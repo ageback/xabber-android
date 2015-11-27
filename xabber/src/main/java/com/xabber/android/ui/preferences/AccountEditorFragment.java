@@ -126,23 +126,14 @@ public class AccountEditorFragment extends BaseSettingsFragment {
         return true;
     }
 
-   /* @Override
+    @Override
     protected void setPreference(Preference preference, Object value) {
         super.setPreference(preference, value);
-        if (preference.getKey().equals(getString(R.string.account_password_key)))
+        if (preference instanceof  CustomEditTextPreference)
         {
-            EditTextPreference pswdTxt = (EditTextPreference) findPreference(getString(R.string.account_password_key));
-            pswdTxt.getEditText().setText(pswdTxt.getText());
-            int dlgResource = pswdTxt.getDialogLayoutResource();
-            LinearLayout ll = (LinearLayout)getView().findViewById(dlgResource);
-
-            //Dialog dialog = ((EditTextPreference)preference).getDialog();
-           // EditText pswdTxt = (EditText)dialog.findViewById(R.id.account_new_password);
-//            AccountItem accountItem = mListener.getAccountItem();
-//            com.xabber.android.data.connection.ConnectionSettings connectionSettings = accountItem.getConnectionSettings();
-//            pswdTxt.setText(connectionSettings.getPassword());
+            ((CustomEditTextPreference)preference).setNewPassword(value.toString());
         }
-    }*/
+    }
 
     @Override
     protected Map<String, Object> getValues() {
@@ -194,6 +185,9 @@ public class AccountEditorFragment extends BaseSettingsFragment {
         return super.getPreferences(source);
 
     }
+
+
+
 
     @Override
     protected boolean setValues(Map<String, Object> source, Map<String, Object> result) {
