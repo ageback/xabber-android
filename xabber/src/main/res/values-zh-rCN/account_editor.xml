@@ -42,6 +42,7 @@
   <string name="account_sasl">使用SASL认证（推荐）</string>
   <string name="account_sasl_summary">旧服务器请勿启用</string>
   <string name="account_store_password">保存密码</string>
+  <string name="account_store_password_md5_encrypt">使用 md5 加密密码</string>
   <string name="account_store_password_summary">禁用此选项以在每次登录时输入密码</string>
   <string name="account_syncable">与系统联系人整合</string>
   <string name="account_syncable_summary">在电话的联系人列表中显示此账户的联系人</string>

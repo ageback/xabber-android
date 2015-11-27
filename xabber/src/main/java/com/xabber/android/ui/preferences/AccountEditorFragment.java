@@ -1,8 +1,12 @@
 package com.xabber.android.ui.preferences;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.os.Bundle;
+import android.preference.EditTextPreference;
 import android.preference.Preference;
+import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import com.xabber.android.R;
@@ -17,6 +21,8 @@ import com.xabber.android.ui.helper.OrbotHelper;
 
 import java.util.HashMap;
 import java.util.Map;
+
+import cn.net.wesoft.android.ui.preferences.CustomEditTextPreference;
 
 public class AccountEditorFragment extends BaseSettingsFragment
         implements Preference.OnPreferenceClickListener {
@@ -37,6 +43,7 @@ public class AccountEditorFragment extends BaseSettingsFragment
         } else {
             throw new IllegalStateException();
         }
+
         if (!Application.getInstance().isContactsSupported()) {
             getPreferenceScreen().removePreference(findPreference(getString(R.string.account_syncable_key)));
         }
@@ -116,7 +123,7 @@ public class AccountEditorFragment extends BaseSettingsFragment
         }
 
         if (getString(R.string.account_color_key).equals(key)) {
-            mListener.onColorChange((String)newValue);
+            mListener.onColorChange((String) newValue);
         }
 
         return true;
@@ -142,6 +149,24 @@ public class AccountEditorFragment extends BaseSettingsFragment
         return false;
     }
 
+   /* @Override
+    protected void setPreference(Preference preference, Object value) {
+        super.setPreference(preference, value);
+        if (preference.getKey().equals(getString(R.string.account_password_key)))
+        {
+            EditTextPreference pswdTxt = (EditTextPreference) findPreference(getString(R.string.account_password_key));
+            pswdTxt.getEditText().setText(pswdTxt.getText());
+            int dlgResource = pswdTxt.getDialogLayoutResource();
+            LinearLayout ll = (LinearLayout)getView().findViewById(dlgResource);
+
+            //Dialog dialog = ((EditTextPreference)preference).getDialog();
+           // EditText pswdTxt = (EditText)dialog.findViewById(R.id.account_new_password);
+//            AccountItem accountItem = mListener.getAccountItem();
+//            com.xabber.android.data.connection.ConnectionSettings connectionSettings = accountItem.getConnectionSettings();
+//            pswdTxt.setText(connectionSettings.getPassword());
+        }
+    }*/
+
     @Override
     protected Map<String, Object> getValues() {
         Map<String, Object> source = new HashMap<>();
@@ -150,6 +175,7 @@ public class AccountEditorFragment extends BaseSettingsFragment
         putValue(source, R.string.account_priority_key, accountItem.getPriority());
         putValue(source, R.string.account_enabled_key, accountItem.isEnabled());
         putValue(source, R.string.account_store_password_key, accountItem.isStorePassword());
+        putValue(source, R.string.account_store_password_md5_encrypt, false);
         putValue(source, R.string.account_syncable_key, accountItem.isSyncable());
         putValue(source, R.string.account_archive_mode_key, accountItem.getArchiveMode().ordinal());
         putValue(source, R.string.account_color_key, accountItem.getColorIndex());
@@ -157,6 +183,7 @@ public class AccountEditorFragment extends BaseSettingsFragment
         com.xabber.android.data.connection.ConnectionSettings connectionSettings = accountItem.getConnectionSettings();
         putValue(source, R.string.account_custom_key, connectionSettings.isCustomHostAndPort());
         putValue(source, R.string.account_host_key, connectionSettings.getHost());
+
         putValue(source, R.string.account_port_key, connectionSettings.getPort());
         putValue(source, R.string.account_server_key, connectionSettings.getServerName());
         putValue(source, R.string.account_username_key, connectionSettings.getUserName());
@@ -175,11 +202,23 @@ public class AccountEditorFragment extends BaseSettingsFragment
     }
 
     @Override
+    protected Object getPreference(Preference preference, Map<String, Object> source) {
+        if (preference instanceof CustomEditTextPreference)
+        {
+            return ((CustomEditTextPreference)preference).getNewPassword();
+        } else {
+            return super.getPreference(preference, source);
+        }
+    }
+
+    @Override
     protected Map<String, Object> getPreferences(Map<String, Object> source) {
+
         Map<String, Object> result = super.getPreferences(source);
         if (oauthPreference != null) {
             putValue(result, R.string.account_password_key, mListener.getAccount());
         }
+
         return result;
     }
 

@@ -40,11 +40,18 @@
         android:summary="@string/account_store_password_summary"
         android:key="@string/account_store_password_key"
         />
-    <EditTextPreference
+    <cn.net.wesoft.android.ui.preferences.CustomEditTextPreference
         android:key="@string/account_password_key"
         android:title="@string/account_password"
         android:password="true"
         android:singleLine="true"
+        android:dialogLayout="@layout/account_change_password"
+        />
+    <CheckBoxPreference
+        android:title="@string/account_store_password_md5_encrypt"
+        android:summary="@string/account_store_password_md5_encrypt"
+        android:key="@string/account_store_password_md5_encrypt"
+
         />
     <EditTextPreference
         android:key="@string/account_server_key"

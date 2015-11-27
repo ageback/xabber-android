@@ -17,6 +17,7 @@ import android.widget.Toast;
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
 import com.xabber.android.data.NetworkException;
+import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.account.AccountType;
 import com.xabber.android.ui.adapter.AccountTypeAdapter;
@@ -24,10 +25,16 @@ import com.xabber.android.ui.dialog.OrbotInstallerDialogBuilder;
 import com.xabber.android.ui.helper.OrbotHelper;
 import com.xabber.android.ui.preferences.AccountEditor;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
+import cn.net.wesoft.android.utils.MD5;
+
 public class AccountAddFragment extends Fragment implements View.OnClickListener, AdapterView.OnItemSelectedListener {
 
     private static final String SAVED_ACCOUNT_TYPE = "com.xabber.android.ui.AccountAdd.ACCOUNT_TYPE";
     private CheckBox storePasswordView;
+    private CheckBox storePasswordMd5EncryptView;
     private CheckBox useOrbotView;
     private CheckBox createAccountCheckBox;
     private Spinner accountTypeView;
@@ -66,6 +73,7 @@ public class AccountAddFragment extends Fragment implements View.OnClickListener
         }
 
         storePasswordView = (CheckBox) view.findViewById(R.id.store_password);
+        storePasswordMd5EncryptView = (CheckBox) view.findViewById(R.id.store_password_md5_encrypt);
         useOrbotView = (CheckBox) view.findViewById(R.id.use_orbot);
         createAccountCheckBox = (CheckBox) view.findViewById(R.id.register_account);
         createAccountCheckBox.setOnClickListener(this);
@@ -118,14 +126,20 @@ public class AccountAddFragment extends Fragment implements View.OnClickListener
         AccountType accountType = (AccountType) accountTypeView.getSelectedItem();
 
         String account;
+
         try {
+
             account = AccountManager.getInstance().addAccount(
                     userView.getText().toString(),
-                    passwordView.getText().toString(), accountType,
+                    storePasswordMd5EncryptView.isChecked() ? MD5.MD5(passwordView.getText().toString()):passwordView.getText().toString(),
+                    accountType,
                     false,
                     storePasswordView.isChecked(),
                     useOrbotView.isChecked(),
                     createAccountCheckBox.isChecked());
+            AccountItem aItem = AccountManager.getInstance().getAccount(account);
+            aItem.setMD5Password(storePasswordMd5EncryptView.isChecked());
+
         } catch (NetworkException e) {
             Application.getInstance().onError(e);
             return;
@@ -135,6 +149,7 @@ public class AccountAddFragment extends Fragment implements View.OnClickListener
         startActivity(AccountEditor.createIntent(getActivity(), account));
         getActivity().finish();
     }
+
 
 
     @Override

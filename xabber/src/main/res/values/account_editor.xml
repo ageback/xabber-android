@@ -44,6 +44,7 @@
     <string name="account_sasl">Use SASL Authentication (recommended)</string>
     <string name="account_sasl_summary">Disable for very old server</string>
     <string name="account_store_password">Store password</string>
+    <string name="account_store_password_md5_encrypt">Encrypt password with md5</string>
     <string name="account_store_password_summary">Disable this option to request password each time you go online</string>
     <string name="account_syncable">Integrate into system contacts</string>
     <string name="account_syncable_summary">Show contacts from this account in phone`s contact list</string>

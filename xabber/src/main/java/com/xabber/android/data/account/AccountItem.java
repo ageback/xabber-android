@@ -66,6 +66,11 @@ public class AccountItem extends ConnectionItem {
     private boolean storePassword;
 
     /**
+     * Wheather encrypt password with md5.
+     */
+    private boolean isEncryptMD5;
+
+    /**
      * Whether authorization was failed.
      */
     private boolean authFailed;
@@ -205,6 +210,10 @@ public class AccountItem extends ConnectionItem {
     void setStorePassword(boolean storePassword) {
         this.storePassword = storePassword;
     }
+
+    public void setMD5Password(boolean encrypt){this.isEncryptMD5=encrypt;}
+
+    public boolean isMD5Password() {return isEncryptMD5;}
 
     public KeyPair getKeyPair() {
         return keyPair;
