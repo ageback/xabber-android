@@ -1,6 +1,5 @@
 package com.xabber.android.data.extension.file;
 
-import android.Manifest;
 import android.app.DownloadManager;
 import android.content.Context;
 import android.content.Intent;
@@ -10,11 +9,9 @@ import android.content.res.Resources;
 import android.graphics.BitmapFactory;
 import android.media.ExifInterface;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Environment;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.v4.content.ContextCompat;
 import android.webkit.MimeTypeMap;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -136,25 +133,9 @@ public class FileManager {
 
     public interface ProgressListener {
         void onProgress(long bytesWritten, long totalSize);
+        void onFinish(long totalSize);
     }
 
-    public static boolean hasFileReadPermission() {
-        return checkPermission(Manifest.permission.READ_EXTERNAL_STORAGE);
-    }
-
-    public static boolean hasFileWritePermission() {
-        return checkPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE);
-    }
-
-    private static boolean checkPermission(String permission) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return true;
-        }
-
-        final int permissionCheck = ContextCompat.checkSelfPermission(Application.getInstance(), permission);
-
-        return permissionCheck == PackageManager.PERMISSION_GRANTED;
-    }
 
     public void downloadFile(final MessageItem messageItem, final ProgressListener progressListener) {
         final String downloadUrl = messageItem.getText();
@@ -179,7 +160,7 @@ public class FileManager {
             @Override
             public void onSuccess(int statusCode, Header[] headers, final byte[] responseBody) {
                 LogManager.i(FileManager.class, "on download onSuccess: " + statusCode);
-                saveFile(responseBody, messageItem.getFile());
+                saveFile(responseBody, messageItem.getFile(), progressListener);
             }
 
             @Override
@@ -190,8 +171,6 @@ public class FileManager {
 
             @Override
             public void onProgress(long bytesWritten, long totalSize) {
-                LogManager.i(FileManager.class, "on download onProgress: " + bytesWritten + " / " + totalSize);
-
                 if (progressListener != null) {
                     progressListener.onProgress(bytesWritten, totalSize);
                 }
@@ -201,12 +180,11 @@ public class FileManager {
             public void onFinish() {
                 super.onFinish();
                 startedDownloads.remove(downloadUrl);
-                MessageManager.getInstance().onChatChanged(messageItem.getChat().getAccount(), messageItem.getChat().getUser(), false);
             }
         });
     }
 
-    private static void saveFile(final byte[] responseBody, final File file) {
+    private static void saveFile(final byte[] responseBody, final File file, final ProgressListener progressListener) {
         LogManager.i(FileManager.class, "Saving file " + file.getPath());
 
         Application.getInstance().runInBackground(new Runnable() {
@@ -222,6 +200,16 @@ public class FileManager {
                     e.printStackTrace();
                     file.delete();
                 }
+
+                Application.getInstance().runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (progressListener != null) {
+                            progressListener.onFinish(responseBody.length);
+                        }
+                    }
+                });
+
             }
         });
     }

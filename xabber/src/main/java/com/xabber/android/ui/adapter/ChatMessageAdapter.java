@@ -39,6 +39,7 @@ import com.xabber.android.data.message.MessageItem;
 import com.xabber.android.data.message.MessageManager;
 import com.xabber.android.data.roster.AbstractContact;
 import com.xabber.android.data.roster.RosterManager;
+import com.xabber.android.ui.helper.PermissionsRequester;
 import com.xabber.android.utils.Emoticons;
 import com.xabber.android.utils.StringUtils;
 
@@ -208,7 +209,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         } else {
             if (SettingsManager.connectionLoadImages()
                     && FileManager.fileIsImage(messageItem.getFile())
-                    && FileManager.hasFileWritePermission()) {
+                    && PermissionsRequester.hasFileWritePermission()) {
                 LogManager.i(this, "Downloading file from message adapter");
                 downloadFile(messageView, messageItem);
             } else {
@@ -223,8 +224,8 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         }
     }
 
-    private void downloadFile(final Message messageView, MessageItem messageItem) {
-        if (!FileManager.hasFileWritePermission()) {
+    private void downloadFile(final Message messageView, final MessageItem messageItem) {
+        if (!PermissionsRequester.hasFileWritePermission()) {
             listener.onNoDownloadFilePermission();
             return;
         }
@@ -239,14 +240,25 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                 if (bytesWritten <= totalSize) {
                     progress += " / " + android.text.format.Formatter.formatShortFileSize(context, totalSize);
                 }
-                messageView.messageFileInfo.setText(progress);
-                messageView.messageFileInfo.setVisibility(View.VISIBLE);
+
+                if (!progress.equals(messageView.messageFileInfo.getText())) {
+                    messageView.messageFileInfo.setText(progress);
+                }
+
+                if (messageView.messageFileInfo.getVisibility() != View.VISIBLE) {
+                    messageView.messageFileInfo.setVisibility(View.VISIBLE);
+                }
+            }
+
+            @Override
+            public void onFinish(long totalSize) {
+                MessageManager.getInstance().onChatChanged(messageItem.getChat().getAccount(), messageItem.getChat().getUser(), false);
             }
         });
     }
 
     private void onFileExists(Message message, final File file) {
-        if (FileManager.fileIsImage(file) && FileManager.hasFileReadPermission()) {
+        if (FileManager.fileIsImage(file) && PermissionsRequester.hasFileReadPermission()) {
             message.messageTextForFileName.setVisibility(View.GONE);
             message.messageImage.setVisibility(View.VISIBLE);
             FileManager.loadImageFromFile(file, message.messageImage);
