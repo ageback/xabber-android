@@ -47,12 +47,7 @@
         android:singleLine="true"
         android:dialogLayout="@layout/account_change_password"
         />
-    <CheckBoxPreference
-        android:title="@string/account_store_password_md5_encrypt"
-        android:summary="@string/account_store_password_md5_encrypt"
-        android:key="@string/account_store_password_md5_encrypt"
 
-        />
     <EditTextPreference
         android:key="@string/account_server_key"
         android:title="@string/account_server_name"

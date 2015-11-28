@@ -36,6 +36,7 @@ public class CustomEditTextPreference extends DialogPreference {
         mView = (LinearLayout) view;
         pswdTxt=(EditText)mView.findViewById(R.id.account_new_password);
         chkMD5=(CheckBox)mView.findViewById(R.id.account_change_password_md5);
+        pswdTxt.setText(newPassword);
     }
 
 
@@ -56,6 +57,12 @@ public class CustomEditTextPreference extends DialogPreference {
     public String getNewPassword()
     {
         return newPassword;
+    }
+
+    public void setNewPassword(String psd)
+    {
+        newPassword = psd;
+
     }
 
     @Override
