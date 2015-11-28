@@ -26,6 +26,8 @@ import com.xabber.android.data.Application;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.intent.AccountIntentBuilder;
 
+import cn.net.wesoft.android.utils.MD5;
+
 /**
  * Dialog with password request for authentication.
  *
@@ -37,6 +39,7 @@ public class PasswordRequest extends ManagedDialog {
 
     private EditText passwordView;
     private CheckBox storePasswordView;
+    private CheckBox md5EncryptView;
 
     public static Intent createIntent(Context context, String account) {
         return new AccountIntentBuilder(context, PasswordRequest.class)
@@ -55,6 +58,7 @@ public class PasswordRequest extends ManagedDialog {
                 null);
         passwordView = (EditText) layout.findViewById(R.id.account_password);
         storePasswordView = (CheckBox) layout.findViewById(R.id.store_password);
+        md5EncryptView=(CheckBox)layout.findViewById(R.id.account_request_password_md5);
         account = getAccount(getIntent());
         if (AccountManager.getInstance().getAccount(account) == null) {
             Application.getInstance().onError(R.string.NO_SUCH_ACCOUNT);
@@ -70,7 +74,7 @@ public class PasswordRequest extends ManagedDialog {
         super.onAccept();
         AccountManager.getInstance().setPassword(account,
                 storePasswordView.isChecked(),
-                passwordView.getText().toString());
+                md5EncryptView.isChecked()? MD5.MD5(passwordView.getText().toString()):passwordView.getText().toString());
         finish();
     }
 
