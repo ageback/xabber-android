@@ -1,4 +1,4 @@
-package com.xabber.android.ui.helper;
+package com.xabber.android.ui.color;
 
 import android.content.Context;
 import android.content.res.TypedArray;
@@ -12,24 +12,31 @@ import java.util.Collections;
 import java.util.List;
 
 public class AccountPainter {
+    private final int themeMainColor;
     private final int themeDarkColor;
     private final int themeTextColor;
     private final String[] accountColorNames;
 
-    private int[] accountMainColors;
-    private int[] accountDarkColors;
-    private int[] accountTextColors;
+    private final int[] accountMainColors;
+    private final int[] accountDarkColors;
+    private final int[] accountTextColors;
+    private final int[] accountRippleColors;
+    private final int[] accountSendButtonColors;
+
     private final int greyMain;
     private final int greyDark;
 
-    public AccountPainter(Context context) {
+    AccountPainter(Context context) {
 
         accountMainColors = context.getResources().getIntArray(getThemeAttribute(context, R.attr.account_main_color));
         accountDarkColors = context.getResources().getIntArray(getThemeAttribute(context, R.attr.account_status_bar_color));
         accountTextColors = context.getResources().getIntArray(getThemeAttribute(context, R.attr.account_text_color));
+        accountRippleColors = context.getResources().getIntArray(R.array.account_100);
+        accountSendButtonColors = context.getResources().getIntArray(getThemeAttribute(context, R.attr.chat_send_button_color));
 
         accountColorNames = context.getResources().getStringArray(R.array.account_color_names);
 
+        themeMainColor = getThemeMainColor(context);
         themeDarkColor = getThemeDarkColor(context);
         themeTextColor = getThemeTextColor(context);
 
@@ -76,6 +83,11 @@ public class AccountPainter {
         return attributeResourceId;
     }
 
+
+    private int getThemeMainColor(Context context) {
+        return context.getResources().getColor(getThemeAttribute(context, R.attr.colorPrimary));
+    }
+
     private int getThemeDarkColor(Context context) {
         return context.getResources().getColor(getThemeAttribute(context, R.attr.colorPrimaryDark));
     }
@@ -91,7 +103,7 @@ public class AccountPainter {
     public int getDefaultMainColor() {
         String firstAccount = getFirstAccount();
         if (firstAccount == null) {
-            return themeTextColor;
+            return themeMainColor;
         } else {
             return getAccountMainColor(firstAccount);
         }
@@ -105,10 +117,18 @@ public class AccountPainter {
         return accountTextColors[getAccountColorLevel(account)];
     }
 
+    public int getAccountRippleColor(String account) {
+        return accountRippleColors[getAccountColorLevel(account)];
+    }
+
+    public int getAccountSendButtonColor(String account) {
+        return accountSendButtonColors[getAccountColorLevel(account)];
+    }
+
     public int getDefaultTextColor() {
         String firstAccount = getFirstAccount();
         if (firstAccount == null) {
-            return themeDarkColor;
+            return themeTextColor;
         } else {
             return getAccountTextColor(firstAccount);
         }
