@@ -37,8 +37,8 @@ import org.jivesoftware.smack.XMPPException;
 import org.jivesoftware.smack.filter.StanzaFilter;
 import org.jivesoftware.smack.packet.Stanza;
 import org.jivesoftware.smack.packet.StreamError;
+import org.jivesoftware.smack.parsing.ExceptionLoggingCallback;
 import org.jivesoftware.smack.roster.Roster;
-import org.jivesoftware.smack.roster.RosterLoadedListener;
 import org.jivesoftware.smack.sasl.provided.SASLPlainMechanism;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
@@ -213,10 +213,14 @@ public class ConnectionThread implements
         xmppConnection.addAsyncStanzaListener(this, ACCEPT_ALL);
         xmppConnection.addConnectionListener(this);
 
+        // by default Smack disconnects in case of parsing errors
+        xmppConnection.setParsingExceptionCallback(new ExceptionLoggingCallback());
 
         AccountRosterListener rosterListener = new AccountRosterListener(((AccountItem)connectionItem).getAccount());
-        Roster.getInstanceFor(xmppConnection).addRosterListener(rosterListener);
-        Roster.getInstanceFor(xmppConnection).addRosterLoadedListener(rosterListener);
+        final Roster roster = Roster.getInstanceFor(xmppConnection);
+        roster.addRosterListener(rosterListener);
+        roster.addRosterLoadedListener(rosterListener);
+        roster.setSubscriptionMode(Roster.SubscriptionMode.manual);
 
         org.jivesoftware.smackx.ping.PingManager.getInstanceFor(xmppConnection).registerPingFailedListener(this);
 
