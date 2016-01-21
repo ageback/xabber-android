@@ -17,6 +17,7 @@ package com.xabber.android.data.message;
 import android.database.Cursor;
 
 import com.xabber.android.data.Application;
+import com.xabber.android.data.LogManager;
 import com.xabber.android.data.NetworkException;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.account.AccountManager;
@@ -65,7 +66,7 @@ public abstract class AbstractChat extends BaseEntity {
     /**
      * Number of messages from history to be shown for context purpose.
      */
-    private static final int PRELOADED_MESSAGES = 3;
+    public static final int PRELOADED_MESSAGES = 50;
     /**
      * Ids of messages not loaded in to the memory.
      * <p/>
@@ -273,8 +274,34 @@ public abstract class AbstractChat extends BaseEntity {
     }
 
     public void onMessageDownloaded(Collection<MessageItem> items) {
-        messages.clear();
-        messages.addAll(items);
+
+        if (items == null) {
+            return;
+        }
+
+        Collection<MessageItem> newMessages = new ArrayList<>(items);
+
+        for (MessageItem oldMessage : messages) {
+            Iterator<MessageItem> newMessageIterator = newMessages.iterator();
+
+            while (newMessageIterator.hasNext()) {
+
+                MessageItem newMessage = newMessageIterator.next();
+
+                if (Math.abs(oldMessage.getTimestamp().getTime() - newMessage.getTimestamp().getTime()) < 1000 * 60
+                    && oldMessage.getText().equals(newMessage.getText())) {
+
+                    LogManager.i(this, "found messages with same text and similar time. removing. Text " + oldMessage.getText() + ", time old " + oldMessage.getTimestamp() + " new " + newMessage.getTimestamp());
+
+                    newMessageIterator.remove();
+                }
+            }
+        }
+
+
+        LogManager.i(this, "Was " + items.size() + " new messages, " + newMessages.size() + " left");
+
+        messages.addAll(newMessages);
         sort();
         MessageManager.getInstance().onChatChanged(account, user, false);
     }
