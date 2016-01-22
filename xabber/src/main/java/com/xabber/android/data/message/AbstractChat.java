@@ -148,7 +148,7 @@ public abstract class AbstractChat extends BaseEntity {
         try {
             if (cursor.moveToFirst()) {
                 do {
-                    MessageItem messageItem = createMessageItem(cursor);
+                    MessageItem messageItem = MessageTable.createMessageItem(cursor, this);
                     if (started) {
                         messageItems.add(messageItem);
                         continue;
@@ -197,23 +197,6 @@ public abstract class AbstractChat extends BaseEntity {
     }
 
     /**
-     * @param cursor
-     * @return New message item.
-     */
-    private MessageItem createMessageItem(Cursor cursor) {
-        MessageItem messageItem = new MessageItem(this,
-                MessageTable.getTag(cursor), MessageTable.getResource(cursor),
-                MessageTable.getText(cursor), MessageTable.getAction(cursor),
-                MessageTable.getTimeStamp(cursor),
-                MessageTable.getDelayTimeStamp(cursor),
-                MessageTable.isIncoming(cursor), MessageTable.isRead(cursor),
-                MessageTable.isSent(cursor), MessageTable.hasError(cursor),
-                true, false, false);
-        messageItem.setId(MessageTable.getId(cursor));
-        return messageItem;
-    }
-
-    /**
      * Load all message from local history.
      * <p/>
      * CALL THIS METHOD FROM BACKGROUND THREAD ONLY.
@@ -226,7 +209,7 @@ public abstract class AbstractChat extends BaseEntity {
         try {
             if (cursor.moveToFirst()) {
                 do {
-                    MessageItem messageItem = createMessageItem(cursor);
+                    MessageItem messageItem = MessageTable.createMessageItem(cursor, this);
                     if (historyIds.contains(messageItem.getId()))
                         messageItems.add(messageItem);
                 } while (cursor.moveToNext());
@@ -288,12 +271,21 @@ public abstract class AbstractChat extends BaseEntity {
 
                 MessageItem newMessage = newMessageIterator.next();
 
+                if (oldMessage.getStanzaId() != null && newMessage.getStanzaId() != null
+                        && oldMessage.getStanzaId().equals(newMessage.getStanzaId())) {
+                    LogManager.i(this, "found messages with same Stanza ID. removing. Text " + oldMessage.getText() + " stanza id " + oldMessage.getStanzaId());
+
+                    newMessageIterator.remove();
+                    break;
+                }
+
                 if (Math.abs(oldMessage.getTimestamp().getTime() - newMessage.getTimestamp().getTime()) < 1000 * 60
                     && oldMessage.getText().equals(newMessage.getText())) {
 
                     LogManager.i(this, "found messages with same text and similar time. removing. Text " + oldMessage.getText() + ", time old " + oldMessage.getTimestamp() + " new " + newMessage.getTimestamp());
 
                     newMessageIterator.remove();
+                    break;
                 }
             }
         }
@@ -465,8 +457,7 @@ public abstract class AbstractChat extends BaseEntity {
         updateSendQuery(messageItem);
         sort();
         if (save && !isPrivateMucChat)
-            requestToWriteMessage(messageItem, resource, text, action,
-                    timestamp, delayTimestamp, incoming, read, send);
+            requestToWriteMessage(messageItem);
 
         if (notify && notifyAboutMessage()) {
             if (visible) {
@@ -502,16 +493,11 @@ public abstract class AbstractChat extends BaseEntity {
         return messageItem;
     }
 
-    private void requestToWriteMessage(final MessageItem messageItem,
-                                       final String resource, final String text, final ChatAction action,
-                                       final Date timestamp, final Date delayTimestamp,
-                                       final boolean incoming, final boolean read, final boolean sent) {
+    private void requestToWriteMessage(final MessageItem messageItem) {
         Application.getInstance().runInBackground(new Runnable() {
             @Override
             public void run() {
-                long id = MessageTable.getInstance().add(account, user, null,
-                        resource, text, action, timestamp, delayTimestamp,
-                        incoming, read, sent, false);
+                long id = MessageTable.getInstance().add(messageItem);
                 messageItem.setId(id);
             }
         });
@@ -652,7 +638,17 @@ public abstract class AbstractChat extends BaseEntity {
                 });
             } else {
                 Message message = createMessagePacket(text);
-                messageItem.setPacketID(message.getPacketID());
+                messageItem.setStanzaId(message.getStanzaId());
+                Application.getInstance().runInBackground(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (messageItem.getId() != null) {
+                            MessageTable.getInstance().setStanzaId(messageItem);
+                        }
+
+                    }
+                });
+
                 ChatStateManager.getInstance().updateOutgoingMessage(this,
                         message);
                 ReceiptManager.getInstance().updateOutgoingMessage(this,
