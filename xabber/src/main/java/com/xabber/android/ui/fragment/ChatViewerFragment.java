@@ -40,14 +40,17 @@ import com.xabber.android.data.LogManager;
 import com.xabber.android.data.NetworkException;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.entity.BaseEntity;
-import com.xabber.android.data.extension.archive.MessageArchiveManager;
 import com.xabber.android.data.extension.attention.AttentionManager;
 import com.xabber.android.data.extension.cs.ChatStateManager;
 import com.xabber.android.data.extension.file.FileManager;
 import com.xabber.android.data.extension.file.FileUtils;
 import com.xabber.android.data.extension.httpfileupload.HttpFileUploadManager;
 import com.xabber.android.data.extension.httpfileupload.HttpUploadListener;
+import com.xabber.android.data.extension.mam.LastHistoryLoadFinishedEvent;
+import com.xabber.android.data.extension.mam.LastHistoryLoadStartedEvent;
 import com.xabber.android.data.extension.mam.MamManager;
+import com.xabber.android.data.extension.mam.PreviousHistoryLoadFinishedEvent;
+import com.xabber.android.data.extension.mam.PreviousHistoryLoadStartedEvent;
 import com.xabber.android.data.extension.muc.MUCManager;
 import com.xabber.android.data.extension.muc.RoomChat;
 import com.xabber.android.data.extension.muc.RoomState;
@@ -82,18 +85,19 @@ import java.io.IOException;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import de.greenrobot.event.EventBus;
 import github.ankushsachdeva.emojicon.EmojiconGridView;
 import github.ankushsachdeva.emojicon.EmojiconsPopup;
 import github.ankushsachdeva.emojicon.emoji.Emojicon;
 
 public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItemClickListener,
         View.OnClickListener, Toolbar.OnMenuItemClickListener,
-        ChatMessageAdapter.Message.MessageClickListener, HttpUploadListener, ChatMessageAdapter.Listener {
+        ChatMessageAdapter.Message.MessageClickListener, HttpUploadListener,
+        ChatMessageAdapter.Listener {
 
     public static final String ARGUMENT_ACCOUNT = "ARGUMENT_ACCOUNT";
     public static final String ARGUMENT_USER = "ARGUMENT_USER";
 
-    private static final int MINIMUM_MESSAGES_TO_LOAD = 10;
     public static final int FILE_SELECT_ACTIVITY_REQUEST_CODE = 23;
     private static final int PERMISSIONS_REQUEST_ATTACH_FILE = 24;
     private static final int PERMISSIONS_REQUEST_SAVE_TO_DOWNLOADS = 25;
@@ -120,6 +124,13 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
     private Timer stopTypingTimer = new Timer();
     private final long STOP_TYPING_DELAY = 4000; // in ms
     private ImageButton attachButton;
+    private View lastHistoryProgressBar;
+    private View previousHistoryProgressBar;
+
+    private boolean isLocalHistoryLoadRequested = false;
+    private boolean isRemotePreviousHistoryRequested = false;
+
+    private AbstractChat chat;
 
     public static ChatViewerFragment newInstance(String account, String user) {
         ChatViewerFragment fragment = new ChatViewerFragment();
@@ -151,8 +162,22 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
         account = args.getString(ARGUMENT_ACCOUNT, null);
         user = args.getString(ARGUMENT_USER, null);
 
+        chat = MessageManager.getInstance().getChat(account, user);
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        EventBus.getDefault().register(this);
         AbstractChat abstractChat = MessageManager.getInstance().getChat(account, user);
         MamManager.getInstance().requestLastHistory(abstractChat);
+
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        EventBus.getDefault().unregister(this);
     }
 
     @Override
@@ -206,6 +231,39 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
         layoutManager = new LinearLayoutManager(getActivity());
         layoutManager.setStackFromEnd(true);
         recyclerView.setLayoutManager(layoutManager);
+
+        recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
+                super.onScrolled(recyclerView, dx, dy);
+
+//                if (chat.isLocalHistoryLoadedCompletely()) {
+//                    return;
+//                }
+
+                if (dy < 0) {
+                    int visibleItemCount = layoutManager.getChildCount();
+                    int pastVisibleItems = layoutManager.findFirstVisibleItemPosition();
+
+                    if (pastVisibleItems / visibleItemCount <= 2) {
+
+
+                        if (!isLocalHistoryLoadRequested) {
+                            isLocalHistoryLoadRequested = true;
+                            LogManager.i("CHAT", "local history requested");
+                            chat.loadNext();
+                        }
+
+                        if (!isRemotePreviousHistoryRequested) {
+                            isRemotePreviousHistoryRequested = true;
+                            LogManager.i("CHAT", "remote history requested");
+                            MamManager.getInstance().requestPreviousHistory(chat);
+                        }
+
+                    }
+                }
+            }
+        });
 
         // to avoid strange bug on some 4.x androids
         view.findViewById(R.id.input_layout).setBackgroundColor(ColorManager.getInstance().getChatInputBackgroundColor());
@@ -383,7 +441,38 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
             }
         });
 
+
+        lastHistoryProgressBar = view.findViewById(R.id.chat_last_history_progress_bar);
+        previousHistoryProgressBar = view.findViewById(R.id.progress_bar_toolbar);
+
         return view;
+    }
+
+    public void onEventMainThread(LastHistoryLoadStartedEvent event) {
+        if (event.getAccount().equals(account) && event.getUser().equals(user)) {
+            lastHistoryProgressBar.setVisibility(View.VISIBLE);
+        }
+    }
+
+    public void onEventMainThread(LastHistoryLoadFinishedEvent event) {
+        if (event.getAccount().equals(account) && event.getUser().equals(user)) {
+            lastHistoryProgressBar.setVisibility(View.GONE);
+        }
+    }
+
+    public void onEventMainThread(PreviousHistoryLoadStartedEvent event) {
+        if (event.getAccount().equals(account) && event.getUser().equals(user)) {
+            LogManager.i(this, "PreviousHistoryLoadStartedEvent");
+            previousHistoryProgressBar.setVisibility(View.VISIBLE);
+        }
+    }
+
+    public void onEventMainThread(PreviousHistoryLoadFinishedEvent event) {
+        if (event.getAccount().equals(account) && event.getUser().equals(user)) {
+            LogManager.i(this, "PreviousHistoryLoadFinishedEvent");
+            isRemotePreviousHistoryRequested = false;
+            previousHistoryProgressBar.setVisibility(View.GONE);
+        }
     }
 
     private void onAttachButtonPressed() {
@@ -671,6 +760,8 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
         } else {
             layoutManager.scrollToPositionWithOffset(chatMessageAdapter.findMessagePosition(messageItem), (int) offset);
         }
+
+        isLocalHistoryLoadRequested = false;
     }
 
     private void scrollDown() {
@@ -745,10 +836,6 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
 
             case R.id.action_chat_settings:
                 startActivity(ChatContactSettings.createIntent(getActivity(), account, user));
-                return true;
-
-            case R.id.action_show_history:
-                showHistory(account, user);
                 return true;
 
             case R.id.action_authorization_settings:
@@ -876,11 +963,6 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
                 }
             }
         });
-    }
-
-    private void showHistory(String account, String user) {
-        MessageManager.getInstance().requestToLoadLocalHistory(account, user);
-        MessageArchiveManager.getInstance().requestHistory(account, user, MINIMUM_MESSAGES_TO_LOAD, 0);
     }
 
     private void stopEncryption(String account, String user) {
