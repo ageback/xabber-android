@@ -242,25 +242,7 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
 //                }
 
                 if (dy < 0) {
-                    int visibleItemCount = layoutManager.getChildCount();
-                    int pastVisibleItems = layoutManager.findFirstVisibleItemPosition();
-
-                    if (pastVisibleItems / visibleItemCount <= 2) {
-
-
-                        if (!isLocalHistoryLoadRequested) {
-                            isLocalHistoryLoadRequested = true;
-                            LogManager.i("CHAT", "local history requested");
-                            chat.loadNext();
-                        }
-
-                        if (!isRemotePreviousHistoryRequested) {
-                            isRemotePreviousHistoryRequested = true;
-                            LogManager.i("CHAT", "remote history requested");
-                            MamManager.getInstance().requestPreviousHistory(chat);
-                        }
-
-                    }
+                    loadHistoryIfNeeded();
                 }
             }
         });
@@ -448,25 +430,93 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
         return view;
     }
 
+    private void loadHistoryIfNeeded() {
+        int visibleItemCount = layoutManager.getChildCount();
+        int pastVisibleItems = layoutManager.findFirstVisibleItemPosition();
+
+        if (visibleItemCount == 0) {
+            return;
+        }
+
+        if (isLocalHistoryLoadRequested && isRemotePreviousHistoryRequested) {
+            return;
+        }
+
+        if (pastVisibleItems / visibleItemCount <= 2) {
+            LogManager.i(this, "pastVisibleItems / visibleItemCount <= 2");
+            requestLocalHistoryLoad();
+            requestRemoteHistoryLoad();
+        } else {
+            if (!chat.getSyncInfo().isRemoteHistoryCompletelyLoaded()) {
+                Integer firstLocalMessagePosition = chat.getSyncInfo().getFirstLocalMessagePosition();
+                Integer firstRemotelySyncedMessagePosition = chat.getSyncInfo().getFirstMamMessagePosition();
+
+                LogManager.i(this, "firstLocalMessagePosition: " + firstLocalMessagePosition + " firstRemotelySyncedMessagePosition: " + firstRemotelySyncedMessagePosition);
+
+
+                if (firstLocalMessagePosition != null && firstRemotelySyncedMessagePosition != null) {
+
+                    int abs = Math.abs(firstLocalMessagePosition - firstRemotelySyncedMessagePosition);
+
+                    if (abs >= MamManager.PAGE_SIZE) {
+                        LogManager.i(this, "Large difference between local and removed history loaded!");
+                        if (firstLocalMessagePosition < firstRemotelySyncedMessagePosition) {
+                            requestRemoteHistoryLoad();
+                        } else {
+                            requestLocalHistoryLoad();
+
+                        }
+                    }
+
+
+                }
+
+
+            }
+        }
+
+
+    }
+
+    private void requestRemoteHistoryLoad() {
+        if (!isRemotePreviousHistoryRequested) {
+            LogManager.i("CHAT", "remote history requested");
+            MamManager.getInstance().requestPreviousHistory(chat);
+        }
+    }
+
+    private void requestLocalHistoryLoad() {
+        if (!isLocalHistoryLoadRequested) {
+            isLocalHistoryLoadRequested = true;
+            LogManager.i("CHAT", "local history requested");
+            chat.loadNext();
+        }
+    }
+
+    @SuppressWarnings("unused")
     public void onEventMainThread(LastHistoryLoadStartedEvent event) {
         if (event.getAccount().equals(account) && event.getUser().equals(user)) {
             lastHistoryProgressBar.setVisibility(View.VISIBLE);
         }
     }
 
+    @SuppressWarnings("unused")
     public void onEventMainThread(LastHistoryLoadFinishedEvent event) {
         if (event.getAccount().equals(account) && event.getUser().equals(user)) {
             lastHistoryProgressBar.setVisibility(View.GONE);
         }
     }
 
+    @SuppressWarnings("unused")
     public void onEventMainThread(PreviousHistoryLoadStartedEvent event) {
         if (event.getAccount().equals(account) && event.getUser().equals(user)) {
             LogManager.i(this, "PreviousHistoryLoadStartedEvent");
             previousHistoryProgressBar.setVisibility(View.VISIBLE);
+            isRemotePreviousHistoryRequested = true;
         }
     }
 
+    @SuppressWarnings("unused")
     public void onEventMainThread(PreviousHistoryLoadFinishedEvent event) {
         if (event.getAccount().equals(account) && event.getUser().equals(user)) {
             LogManager.i(this, "PreviousHistoryLoadFinishedEvent");
@@ -758,10 +808,14 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
         if (lastVisibleItemPosition == -1 || lastVisibleItemPosition == (itemCountBeforeUpdate - 1)) {
             scrollDown();
         } else {
-            layoutManager.scrollToPositionWithOffset(chatMessageAdapter.findMessagePosition(messageItem), (int) offset);
+            if (messageItem != null) {
+                layoutManager.scrollToPositionWithOffset(chatMessageAdapter.findMessagePosition(messageItem), (int) offset);
+            }
         }
 
         isLocalHistoryLoadRequested = false;
+
+        loadHistoryIfNeeded();
     }
 
     private void scrollDown() {

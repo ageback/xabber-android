@@ -24,16 +24,15 @@ import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.account.ArchiveMode;
 import com.xabber.android.data.connection.ConnectionManager;
 import com.xabber.android.data.entity.BaseEntity;
-import com.xabber.android.data.extension.archive.MessageArchiveManager;
 import com.xabber.android.data.extension.blocking.PrivateMucChatBlockingManager;
 import com.xabber.android.data.extension.cs.ChatStateManager;
 import com.xabber.android.data.extension.file.FileManager;
+import com.xabber.android.data.extension.mam.SyncInfo;
 import com.xabber.android.data.extension.otr.OTRManager;
 import com.xabber.android.data.extension.otr.SecurityLevel;
 import com.xabber.android.data.message.chat.ChatManager;
 import com.xabber.android.data.notification.NotificationManager;
 import com.xabber.xmpp.address.Jid;
-import com.xabber.xmpp.archive.SaveMode;
 import com.xabber.xmpp.carbon.CarbonManager;
 
 import org.jivesoftware.smack.packet.Message;
@@ -75,7 +74,7 @@ public abstract class AbstractChat extends BaseEntity {
     /**
      * Sorted list of messages in this chat.
      */
-    protected final List<MessageItem> messages;
+    private final List<MessageItem> messages;
     /**
      * List of messages to be sent.
      */
@@ -112,6 +111,11 @@ public abstract class AbstractChat extends BaseEntity {
 
     private boolean isLocalHistoryLoadedCompletely = false;
 
+    /**
+     * for Message Archive Management (XEP-313)
+     */
+    private SyncInfo syncInfo;
+
 
     protected AbstractChat(final String account, final String user, boolean isPrivateMucChat) {
         super(account, isPrivateMucChat ? user : Jid.getBareAddress(user));
@@ -121,12 +125,14 @@ public abstract class AbstractChat extends BaseEntity {
         firstNotification = true;
         lastText = "";
         lastTime = null;
-        historyIds = new ArrayList<Long>();
-        messages = new ArrayList<MessageItem>();
-        sendQuery = new ArrayList<MessageItem>();
+        historyIds = new ArrayList<>();
+        messages = new ArrayList<>();
+        sendQuery = new ArrayList<>();
         this.isPrivateMucChat = isPrivateMucChat;
         isPrivateMucChatAccepted = false;
         updateCreationTime();
+
+        syncInfo = new SyncInfo();
 
         Application.getInstance().runInBackground(new Runnable() {
             @Override
@@ -160,7 +166,7 @@ public abstract class AbstractChat extends BaseEntity {
                 for (MessageItem messageItem : messageItems) {
                     updateSendQuery(messageItem);
                 }
-                addMessages(messageItems);
+                addMessageItems(messageItems);
             }
         });
     }
@@ -179,22 +185,13 @@ public abstract class AbstractChat extends BaseEntity {
             @Override
             public void run() {
 
-                Date firstTimeStamp = null;
-                for (MessageItem messageItem : messages) {
-
-                    if (!messageItem.isReceivedFromMessageArchive()) {
-                        firstTimeStamp = messageItem.getTimestamp();
-                        break;
-                    }
-
-                }
-
-                if (firstTimeStamp == null) {
+                if (syncInfo.getFirstLocalMessageTimeStamp() == null) {
                     return;
                 }
 
                 final ArrayList<MessageItem> messageItems = new ArrayList<>();
-                Cursor cursor = MessageTable.getInstance().getLastMessagesBefore(account, user, firstTimeStamp.getTime(), PRELOADED_MESSAGES);
+                Cursor cursor = MessageTable.getInstance().getLastMessagesBefore(account, user,
+                        syncInfo.getFirstLocalMessageTimeStamp().getTime(), PRELOADED_MESSAGES);
                 while (cursor.moveToNext()) {
                     MessageItem messageItem = MessageTable.createMessageItem(cursor, AbstractChat.this);
                     messageItems.add(messageItem);
@@ -213,7 +210,7 @@ public abstract class AbstractChat extends BaseEntity {
                         for (MessageItem messageItem : messageItems) {
                             updateSendQuery(messageItem);
                         }
-                        addMessages(messageItems);
+                        addMessageItems(messageItems);
                     }
                 });
             }
@@ -229,44 +226,46 @@ public abstract class AbstractChat extends BaseEntity {
      *
      * @param messageItems
      */
-    private void addMessages(Collection<MessageItem> messageItems) {
-        for (MessageItem messageItem : messageItems) {
-            FileManager.processFileMessage(messageItem, false);
-        }
+    private void addMessageItems(final Collection<MessageItem> messageItems) {
+        Application.getInstance().runInBackground(new Runnable() {
+            @Override
+            public void run() {
+                for (MessageItem messageItem : messageItems) {
+                    FileManager.processFileMessage(messageItem, false);
+                }
 
-        messages.addAll(messageItems);
-        sort();
-        MessageManager.getInstance().onChatChanged(account, user, false);
+                synchronized (messages) {
+                    messages.addAll(messageItems);
+                    sort();
+                }
+
+                Application.getInstance().runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        MessageManager.getInstance().onChatChanged(account, user, false);
+                    }
+                });
+            }
+        });
     }
 
-    /**
-     * Updates chat with messages received from server side message archive.
-     * Replaces local copies with the same tag and offline messages.
-     *
-     * @param tag
-     * @param items
-     * @param replication Whether all message without tag (not received from server
-     *                    side) should be removed.
-     * @return Number of new messages.
-     */
-    public int onMessageDownloaded(String tag, Collection<MessageItem> items,
-                                   boolean replication) {
-        int previous = messages.size();
-        Iterator<MessageItem> iterator = messages.iterator();
-        while (iterator.hasNext()) {
-            MessageItem messageItem = iterator.next();
-            if (messageItem.getAction() == null
-                    && !messageItem.isError()
-                    && messageItem.isSent()
-                    && ((replication && messageItem.getTag() == null)
-                    || messageItem.isOffline() || tag
-                    .equals(messageItem.getTag())))
-                iterator.remove();
-        }
-        messages.addAll(items);
-        sort();
-        MessageManager.getInstance().onChatChanged(account, user, false);
-        return Math.max(0, messages.size() - previous);
+    private void addMessageItem(final MessageItem messageItem, boolean incoming) {
+        Application.getInstance().runInBackground(new Runnable() {
+            @Override
+            public void run() {
+                synchronized (messages) {
+                    messages.add(messageItem);
+                    sort();
+                }
+
+                Application.getInstance().runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        MessageManager.getInstance().onChatChanged(account, user, false);
+                    }
+                });
+            }
+        });
     }
 
     public void onMessageDownloaded(Collection<MessageItem> items) {
@@ -277,38 +276,44 @@ public abstract class AbstractChat extends BaseEntity {
 
         Collection<MessageItem> newMessages = new ArrayList<>(items);
 
-        for (MessageItem oldMessage : messages) {
-            Iterator<MessageItem> newMessageIterator = newMessages.iterator();
+        synchronized (messages) {
 
-            while (newMessageIterator.hasNext()) {
+            for (MessageItem oldMessage : messages) {
+                Iterator<MessageItem> newMessageIterator = newMessages.iterator();
 
-                MessageItem newMessage = newMessageIterator.next();
+                while (newMessageIterator.hasNext()) {
 
-                if (oldMessage.getStanzaId() != null && newMessage.getStanzaId() != null
-                        && oldMessage.getStanzaId().equals(newMessage.getStanzaId())) {
-                    LogManager.i(this, "found messages with same Stanza ID. removing. Text " + oldMessage.getText() + " stanza id " + oldMessage.getStanzaId());
+                    MessageItem newMessage = newMessageIterator.next();
 
-                    newMessageIterator.remove();
-                    break;
-                }
+                    if (oldMessage.getStanzaId() != null && newMessage.getStanzaId() != null
+                            && oldMessage.getStanzaId().equals(newMessage.getStanzaId())) {
+                        LogManager.i(this, "found messages with same Stanza ID. removing. Text " + oldMessage.getText() + " stanza id " + oldMessage.getStanzaId());
 
-                if (Math.abs(oldMessage.getTimestamp().getTime() - newMessage.getTimestamp().getTime()) < 1000 * 60
-                    && oldMessage.getText().equals(newMessage.getText())) {
+                        newMessageIterator.remove();
+                        break;
+                    }
 
-                    LogManager.i(this, "found messages with same text and similar time. removing. Text " + oldMessage.getText() + ", time old " + oldMessage.getTimestamp() + " new " + newMessage.getTimestamp());
+                    if (Math.abs(oldMessage.getTimestamp().getTime() - newMessage.getTimestamp().getTime()) < 1000 * 60
+                            && oldMessage.getText().equals(newMessage.getText())) {
 
-                    newMessageIterator.remove();
-                    break;
+                        LogManager.i(this, "found messages with same text and similar time. removing. Text " + oldMessage.getText() + ", time old " + oldMessage.getTimestamp() + " new " + newMessage.getTimestamp());
+
+                        oldMessage.setStanzaId(newMessage.getStanzaId());
+                        writeStanzaIdToDataBase(oldMessage);
+
+                        newMessageIterator.remove();
+                        break;
+                    }
                 }
             }
+
+            LogManager.i(this, "Was " + items.size() + " new messages, " + newMessages.size() + " left");
+
+            addMessageItems(newMessages);
+            for (MessageItem messageItem : newMessages) {
+                requestToWriteMessage(messageItem);
+            }
         }
-
-
-        LogManager.i(this, "Was " + items.size() + " new messages, " + newMessages.size() + " left");
-
-        messages.addAll(newMessages);
-        sort();
-        MessageManager.getInstance().onChatChanged(account, user, false);
     }
 
     public boolean isActive() {
@@ -357,7 +362,7 @@ public abstract class AbstractChat extends BaseEntity {
         return result;
     }
 
-    Collection<MessageItem> getMessages() {
+    public Collection<MessageItem> getMessages() {
         return Collections.unmodifiableCollection(messages);
     }
 
@@ -408,41 +413,47 @@ public abstract class AbstractChat extends BaseEntity {
         boolean visible = MessageManager.getInstance().isVisibleChat(this);
         boolean read = incoming ? visible : true;
         boolean send = incoming;
-        if (action == null && text == null)
+        if (action == null && text == null) {
             throw new IllegalArgumentException();
-        if (resource == null)
+        }
+        if (resource == null) {
             resource = "";
-        if (text == null)
+        }
+        if (text == null) {
             text = "";
+        }
         if (action != null) {
             read = true;
             send = true;
             save = false;
         } else {
-            ArchiveMode archiveMode = AccountManager.getInstance()
-                    .getArchiveMode(account);
-            if (archiveMode == ArchiveMode.dontStore)
+            ArchiveMode archiveMode = AccountManager.getInstance().getArchiveMode(account);
+            if (archiveMode == ArchiveMode.dontStore) {
                 save = false;
-            else
+            } else {
                 save = archiveMode.saveLocally() || !send
                         || (!read && archiveMode == ArchiveMode.unreadOnly);
-            if (save)
+            }
+            if (save) {
                 save = ChatManager.getInstance().isSaveMessages(account, user);
+            }
         }
-        if (save
-                && (unencrypted || (!SettingsManager.securityOtrHistory() && OTRManager
-                .getInstance().getSecurityLevel(account, user) != SecurityLevel.plain)))
+        if (save && (unencrypted || (!SettingsManager.securityOtrHistory()
+                && OTRManager.getInstance().getSecurityLevel(account, user) != SecurityLevel.plain))) {
             save = false;
+        }
         Date timestamp = new Date();
 
         if (text.trim().isEmpty()) {
             notify = false;
         }
 
-        if (notify || !incoming)
+        if (notify || !incoming) {
             openChat();
-        if (!incoming)
+        }
+        if (!incoming) {
             notify = false;
+        }
 
         if (isPrivateMucChat) {
             if (!isPrivateMucChatAccepted
@@ -451,19 +462,19 @@ public abstract class AbstractChat extends BaseEntity {
             }
         }
 
-        MessageItem messageItem = new MessageItem(this, record ? null
-                : NO_RECORD_TAG, resource, text, action, timestamp,
-                delayTimestamp, incoming, read, send, false, incoming,
+        MessageItem messageItem = new MessageItem(this, record ? null : NO_RECORD_TAG, resource,
+                text, action, timestamp, delayTimestamp, incoming, read, send, false, incoming,
                 unencrypted, offline);
         messageItem.setStanzaId(stanzaId);
 
         FileManager.processFileMessage(messageItem, true);
 
-        messages.add(messageItem);
         updateSendQuery(messageItem);
-        sort();
-        if (save && !isPrivateMucChat)
+        addMessageItem(messageItem, incoming);
+
+        if (save && !isPrivateMucChat) {
             requestToWriteMessage(messageItem);
+        }
 
         if (notify && notifyAboutMessage()) {
             if (visible) {
@@ -475,7 +486,7 @@ public abstract class AbstractChat extends BaseEntity {
             }
         }
 
-        MessageManager.getInstance().onChatChanged(account, user, incoming);
+
         return messageItem;
     }
 
@@ -483,8 +494,7 @@ public abstract class AbstractChat extends BaseEntity {
         Date timestamp = new Date();
 
         MessageItem messageItem = new MessageItem(this, NO_RECORD_TAG, "", text, null, timestamp,
-                null, false, true, false, false, false,
-                false, false);
+                null, false, true, false, false, false, false, false);
 
         messageItem.setIsUploadFileMessage(true);
         if (isError) {
@@ -492,10 +502,7 @@ public abstract class AbstractChat extends BaseEntity {
         }
         messageItem.setFile(file);
 
-        messages.add(messageItem);
-        sort();
-
-        MessageManager.getInstance().onChatChanged(account, user, false);
+        addMessageItem(messageItem, false);
         return messageItem;
     }
 
@@ -510,8 +517,9 @@ public abstract class AbstractChat extends BaseEntity {
     }
 
     private void updateSendQuery(MessageItem messageItem) {
-        if (!messageItem.isSent())
+        if (!messageItem.isSent()) {
             sendQuery.add(messageItem);
+        }
     }
 
     /**
@@ -519,6 +527,7 @@ public abstract class AbstractChat extends BaseEntity {
      */
     private void sort() {
         Collections.sort(messages);
+        updateSyncInfo();
         for (int index = messages.size() - 1; index >= 0; index--) {
             MessageItem messageItem = messages.get(index);
             if (messageItem.getAction() == null) {
@@ -530,10 +539,57 @@ public abstract class AbstractChat extends BaseEntity {
         }
     }
 
+    private void updateSyncInfo() {
+        LogManager.i(this, "updateSyncInfo messages size " + messages.size());
+        LogManager.i(this, "getFirstMamMessageMamId " + syncInfo.getFirstMamMessageMamId() + " getLastMessageMamId " + syncInfo.getLastMessageMamId() + " getLastSyncedTime " + syncInfo.getLastSyncedTime());
+
+        Integer firstLocalMessagePosition = null;
+        Integer firstMamMessagePosition = null;
+        Date firstLocalMessageTimestamp = null;
+        String firstMamMessageStanzaId = syncInfo.getFirstMamMessageStanzaId();
+
+        for (int i = 0; i < messages.size(); i++) {
+            MessageItem messageItem = messages.get(i);
+            String stanzaId = messageItem.getStanzaId();
+
+            if (firstLocalMessagePosition == null && messageItem.getId() != null) {
+                firstLocalMessagePosition = i;
+                firstLocalMessageTimestamp = messageItem.getTimestamp();
+                LogManager.i(this, "firstLocalMessagePosition " + firstLocalMessagePosition + " firstLocalMessageTimestamp " + firstLocalMessageTimestamp);
+            }
+
+
+            if (firstMamMessagePosition == null && firstMamMessageStanzaId != null && stanzaId != null
+                    && firstMamMessageStanzaId.equals(stanzaId)) {
+                firstMamMessagePosition = i;
+
+                LogManager.i(this, "firstMamMessagePosition " + i);
+            }
+
+
+            if (firstLocalMessagePosition != null) {
+                if (firstMamMessagePosition != null) {
+                    break;
+                }
+                if (firstMamMessageStanzaId == null) {
+                    break;
+                }
+            }
+
+        }
+
+        syncInfo.setFirstLocalMessagePosition(firstLocalMessagePosition);
+        syncInfo.setFirstLocalMessageTimeStamp(firstLocalMessageTimestamp);
+        syncInfo.setFirstMamMessagePosition(firstMamMessagePosition);
+    }
+
     void removeMessage(MessageItem messageItem) {
-        messages.remove(messageItem);
+        synchronized (messages) {
+            messages.remove(messageItem);
+            updateSyncInfo();
+        }
         sendQuery.remove(messageItem);
-        final ArrayList<MessageItem> messageItems = new ArrayList<MessageItem>();
+        final ArrayList<MessageItem> messageItems = new ArrayList<>();
         messageItems.add(messageItem);
         Application.getInstance().runInBackground(new Runnable() {
             @Override
@@ -544,10 +600,13 @@ public abstract class AbstractChat extends BaseEntity {
     }
 
     void removeAllMessages() {
-        final ArrayList<MessageItem> messageItems = new ArrayList<MessageItem>(
-                messages);
+        final ArrayList<MessageItem> messageItems;
+        synchronized (messages) {
+            messageItems = new ArrayList<>(messages);
+            messages.clear();
+            updateSyncInfo();
+        }
         lastText = "";
-        messages.clear();
         sendQuery.clear();
         Application.getInstance().runInBackground(new Runnable() {
             @Override
@@ -626,10 +685,11 @@ public abstract class AbstractChat extends BaseEntity {
      * @param intent can be <code>null</code>.
      */
     protected void sendQueue(MessageItem intent) {
-        if (!canSendMessage())
+        if (!canSendMessage()) {
             return;
-        final ArrayList<MessageItem> sentMessages = new ArrayList<MessageItem>();
-        final ArrayList<MessageItem> removeMessages = new ArrayList<MessageItem>();
+        }
+        final ArrayList<MessageItem> sentMessages = new ArrayList<>();
+        final ArrayList<MessageItem> removeMessages = new ArrayList<>();
         for (final MessageItem messageItem : sendQuery) {
             String text = prepareText(messageItem.getText());
             if (text == null) {
@@ -637,54 +697,40 @@ public abstract class AbstractChat extends BaseEntity {
                 Application.getInstance().runInBackground(new Runnable() {
                     @Override
                     public void run() {
-                        if (messageItem.getId() != null)
-                            MessageTable.getInstance().markAsError(
-                                    messageItem.getId());
+                        if (messageItem.getId() != null) {
+                            MessageTable.getInstance().markAsError(messageItem.getId());
+                        }
                     }
                 });
             } else {
                 Message message = createMessagePacket(text);
                 messageItem.setStanzaId(message.getStanzaId());
-                Application.getInstance().runInBackground(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (messageItem.getId() != null) {
-                            MessageTable.getInstance().setStanzaId(messageItem);
-                        }
+                writeStanzaIdToDataBase(messageItem);
 
-                    }
-                });
-
-                ChatStateManager.getInstance().updateOutgoingMessage(this,
-                        message);
-                ReceiptManager.getInstance().updateOutgoingMessage(this,
-                        message, messageItem);
-                CarbonManager.getInstance().updateOutgoingMessage(this,
-                        message, messageItem);
-                if (messageItem != intent)
-                    message.addExtension(new DelayInformation(messageItem
-                            .getTimestamp()));
+                ChatStateManager.getInstance().updateOutgoingMessage(this, message);
+                ReceiptManager.getInstance().updateOutgoingMessage(this, message, messageItem);
+                CarbonManager.getInstance().updateOutgoingMessage(this, message, messageItem);
+                if (messageItem != intent) {
+                    message.addExtension(new DelayInformation(messageItem.getTimestamp()));
+                }
                 try {
-                    ConnectionManager.getInstance()
-                            .sendStanza(account, message);
+                    ConnectionManager.getInstance().sendStanza(account, message);
                 } catch (NetworkException e) {
                     break;
                 }
             }
-            if (MessageArchiveManager.getInstance().getSaveMode(account, user,
-                    threadId) == SaveMode.fls)
-                messageItem.setTag(NO_RECORD_TAG);
             if (messageItem != intent) {
                 messageItem.setSentTimeStamp(new Date());
-                Collections.sort(messages);
+                synchronized (messages) {
+                    sort();
+                }
             }
             messageItem.markAsSent();
-            if (AccountManager.getInstance()
-                    .getArchiveMode(messageItem.getChat().getAccount())
-                    .saveLocally())
+            if (AccountManager.getInstance().getArchiveMode(messageItem.getChat().getAccount()).saveLocally()) {
                 sentMessages.add(messageItem);
-            else
+            } else {
                 removeMessages.add(messageItem);
+            }
         }
         sendQuery.removeAll(sentMessages);
         sendQuery.removeAll(removeMessages);
@@ -692,12 +738,22 @@ public abstract class AbstractChat extends BaseEntity {
         Application.getInstance().runInBackground(new Runnable() {
             @Override
             public void run() {
-                Collection<Long> sentIds = MessageManager.getMessageIds(
-                        sentMessages, false);
-                Collection<Long> removeIds = MessageManager.getMessageIds(
-                        removeMessages, true);
+                Collection<Long> sentIds = MessageManager.getMessageIds(sentMessages, false);
+                Collection<Long> removeIds = MessageManager.getMessageIds(removeMessages, true);
                 MessageTable.getInstance().markAsSent(sentIds);
                 MessageTable.getInstance().removeMessages(removeIds);
+            }
+        });
+    }
+
+    private void writeStanzaIdToDataBase(final MessageItem messageItem) {
+        Application.getInstance().runInBackground(new Runnable() {
+            @Override
+            public void run() {
+                if (messageItem.getId() != null) {
+                    MessageTable.getInstance().setStanzaId(messageItem);
+                }
+
             }
         });
     }
@@ -712,28 +768,10 @@ public abstract class AbstractChat extends BaseEntity {
      * @param threadId <code>null</code> if current value shouldn't be changed.
      */
     protected void updateThreadId(String threadId) {
-        if (threadId == null)
+        if (threadId == null) {
             return;
+        }
         this.threadId = threadId;
-    }
-
-    /**
-     * Returns number of messages to be loaded from server side archive to be
-     * displayed. Should be called before notification messages will be removed.
-     *
-     * @return
-     */
-    public int getRequiredMessageCount() {
-        int count = PRELOADED_MESSAGES
-                + NotificationManager.getInstance()
-                .getNotificationMessageCount(account, user);
-        for (MessageItem message : messages)
-            if (message.isIncoming()) {
-                count -= 1;
-                if (count <= 0)
-                    return 0;
-            }
-        return count;
     }
 
     /**
@@ -781,5 +819,9 @@ public abstract class AbstractChat extends BaseEntity {
 
     public boolean isPrivateMucChatAccepted() {
         return isPrivateMucChatAccepted;
+    }
+
+    public SyncInfo getSyncInfo() {
+        return syncInfo;
     }
 }

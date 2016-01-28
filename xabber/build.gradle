@@ -7,8 +7,8 @@ android {
     defaultConfig {
         minSdkVersion 14
         targetSdkVersion 23
-        versionCode 253
-        versionName '1.0.80'
+        versionCode 259
+        versionName '1.0.86'
     }
 
     compileOptions {
@@ -60,7 +60,7 @@ android {
 }
 
 ext {
-    smackVersion = '4.1.5'
+    smackVersion = '4.1.6'
 }
 
 dependencies {
