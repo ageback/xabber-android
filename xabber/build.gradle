@@ -7,8 +7,8 @@ android {
     defaultConfig {
         minSdkVersion 14
         targetSdkVersion 23
-        versionCode 259
-        versionName '1.0.86'
+        versionCode 263
+        versionName '1.0.90'
     }
 
     compileOptions {
@@ -73,7 +73,7 @@ dependencies {
     compile 'com.google.zxing:android-integration:3.1.0'
     compile 'com.loopj.android:android-async-http:1.4.9'
     compile 'com.soundcloud.android:android-crop:1.0.1@aar'
-    compile 'io.realm:realm-android:0.85.0'
+    compile 'io.realm:realm-android:0.87.4'
     compile 'de.greenrobot:eventbus:2.4.0'
 
     compile "org.igniterealtime.smack:smack-android-extensions:$smackVersion"
@@ -82,4 +82,5 @@ dependencies {
     compile project('otr4j')
     compile project('MemorizingTrustManager')
     compile project('emojicon')
+    compile project(path: ':realm-recyclerview')
 }

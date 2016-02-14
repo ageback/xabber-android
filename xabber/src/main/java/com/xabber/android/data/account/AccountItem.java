@@ -255,7 +255,7 @@ public class AccountItem extends ConnectionItem {
     /**
      * @return Saved status mode.
      */
-    StatusMode getRawStatusMode() {
+    public StatusMode getRawStatusMode() {
         return statusMode;
     }
 

@@ -14,19 +14,20 @@
  */
 package com.xabber.android.data.message;
 
-import android.database.Cursor;
-
 import com.xabber.android.data.Application;
+import com.xabber.android.data.database.DatabaseManager;
 import com.xabber.android.data.LogManager;
 import com.xabber.android.data.NetworkException;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.account.ArchiveMode;
 import com.xabber.android.data.connection.ConnectionManager;
+import com.xabber.android.data.database.realm.MessageItem;
 import com.xabber.android.data.entity.BaseEntity;
 import com.xabber.android.data.extension.blocking.PrivateMucChatBlockingManager;
 import com.xabber.android.data.extension.cs.ChatStateManager;
 import com.xabber.android.data.extension.file.FileManager;
+import com.xabber.android.data.extension.mam.SyncCache;
 import com.xabber.android.data.extension.mam.SyncInfo;
 import com.xabber.android.data.extension.otr.OTRManager;
 import com.xabber.android.data.extension.otr.SecurityLevel;
@@ -41,13 +42,17 @@ import org.jivesoftware.smack.packet.Stanza;
 import org.jivesoftware.smack.util.StringUtils;
 import org.jivesoftware.smackx.delay.packet.DelayInformation;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
+
+import de.greenrobot.event.EventBus;
+import io.realm.Realm;
+import io.realm.RealmChangeListener;
+import io.realm.RealmResults;
+import io.realm.Sort;
 
 /**
  * Chat instance.
@@ -57,28 +62,10 @@ import java.util.List;
 public abstract class AbstractChat extends BaseEntity {
 
     /**
-     * Message tag used when server side record is disable.
-     */
-    private static final String NO_RECORD_TAG = "com.xabber.android.data.message.NO_RECORD_TAG";
-
-    /**
      * Number of messages from history to be shown for context purpose.
      */
     public static final int PRELOADED_MESSAGES = 50;
-    /**
-     * Ids of messages not loaded in to the memory.
-     * <p/>
-     * MUST BE ACCESSED FROM BACKGROUND THREAD ONLY.
-     */
-    protected final Collection<Long> historyIds;
-    /**
-     * Sorted list of messages in this chat.
-     */
-    private final List<MessageItem> messages;
-    /**
-     * List of messages to be sent.
-     */
-    protected final Collection<MessageItem> sendQuery;
+
     /**
      * Whether chat is open and should be displayed as active chat.
      */
@@ -91,20 +78,12 @@ public abstract class AbstractChat extends BaseEntity {
      * Whether user never received notifications from this chat.
      */
     protected boolean firstNotification;
-    /**
-     * Last incoming message's text.
-     */
-    protected String lastText;
-    /**
-     * Last message's time.
-     */
-    protected Date lastTime;
+
     protected Date creationTime = new Date();
     /**
      * Current thread id.
      */
     private String threadId;
-    private boolean isLastMessageIncoming;
 
     private boolean isPrivateMucChat;
     private boolean isPrivateMucChatAccepted;
@@ -116,204 +95,167 @@ public abstract class AbstractChat extends BaseEntity {
      */
     private SyncInfo syncInfo;
 
+    private SyncCache syncCache;
+    private final Realm realm;
+    private final RealmResults<MessageItem> messages;
+    private final RealmResults<MessageItem> messagesToSend;
+
 
     protected AbstractChat(final String account, final String user, boolean isPrivateMucChat) {
         super(account, isPrivateMucChat ? user : Jid.getBareAddress(user));
+        LogManager.i("AbstractChat", "AbstractChat user: " + user);
         threadId = StringUtils.randomString(12);
         active = false;
         trackStatus = false;
         firstNotification = true;
-        lastText = "";
-        lastTime = null;
-        historyIds = new ArrayList<>();
-        messages = new ArrayList<>();
-        sendQuery = new ArrayList<>();
         this.isPrivateMucChat = isPrivateMucChat;
         isPrivateMucChatAccepted = false;
         updateCreationTime();
 
-        syncInfo = new SyncInfo();
+        syncCache = new SyncCache();
 
-        Application.getInstance().runInBackground(new Runnable() {
+        realm = DatabaseManager.getInstance().getRealm();
+
+        getSyncInfo(account, this.user);
+
+        messages = realm.where(MessageItem.class)
+                .equalTo(MessageItem.Fields.ACCOUNT, account)
+                .equalTo(MessageItem.Fields.USER, this.user)
+                .findAllSortedAsync(MessageItem.Fields.TIMESTAMP, Sort.ASCENDING);
+        messages.addChangeListener(new RealmChangeListener() {
             @Override
-            public void run() {
-                loadMessages();
+            public void onChange() {
+                LogManager.i("AbstractChat", "messages changed size: " + messages.size() + " user: " + user);
+            }
+        });
+
+        messagesToSend = realm.where(MessageItem.class)
+                .equalTo(MessageItem.Fields.ACCOUNT, account)
+                .equalTo(MessageItem.Fields.USER, this.user)
+                .equalTo(MessageItem.Fields.SENT, false)
+                .findAllSortedAsync(MessageItem.Fields.TIMESTAMP, Sort.ASCENDING);
+        messagesToSend.addChangeListener(new RealmChangeListener() {
+            @Override
+            public void onChange() {
+                LogManager.i("AbstractChat", "messagesToSend changed user: " + user);
+                sendMessages();
             }
         });
     }
 
-    /**
-     * Load recent messages from local history.
-     * <p/>
-     * CALL THIS METHOD FROM BACKGROUND THREAD ONLY.
-     */
-    private void loadMessages() {
-        final ArrayList<MessageItem> messageItems = new ArrayList<>();
-        Cursor cursor = MessageTable.getInstance().getLastMessages(account, user, PRELOADED_MESSAGES);
-        while (cursor.moveToNext()) {
-            MessageItem messageItem = MessageTable.createMessageItem(cursor, this);
-            messageItems.add(messageItem);
-        }
-        cursor.close();
+    private void getSyncInfo(String account, String user) {
+        syncInfo = realm.where(SyncInfo.class).equalTo(SyncInfo.FIELD_ACCOUNT, account).equalTo(SyncInfo.FIELD_USER, user).findFirst();
 
-        if (messageItems.size() < PRELOADED_MESSAGES) {
-            isLocalHistoryLoadedCompletely = true;
-        }
+        if (syncInfo == null) {
+            realm.beginTransaction();
 
-        Application.getInstance().runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                for (MessageItem messageItem : messageItems) {
-                    updateSendQuery(messageItem);
-                }
-                addMessageItems(messageItems);
-            }
-        });
+            syncInfo = realm.createObject(SyncInfo.class);
+            syncInfo.setAccount(account);
+            syncInfo.setUser(user);
+            realm.commitTransaction();
+        }
     }
 
-    public void loadNext() {
-        if (isLocalHistoryLoadedCompletely) {
-            return;
-        }
-
-        if (messages.isEmpty()) {
-            return;
-        }
-
-
-        Application.getInstance().runInBackground(new Runnable() {
-            @Override
-            public void run() {
-
-                if (syncInfo.getFirstLocalMessageTimeStamp() == null) {
-                    return;
-                }
-
-                final ArrayList<MessageItem> messageItems = new ArrayList<>();
-                Cursor cursor = MessageTable.getInstance().getLastMessagesBefore(account, user,
-                        syncInfo.getFirstLocalMessageTimeStamp().getTime(), PRELOADED_MESSAGES);
-                while (cursor.moveToNext()) {
-                    MessageItem messageItem = MessageTable.createMessageItem(cursor, AbstractChat.this);
-                    messageItems.add(messageItem);
-                }
-                cursor.close();
-
-                if (messageItems.size() < PRELOADED_MESSAGES) {
-                    isLocalHistoryLoadedCompletely = true;
-                }
-
-                LogManager.i(this, "Loaded " + messageItems.size() + " messages from local DB");
-
-                Application.getInstance().runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        for (MessageItem messageItem : messageItems) {
-                            updateSendQuery(messageItem);
-                        }
-                        addMessageItems(messageItems);
-                    }
-                });
-            }
-        });
+    public RealmResults<MessageItem> getMessages() {
+        return messages;
     }
+
+
 
     public boolean isLocalHistoryLoadedCompletely() {
         return isLocalHistoryLoadedCompletely;
     }
 
-    /**
-     * Update existing message list with loaded.
-     *
-     * @param messageItems
-     */
-    private void addMessageItems(final Collection<MessageItem> messageItems) {
-        Application.getInstance().runInBackground(new Runnable() {
-            @Override
-            public void run() {
-                for (MessageItem messageItem : messageItems) {
-                    FileManager.processFileMessage(messageItem, false);
-                }
+    public void onMessageDownloaded(final Collection<MessageItem> messagesFromServer) {
 
-                synchronized (messages) {
-                    messages.addAll(messageItems);
-                    sort();
-                }
-
-                Application.getInstance().runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        MessageManager.getInstance().onChatChanged(account, user, false);
-                    }
-                });
-            }
-        });
-    }
-
-    private void addMessageItem(final MessageItem messageItem, boolean incoming) {
-        Application.getInstance().runInBackground(new Runnable() {
-            @Override
-            public void run() {
-                synchronized (messages) {
-                    messages.add(messageItem);
-                    sort();
-                }
-
-                Application.getInstance().runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        MessageManager.getInstance().onChatChanged(account, user, false);
-                    }
-                });
-            }
-        });
-    }
-
-    public void onMessageDownloaded(Collection<MessageItem> items) {
-
-        if (items == null) {
+        if (messagesFromServer == null || messagesFromServer.isEmpty()) {
             return;
         }
 
-        Collection<MessageItem> newMessages = new ArrayList<>(items);
+        LogManager.i(this, "onMessageDownloaded: " + messagesFromServer.size());
 
-        synchronized (messages) {
 
-            for (MessageItem oldMessage : messages) {
-                Iterator<MessageItem> newMessageIterator = newMessages.iterator();
+        LogManager.i(this, "Adding new messages from MAM: " + messagesFromServer.size());
 
-                while (newMessageIterator.hasNext()) {
+        realm.executeTransaction(new Realm.Transaction() {
+            @Override
+            public void execute(Realm realm) {
+                RealmResults<MessageItem> localMessages = realm.where(MessageItem.class)
+                        .equalTo(MessageItem.Fields.ACCOUNT, account)
+                        .equalTo(MessageItem.Fields.USER, user)
+                        .findAll();
 
-                    MessageItem newMessage = newMessageIterator.next();
+                Iterator<MessageItem> iterator = messagesFromServer.iterator();
+                while (iterator.hasNext()) {
+                    MessageItem remoteMessage = iterator.next();
 
-                    if (oldMessage.getStanzaId() != null && newMessage.getStanzaId() != null
-                            && oldMessage.getStanzaId().equals(newMessage.getStanzaId())) {
-                        LogManager.i(this, "found messages with same Stanza ID. removing. Text " + oldMessage.getText() + " stanza id " + oldMessage.getStanzaId());
-
-                        newMessageIterator.remove();
-                        break;
+                    if (localMessages.where()
+                            .equalTo(MessageItem.Fields.STANZA_ID, remoteMessage.getStanzaId())
+                            .count() > 0) {
+                        LogManager.i(this, "Sync. Found messages with same Stanza ID. removing. Remote message:"
+                                + " Text: " + remoteMessage.getText()
+                                + " Timestamp: " + remoteMessage.getTimestamp()
+                                + " Delay Timestamp: " + remoteMessage.getDelayTimestamp()
+                                + " StanzaId: " + remoteMessage.getStanzaId());
+                        iterator.remove();
+                        continue;
                     }
 
-                    if (Math.abs(oldMessage.getTimestamp().getTime() - newMessage.getTimestamp().getTime()) < 1000 * 60
-                            && oldMessage.getText().equals(newMessage.getText())) {
+                    if (remoteMessage.getText() == null || remoteMessage.getTimestamp() == null) {
+                        continue;
+                    }
 
-                        LogManager.i(this, "found messages with same text and similar time. removing. Text " + oldMessage.getText() + ", time old " + oldMessage.getTimestamp() + " new " + newMessage.getTimestamp());
+                    Long remoteMessageDelayTimestamp = remoteMessage.getDelayTimestamp();
+                    Long remoteMessageTimestamp = remoteMessage.getTimestamp();
 
-                        oldMessage.setStanzaId(newMessage.getStanzaId());
-                        writeStanzaIdToDataBase(oldMessage);
+                    RealmResults<MessageItem> sameTextMessages = localMessages.where()
+                            .equalTo(MessageItem.Fields.TEXT, remoteMessage.getText()).findAll();
 
-                        newMessageIterator.remove();
-                        break;
+                    if (isTimeStampSimilar(sameTextMessages, remoteMessageTimestamp)) {
+                        LogManager.i(this, "Sync. Found messages with similar remote timestamp. Removing. Remote message:"
+                                + " Text: " + remoteMessage.getText()
+                                + " Timestamp: " + remoteMessage.getTimestamp()
+                                + " Delay Timestamp: " + remoteMessage.getDelayTimestamp()
+                                + " StanzaId: " + remoteMessage.getStanzaId());
+                        iterator.remove();
+                        continue;
+                    }
+
+                    if (remoteMessageDelayTimestamp != null
+                            && isTimeStampSimilar(sameTextMessages, remoteMessageDelayTimestamp)) {
+                        LogManager.i(this, "Sync. Found messages with similar remote delay timestamp. Removing. Remote message:"
+                                + " Text: " + remoteMessage.getText()
+                                + " Timestamp: " + remoteMessage.getTimestamp()
+                                + " Delay Timestamp: " + remoteMessage.getDelayTimestamp()
+                                + " StanzaId: " + remoteMessage.getStanzaId());
+                        iterator.remove();
+                        continue;
                     }
                 }
-            }
 
-            LogManager.i(this, "Was " + items.size() + " new messages, " + newMessages.size() + " left");
-
-            addMessageItems(newMessages);
-            for (MessageItem messageItem : newMessages) {
-                requestToWriteMessage(messageItem);
+                realm.copyToRealm(messagesFromServer);
             }
+        }, null);
+    }
+
+    private boolean isTimeStampSimilar(RealmResults<MessageItem> sameTextMessages, long remoteMessageTimestamp) {
+        long start = remoteMessageTimestamp - (1000 * 5);
+        long end = remoteMessageTimestamp + (1000 * 5);
+
+        if (sameTextMessages.where()
+                .between(MessageItem.Fields.TIMESTAMP, start, end)
+                .count() > 0) {
+            LogManager.i(this, "Sync. Found messages with similar local timestamp");
+            return true;
         }
+
+        if (sameTextMessages.where()
+                .between(MessageItem.Fields.DELAY_TIMESTAMP, start, end)
+                .count() > 0) {
+            LogManager.i(this, "Sync. Found messages with similar local delay timestamp.");
+            return true;
+        }
+        return false;
     }
 
     public boolean isActive() {
@@ -336,6 +278,9 @@ public abstract class AbstractChat extends BaseEntity {
     void closeChat() {
         active = false;
         firstNotification = true;
+
+        messagesToSend.removeChangeListeners();
+        messages.removeChangeListeners();
     }
 
     boolean isStatusTrackingEnabled() {
@@ -362,10 +307,6 @@ public abstract class AbstractChat extends BaseEntity {
         return result;
     }
 
-    public Collection<MessageItem> getMessages() {
-        return Collections.unmodifiableCollection(messages);
-    }
-
     /**
      * @return Whether user should be notified about incoming messages in chat.
      */
@@ -377,7 +318,7 @@ public abstract class AbstractChat extends BaseEntity {
      * @param text
      * @return New message instance.
      */
-    abstract protected MessageItem newMessage(String text);
+    abstract protected void newMessage(String text);
 
     /**
      * Creates new action.
@@ -406,11 +347,11 @@ public abstract class AbstractChat extends BaseEntity {
      * @param record         Whether record server side is enabled.
      * @return
      */
-    protected MessageItem newMessage(String resource, String text,
-                                     ChatAction action, Date delayTimestamp, boolean incoming,
-                                     boolean notify, boolean unencrypted, boolean offline, boolean record, String stanzaId) {
+    protected void newMessage(String resource, String text,
+                                     final ChatAction action, final Date delayTimestamp, final boolean incoming,
+                                     boolean notify, final boolean unencrypted, final boolean offline, boolean record, final String stanzaId) {
         boolean save;
-        boolean visible = MessageManager.getInstance().isVisibleChat(this);
+        final boolean visible = MessageManager.getInstance().isVisibleChat(this);
         boolean read = incoming ? visible : true;
         boolean send = incoming;
         if (action == null && text == null) {
@@ -442,7 +383,7 @@ public abstract class AbstractChat extends BaseEntity {
                 && OTRManager.getInstance().getSecurityLevel(account, user) != SecurityLevel.plain))) {
             save = false;
         }
-        Date timestamp = new Date();
+        final Date timestamp = new Date();
 
         if (text.trim().isEmpty()) {
             notify = false;
@@ -462,101 +403,94 @@ public abstract class AbstractChat extends BaseEntity {
             }
         }
 
-        MessageItem messageItem = new MessageItem(this, record ? null : NO_RECORD_TAG, resource,
-                text, action, timestamp, delayTimestamp, incoming, read, send, false, incoming,
-                unencrypted, offline);
-        messageItem.setStanzaId(stanzaId);
-
-        FileManager.processFileMessage(messageItem, true);
-
-        updateSendQuery(messageItem);
-        addMessageItem(messageItem, incoming);
-
         if (save && !isPrivateMucChat) {
-            requestToWriteMessage(messageItem);
-        }
+            final boolean finalRead = read;
+            final boolean finalSend = send;
+            final String finalResource = resource;
+            final String finalText = text;
+            final boolean finalNotify = notify;
+            realm.executeTransaction(new Realm.Transaction() {
+                @Override
+                public void execute(Realm realm) {
+                    MessageItem messageItem = new MessageItem();
 
-        if (notify && notifyAboutMessage()) {
-            if (visible) {
-                if (ChatManager.getInstance().isNotifyVisible(account, user)) {
-                    NotificationManager.getInstance().onCurrentChatMessageNotification(messageItem);
+                    messageItem.setAccount(account);
+                    messageItem.setUser(user);
+                    messageItem.setResource(finalResource);
+                    if (action != null) {
+                        messageItem.setAction(action.toString());
+                    }
+                    messageItem.setText(finalText);
+                    messageItem.setTimestamp(timestamp.getTime());
+                    if (delayTimestamp != null) {
+                        messageItem.setDelayTimestamp(delayTimestamp.getTime());
+                    }
+                    messageItem.setIncoming(incoming);
+                    messageItem.setRead(finalRead);
+                    messageItem.setSent(finalSend);
+                    messageItem.setUnencrypted(unencrypted);
+                    messageItem.setOffline(offline);
+                    messageItem.setStanzaId(stanzaId);
+                    FileManager.processFileMessage(messageItem, true);
+
+                    messageItem = realm.copyToRealm(messageItem);
+
+                    if (finalNotify && notifyAboutMessage()) {
+                        if (visible) {
+                            if (ChatManager.getInstance().isNotifyVisible(account, user)) {
+                                NotificationManager.getInstance().onCurrentChatMessageNotification(messageItem);
+                            }
+                        } else {
+                            NotificationManager.getInstance().onMessageNotification(messageItem);
+                        }
+                    }
+
+
                 }
-            } else {
-                NotificationManager.getInstance().onMessageNotification(messageItem);
-            }
+            }, null);
+
         }
-
-
-        return messageItem;
     }
 
-    protected MessageItem newFileMessage(String text, File file, boolean isError) {
+    protected MessageItem newFileMessage(String text, String filePath, boolean isError) {
         Date timestamp = new Date();
 
-        MessageItem messageItem = new MessageItem(this, NO_RECORD_TAG, "", text, null, timestamp,
-                null, false, true, false, false, false, false, false);
-
-        messageItem.setIsUploadFileMessage(true);
+        MessageItem messageItem = new MessageItem();
+        messageItem.setAccount(account);
+        messageItem.setUser(user);
+        messageItem.setText(text);
+        messageItem.setTimestamp(timestamp.getTime());
+        messageItem.setRead(true);
         if (isError) {
-            messageItem.markAsError();
+            messageItem.setError(true);
         }
-        messageItem.setFile(file);
+        messageItem.setFilePath(filePath);
 
-        addMessageItem(messageItem, false);
+        realm.beginTransaction();
+        messageItem = realm.copyToRealm(messageItem);
+        realm.commitTransaction();
+
         return messageItem;
-    }
-
-    private void requestToWriteMessage(final MessageItem messageItem) {
-        Application.getInstance().runInBackground(new Runnable() {
-            @Override
-            public void run() {
-                long id = MessageTable.getInstance().add(messageItem);
-                messageItem.setId(id);
-            }
-        });
-    }
-
-    private void updateSendQuery(MessageItem messageItem) {
-        if (!messageItem.isSent()) {
-            sendQuery.add(messageItem);
-        }
-    }
-
-    /**
-     * Sorts messages and update last text and time.
-     */
-    private void sort() {
-        Collections.sort(messages);
-        updateSyncInfo();
-        for (int index = messages.size() - 1; index >= 0; index--) {
-            MessageItem messageItem = messages.get(index);
-            if (messageItem.getAction() == null) {
-                lastText = messageItem.getDisplayText();
-                lastTime = messageItem.getTimestamp();
-                isLastMessageIncoming = messageItem.isIncoming();
-                return;
-            }
-        }
     }
 
     private void updateSyncInfo() {
-        LogManager.i(this, "updateSyncInfo messages size " + messages.size());
-        LogManager.i(this, "getFirstMamMessageMamId " + syncInfo.getFirstMamMessageMamId() + " getLastMessageMamId " + syncInfo.getLastMessageMamId() + " getLastSyncedTime " + syncInfo.getLastSyncedTime());
+        LogManager.i(this, "updateSyncInfo messages size");
+
+        final String firstMamMessageStanzaId = syncInfo.getFirstMamMessageStanzaId();
 
         Integer firstLocalMessagePosition = null;
         Integer firstMamMessagePosition = null;
         Date firstLocalMessageTimestamp = null;
-        String firstMamMessageStanzaId = syncInfo.getFirstMamMessageStanzaId();
 
         for (int i = 0; i < messages.size(); i++) {
             MessageItem messageItem = messages.get(i);
             String stanzaId = messageItem.getStanzaId();
-
-            if (firstLocalMessagePosition == null && messageItem.getId() != null) {
-                firstLocalMessagePosition = i;
-                firstLocalMessageTimestamp = messageItem.getTimestamp();
-                LogManager.i(this, "firstLocalMessagePosition " + firstLocalMessagePosition + " firstLocalMessageTimestamp " + firstLocalMessageTimestamp);
-            }
+//
+//            if (firstLocalMessagePosition == null && messageItem.getId() != null) {
+//                firstLocalMessagePosition = i;
+//                firstLocalMessageTimestamp = messageItem.getTimestamp();
+//                LogManager.i(this, "firstLocalMessagePosition " + firstLocalMessagePosition + " firstLocalMessageTimestamp " + firstLocalMessageTimestamp);
+//            }
 
 
             if (firstMamMessagePosition == null && firstMamMessageStanzaId != null && stanzaId != null
@@ -578,44 +512,29 @@ public abstract class AbstractChat extends BaseEntity {
 
         }
 
-        syncInfo.setFirstLocalMessagePosition(firstLocalMessagePosition);
-        syncInfo.setFirstLocalMessageTimeStamp(firstLocalMessageTimestamp);
-        syncInfo.setFirstMamMessagePosition(firstMamMessagePosition);
+        syncCache.setFirstLocalMessagePosition(firstLocalMessagePosition);
+        syncCache.setFirstLocalMessageTimeStamp(firstLocalMessageTimestamp);
+        syncCache.setFirstMamMessagePosition(firstMamMessagePosition);
+
     }
 
-    void removeMessage(MessageItem messageItem) {
-        synchronized (messages) {
-            messages.remove(messageItem);
-            updateSyncInfo();
-        }
-        sendQuery.remove(messageItem);
-        final ArrayList<MessageItem> messageItems = new ArrayList<>();
-        messageItems.add(messageItem);
-        Application.getInstance().runInBackground(new Runnable() {
+    void removeMessage(final MessageItem messageItem) {
+        realm.executeTransaction(new Realm.Transaction() {
             @Override
-            public void run() {
-                MessageTable.getInstance().removeMessages(MessageManager.getMessageIds(messageItems, true));
+            public void execute(Realm realm) {
+                messageItem.removeFromRealm();
             }
-        });
+        }, null);
     }
 
     void removeAllMessages() {
-        final ArrayList<MessageItem> messageItems;
-        synchronized (messages) {
-            messageItems = new ArrayList<>(messages);
-            messages.clear();
-            updateSyncInfo();
-        }
-        lastText = "";
-        sendQuery.clear();
-        Application.getInstance().runInBackground(new Runnable() {
+        realm.executeTransaction(new Realm.Transaction() {
             @Override
-            public void run() {
-                MessageTable.getInstance().removeMessages(MessageManager.getMessageIds(messageItems, true));
-                MessageTable.getInstance().removeMessages(historyIds);
-                historyIds.clear();
+            public void execute(Realm realm) {
+                messages.clear();
             }
-        });
+        }, null);
+
     }
 
     /**
@@ -628,32 +547,29 @@ public abstract class AbstractChat extends BaseEntity {
     }
 
     /**
-     * Requests to send all not sent messages.
-     */
-    public void sendMessages() {
-        sendQueue(null);
-    }
-
-    /**
      * @return Whether chat can send messages.
      */
     protected boolean canSendMessage() {
-        return !sendQuery.isEmpty();
+        return !messagesToSend.isEmpty();
     }
 
-    /**
-     * @return Last incoming message's text. Empty string if last message is
-     * outgoing.
-     */
     public String getLastText() {
-        return lastText;
+        if (!messages.isEmpty()) {
+            return messages.last().getText();
+        } else {
+            return "";
+        }
     }
 
     /**
      * @return Time of last message in chat. Can be <code>null</code>.
      */
     public Date getLastTime() {
-        return lastTime;
+        if (!messages.isEmpty()) {
+            return new Date(messages.last().getTimestamp());
+        } else {
+            return null;
+        }
     }
 
     /**
@@ -679,83 +595,76 @@ public abstract class AbstractChat extends BaseEntity {
         return text;
     }
 
-    /**
-     * Requests to send messages from queue.
-     *
-     * @param intent can be <code>null</code>.
-     */
-    protected void sendQueue(MessageItem intent) {
-        if (!canSendMessage()) {
-            return;
-        }
-        final ArrayList<MessageItem> sentMessages = new ArrayList<>();
-        final ArrayList<MessageItem> removeMessages = new ArrayList<>();
-        for (final MessageItem messageItem : sendQuery) {
-            String text = prepareText(messageItem.getText());
-            if (text == null) {
-                messageItem.markAsError();
-                Application.getInstance().runInBackground(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (messageItem.getId() != null) {
-                            MessageTable.getInstance().markAsError(messageItem.getId());
+
+    public void sendMessages() {
+        LogManager.i(this, "sendMessages. user: " + user);
+
+        Application.getInstance().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (messagesToSend.isEmpty()) {
+                    return;
+                }
+
+                List<MessageItem> messageItemList = new ArrayList<>(messagesToSend);
+
+                LogManager.i(AbstractChat.this, "sendMessages " + messageItemList.size());
+
+                for (final MessageItem messageItem : messageItemList) {
+                    String text = prepareText(messageItem.getText());
+                    Long timestamp = messageItem.getTimestamp();
+
+                    Date currentTime = new Date(System.currentTimeMillis());
+                    Date delayTimestamp = null;
+
+                    if (timestamp != null) {
+                        if (currentTime.getTime() - timestamp > 60000) {
+                            delayTimestamp = currentTime;
                         }
                     }
-                });
-            } else {
-                Message message = createMessagePacket(text);
-                messageItem.setStanzaId(message.getStanzaId());
-                writeStanzaIdToDataBase(messageItem);
 
-                ChatStateManager.getInstance().updateOutgoingMessage(this, message);
-                ReceiptManager.getInstance().updateOutgoingMessage(this, message, messageItem);
-                CarbonManager.getInstance().updateOutgoingMessage(this, message, messageItem);
-                if (messageItem != intent) {
-                    message.addExtension(new DelayInformation(messageItem.getTimestamp()));
-                }
-                try {
-                    ConnectionManager.getInstance().sendStanza(account, message);
-                } catch (NetworkException e) {
-                    break;
-                }
-            }
-            if (messageItem != intent) {
-                messageItem.setSentTimeStamp(new Date());
-                synchronized (messages) {
-                    sort();
-                }
-            }
-            messageItem.markAsSent();
-            if (AccountManager.getInstance().getArchiveMode(messageItem.getChat().getAccount()).saveLocally()) {
-                sentMessages.add(messageItem);
-            } else {
-                removeMessages.add(messageItem);
-            }
-        }
-        sendQuery.removeAll(sentMessages);
-        sendQuery.removeAll(removeMessages);
-        MessageManager.getInstance().onChatChanged(account, user, false);
-        Application.getInstance().runInBackground(new Runnable() {
-            @Override
-            public void run() {
-                Collection<Long> sentIds = MessageManager.getMessageIds(sentMessages, false);
-                Collection<Long> removeIds = MessageManager.getMessageIds(removeMessages, true);
-                MessageTable.getInstance().markAsSent(sentIds);
-                MessageTable.getInstance().removeMessages(removeIds);
-            }
-        });
-    }
+                    Message message = null;
+                    if (text != null) {
 
-    private void writeStanzaIdToDataBase(final MessageItem messageItem) {
-        Application.getInstance().runInBackground(new Runnable() {
-            @Override
-            public void run() {
-                if (messageItem.getId() != null) {
-                    MessageTable.getInstance().setStanzaId(messageItem);
+                        LogManager.i(AbstractChat.this, "Sending message user: " + messageItem.getUser() + " text: " + messageItem.getText());
+                        message = createMessagePacket(text);
+                    }
+
+                    if (message != null) {
+                        ChatStateManager.getInstance().updateOutgoingMessage(AbstractChat.this, message);
+                        CarbonManager.getInstance().updateOutgoingMessage(AbstractChat.this, message);
+                        if (delayTimestamp != null) {
+                            message.addExtension(new DelayInformation(delayTimestamp));
+                        }
+
+                        try {
+                            ConnectionManager.getInstance().sendStanza(account, message);
+                        } catch (NetworkException e) {
+                            break;
+                        }
+                    }
+
+                    realm.beginTransaction();
+                    if (message == null) {
+                        messageItem.setError(true);
+                    } else {
+                        messageItem.setStanzaId(message.getStanzaId());
+                    }
+
+                    if (delayTimestamp != null) {
+                        messageItem.setDelayTimestamp(delayTimestamp.getTime());
+                    }
+                    if (messageItem.getTimestamp() == null) {
+                        messageItem.setTimestamp(currentTime.getTime());
+                    }
+                    messageItem.setSent(true);
+                    realm.commitTransaction();
+                    EventBus.getDefault().post(new MessageUpdateEvent(messageItem.getAccount(), messageItem.getUser(), messageItem.getUniqueId()));
                 }
 
             }
         });
+
     }
 
     public String getThreadId() {
@@ -786,7 +695,7 @@ public abstract class AbstractChat extends BaseEntity {
     }
 
     /**
-     * Connection complete.
+     * Connection complete.f
      */
     protected void onComplete() {
     }
@@ -806,7 +715,11 @@ public abstract class AbstractChat extends BaseEntity {
     }
 
     public boolean isLastMessageIncoming() {
-        return isLastMessageIncoming;
+        if (!messages.isEmpty()) {
+            return messages.last().isIncoming();
+        } else {
+            return false;
+        }
     }
 
     public void setIsPrivateMucChatAccepted(boolean isPrivateMucChatAccepted) {
@@ -823,5 +736,13 @@ public abstract class AbstractChat extends BaseEntity {
 
     public SyncInfo getSyncInfo() {
         return syncInfo;
+    }
+
+    public SyncCache getSyncCache() {
+        return syncCache;
+    }
+
+    protected Realm getRealm() {
+        return realm;
     }
 }
