@@ -18,7 +18,6 @@ import android.os.Environment;
 
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
-import com.xabber.android.data.database.DatabaseManager;
 import com.xabber.android.data.NetworkException;
 import com.xabber.android.data.OnLoadListener;
 import com.xabber.android.data.SettingsManager;
@@ -64,7 +63,6 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import io.realm.Realm;
 import io.realm.RealmResults;
@@ -115,35 +113,27 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
 
     @Override
     public void onLoad() {
-        // TODO!
-//        final Set<BaseEntity> loadChats = new HashSet<BaseEntity>();
-//        Cursor cursor;
-//        cursor = MessageTable.getInstance().messagesToSend();
-//        try {
-//            if (cursor.moveToFirst()) {
-//                do {
-//                    loadChats.add(new BaseEntity(MessageTable.getAccount(cursor), MessageTable.getUser(cursor)));
-//                } while (cursor.moveToNext());
-//            }
-//        } finally {
-//            cursor.close();
-//        }
-//        Application.getInstance().runOnUiThread(new Runnable() {
-//            @Override
-//            public void run() {
-//                onLoaded(loadChats);
-//            }
-//        });
-    }
+        Realm realm = Realm.getDefaultInstance();
 
-    private void onLoaded(Set<BaseEntity> loadChats) {
-        NotificationManager.getInstance().registerNotificationProvider(mucPrivateChatRequestProvider);
+        realm.executeTransaction(new Realm.Transaction() {
+            @Override
+            public void execute(Realm realm) {
+                RealmResults<MessageItem> messagesToSend = realm.where(MessageItem.class)
+                        .equalTo(MessageItem.Fields.SENT, false)
+                        .findAll();
 
-        for (BaseEntity baseEntity : loadChats) {
-            if (getChat(baseEntity.getAccount(), Jid.getBareAddress(baseEntity.getUser())) == null) {
-                createChat(baseEntity.getAccount(), baseEntity.getUser());
+                for (MessageItem messageItem : messagesToSend) {
+                    String account = messageItem.getAccount();
+                    String user = messageItem.getUser();
+                    if (getChat(account, user) == null) {
+                        createChat(account, user);
+                    }
+                }
             }
-        }
+        }, null);
+        realm.close();
+
+        NotificationManager.getInstance().registerNotificationProvider(mucPrivateChatRequestProvider);
     }
 
     /**
@@ -240,41 +230,63 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
         chat.sendMessages();
     }
 
-    public MessageItem createFileMessage(String account, String user, File file) {
+    public String createFileMessage(String account, String user, File file) {
         AbstractChat chat = getChat(account, user);
         if (chat == null) {
             chat = createChat(account, user);
         }
 
         chat.openChat();
-        return chat.newFileMessage(file.getName(), file.getPath(), false);
+        return chat.newFileMessage(file);
     }
 
-    public void replaceMessage(String account, String user, final MessageItem srcFileMessage, final String text) {
-//        AbstractChat chat = getChat(account, user);
-//        if (chat == null) {
-//            return;
-//        }
-//
-//        chat.getRealm().executeTransaction(new Realm.Transaction() {
-//            @Override
-//            public void execute(Realm realm) {
-//                srcFileMessage.setText(text);
-//            }
-//        });
-//
-//        chat.sendMessages();
-    }
-
-    public void updateMessageWithError(String account, String user, MessageItem srcFileMessage, String text) {
-        AbstractChat chat = getChat(account, user);
+    public void updateFileMessage(String account, String user, final String messageId, final String text) {
+        final AbstractChat chat = getChat(account, user);
         if (chat == null) {
             return;
         }
 
-        chat.removeMessage(srcFileMessage);
-        chat.newFileMessage(String.format(Application.getInstance().getString(R.string.error_sending_file), text),
-                srcFileMessage.getFilePath(), true);
+        Realm realm = Realm.getDefaultInstance();
+
+        realm.executeTransaction(new Realm.Transaction() {
+            @Override
+            public void execute(Realm realm) {
+                MessageItem messageItem = realm.where(MessageItem.class)
+                        .equalTo(MessageItem.Fields.UNIQUE_ID, messageId)
+                        .findFirst();
+
+                if (messageItem != null) {
+                    messageItem.setText(text);
+                    messageItem.setSent(false);
+                }
+            }
+        }, new Realm.Transaction.Callback() {
+            @Override
+            public void onSuccess() {
+                chat.sendMessages();
+            }
+        });
+
+        realm.close();
+    }
+
+    public void updateMessageWithError(final String messageId) {
+        Realm realm = Realm.getDefaultInstance();
+
+        realm.executeTransaction(new Realm.Transaction() {
+            @Override
+            public void execute(Realm realm) {
+                MessageItem messageItem = realm.where(MessageItem.class)
+                        .equalTo(MessageItem.Fields.UNIQUE_ID, messageId)
+                        .findFirst();
+
+                if (messageItem != null) {
+                    messageItem.setError(true);
+                }
+            }
+        }, null);
+
+        realm.close();
     }
 
     /**
@@ -358,33 +370,6 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
         chat.closeChat();
     }
 
-//    /**
-//     * @param account
-//     * @param user
-//     * @return Last incoming message's text. Empty string if last message is
-//     * outgoing.
-//     */
-//    public String getLastText(String account, String user) {
-//        AbstractChat chat = getChat(account, user);
-//        if (chat == null) {
-//            return "";
-//        }
-//        return chat.getLastText();
-//    }
-//
-//    /**
-//     * @param account
-//     * @param user
-//     * @return Time of last message in chat. Can be <code>null</code>.
-//     */
-//    public Date getLastTime(String account, String user) {
-//        AbstractChat chat = getChat(account, user);
-//        if (chat == null) {
-//            return null;
-//        }
-//        return chat.getLastTime();
-//    }
-
     /**
      * Sets currently visible chat.
      */
@@ -467,20 +452,6 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
         chat.removeMessage(messageItem);
     }
 
-
-
-//    /**
-//     * @param account
-//     * @param user
-//     * @return List of messages or empty list.
-//     */
-//    public Collection<MessageItem> getMessages(String account, String user) {
-//        AbstractChat chat = getChat(account, user);
-//        if (chat == null) {
-//            return Collections.emptyList();
-//        }
-//        return chat.getMessages();
-//    }
 
     /**
      * Called on action settings change.
@@ -702,7 +673,9 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
                 final boolean isMUC = abstractChat instanceof RoomChat;
                 final String accountName = AccountManager.getInstance().getNickName(account);
                 final String userName = RosterManager.getInstance().getName(account, user);
-                RealmResults<MessageItem> messageItems = Realm.getDefaultInstance().where(MessageItem.class)
+
+                Realm realm = Realm.getDefaultInstance();
+                RealmResults<MessageItem> messageItems = realm.where(MessageItem.class)
                         .equalTo(MessageItem.Fields.ACCOUNT, account)
                         .equalTo(MessageItem.Fields.USER, user)
                         .findAllSorted(MessageItem.Fields.TIMESTAMP);
@@ -729,6 +702,7 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
                     out.write(StringUtils.escapeHtml(messageItem.getText()));
                     out.write("</p><hr />\n");
                 }
+                realm.close();
             }
             out.write("</body></html>");
             out.close();

@@ -39,13 +39,12 @@ import org.jivesoftware.smack.packet.Stanza;
 import org.jivesoftware.smack.util.StringUtils;
 import org.jivesoftware.smackx.delay.packet.DelayInformation;
 
+import java.io.File;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.List;
+import java.util.UUID;
 
-import de.greenrobot.event.EventBus;
 import io.realm.Realm;
 import io.realm.RealmResults;
 import io.realm.Sort;
@@ -106,99 +105,6 @@ public abstract class AbstractChat extends BaseEntity {
 
     public boolean isLocalHistoryLoadedCompletely() {
         return isLocalHistoryLoadedCompletely;
-    }
-
-    public void onMessageDownloaded(final Collection<MessageItem> messagesFromServer) {
-
-        if (messagesFromServer == null || messagesFromServer.isEmpty()) {
-            return;
-        }
-
-        LogManager.i(this, "onMessageDownloaded: " + messagesFromServer.size());
-
-
-        LogManager.i(this, "Adding new messages from MAM: " + messagesFromServer.size());
-        Realm realm = Realm.getDefaultInstance();
-        Realm.getDefaultInstance().executeTransaction(new Realm.Transaction() {
-            @Override
-            public void execute(Realm realm) {
-                RealmResults<MessageItem> localMessages = realm.where(MessageItem.class)
-                        .equalTo(MessageItem.Fields.ACCOUNT, account)
-                        .equalTo(MessageItem.Fields.USER, user)
-                        .findAll();
-
-                Iterator<MessageItem> iterator = messagesFromServer.iterator();
-                while (iterator.hasNext()) {
-                    MessageItem remoteMessage = iterator.next();
-
-                    if (localMessages.where()
-                            .equalTo(MessageItem.Fields.STANZA_ID, remoteMessage.getStanzaId())
-                            .count() > 0) {
-                        LogManager.i(this, "Sync. Found messages with same Stanza ID. removing. Remote message:"
-                                + " Text: " + remoteMessage.getText()
-                                + " Timestamp: " + remoteMessage.getTimestamp()
-                                + " Delay Timestamp: " + remoteMessage.getDelayTimestamp()
-                                + " StanzaId: " + remoteMessage.getStanzaId());
-                        iterator.remove();
-                        continue;
-                    }
-
-                    if (remoteMessage.getText() == null || remoteMessage.getTimestamp() == null) {
-                        continue;
-                    }
-
-                    Long remoteMessageDelayTimestamp = remoteMessage.getDelayTimestamp();
-                    Long remoteMessageTimestamp = remoteMessage.getTimestamp();
-
-                    RealmResults<MessageItem> sameTextMessages = localMessages.where()
-                            .equalTo(MessageItem.Fields.TEXT, remoteMessage.getText()).findAll();
-
-                    if (isTimeStampSimilar(sameTextMessages, remoteMessageTimestamp)) {
-                        LogManager.i(this, "Sync. Found messages with similar remote timestamp. Removing. Remote message:"
-                                + " Text: " + remoteMessage.getText()
-                                + " Timestamp: " + remoteMessage.getTimestamp()
-                                + " Delay Timestamp: " + remoteMessage.getDelayTimestamp()
-                                + " StanzaId: " + remoteMessage.getStanzaId());
-                        iterator.remove();
-                        continue;
-                    }
-
-                    if (remoteMessageDelayTimestamp != null
-                            && isTimeStampSimilar(sameTextMessages, remoteMessageDelayTimestamp)) {
-                        LogManager.i(this, "Sync. Found messages with similar remote delay timestamp. Removing. Remote message:"
-                                + " Text: " + remoteMessage.getText()
-                                + " Timestamp: " + remoteMessage.getTimestamp()
-                                + " Delay Timestamp: " + remoteMessage.getDelayTimestamp()
-                                + " StanzaId: " + remoteMessage.getStanzaId());
-                        iterator.remove();
-                        continue;
-                    }
-                }
-
-                realm.copyToRealm(messagesFromServer);
-            }
-        }, null);
-        realm.close();
-    }
-
-    private boolean isTimeStampSimilar(RealmResults<MessageItem> sameTextMessages, long remoteMessageTimestamp) {
-        long start = remoteMessageTimestamp - (1000 * 5);
-        long end = remoteMessageTimestamp + (1000 * 5);
-
-        if (sameTextMessages.where()
-                .between(MessageItem.Fields.TIMESTAMP, start, end)
-                .count() > 0) {
-            LogManager.i(this, "Sync. Found messages with similar local timestamp");
-            return true;
-        }
-
-        if (sameTextMessages.where()
-                .between(MessageItem.Fields.DELAY_TIMESTAMP, start, end)
-                .count() > 0) {
-            LogManager.i(this, "Sync. Found messages with similar local delay timestamp.");
-            return true;
-        }
-        return false;
     }
 
     public boolean isActive() {
@@ -394,26 +300,32 @@ public abstract class AbstractChat extends BaseEntity {
         }
     }
 
-    protected MessageItem newFileMessage(String text, String filePath, boolean isError) {
-        Date timestamp = new Date();
+    protected String newFileMessage(final File file) {
+        Realm realm = Realm.getDefaultInstance();
 
-        MessageItem messageItem = new MessageItem();
-        messageItem.setAccount(account);
-        messageItem.setUser(user);
-        messageItem.setText(text);
-        messageItem.setTimestamp(timestamp.getTime());
-        messageItem.setRead(true);
-        if (isError) {
-            messageItem.setError(true);
-        }
-        messageItem.setFilePath(filePath);
+        final String messageId = UUID.randomUUID().toString();
 
-        // TODO
-//        realm.beginTransaction();
-//        messageItem = realm.copyToRealm(messageItem);
-//        realm.commitTransaction();
+        realm.executeTransaction(new Realm.Transaction() {
+            @Override
+            public void execute(Realm realm) {
+                MessageItem messageItem = new MessageItem(messageId);
+                messageItem.setAccount(account);
+                messageItem.setUser(user);
+                messageItem.setText(file.getName());
+                messageItem.setFilePath(file.getPath());
+                messageItem.setTimestamp(System.currentTimeMillis());
+                messageItem.setRead(true);
+                messageItem.setSent(true);
+                messageItem.setError(false);
+                messageItem.setIncoming(false);
+                realm.copyToRealm(messageItem);
+            }
+        }, null);
 
-        return messageItem;
+
+        realm.close();
+
+        return messageId;
     }
 
     private void updateSyncInfo() {
@@ -620,13 +532,7 @@ public abstract class AbstractChat extends BaseEntity {
                     messageItem.setSent(true);
                 }
             }
-        }, new Realm.Transaction.Callback() {
-            @Override
-            public void onSuccess() {
-                super.onSuccess();
-                EventBus.getDefault().post(new MessageUpdateEvent(account, user));
-            }
-        });
+        }, null);
         realm.close();
     }
 
