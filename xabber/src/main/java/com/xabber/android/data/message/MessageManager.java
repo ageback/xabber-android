@@ -46,11 +46,11 @@ import com.xabber.android.data.roster.OnStatusChangeListener;
 import com.xabber.android.data.roster.RosterManager;
 import com.xabber.android.utils.StringUtils;
 import com.xabber.xmpp.address.Jid;
-import com.xabber.xmpp.carbon.CarbonManager.Direction;
 
 import org.jivesoftware.smack.packet.ExtensionElement;
 import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.packet.Stanza;
+import org.jivesoftware.smackx.carbons.packet.CarbonExtension;
 import org.jivesoftware.smackx.muc.packet.MUCUser;
 
 import java.io.BufferedWriter;
@@ -225,9 +225,22 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
         sendMessage(text, chat);
     }
 
-    private void sendMessage(String text, AbstractChat chat) {
-        chat.newMessage(text);
-        chat.sendMessages();
+    private void sendMessage(final String text, final AbstractChat chat) {
+        Realm realm = Realm.getDefaultInstance();
+        realm.executeTransaction(new Realm.Transaction() {
+            @Override
+            public void execute(Realm realm) {
+                MessageItem newMessageItem = chat.createNewMessageItem(text);
+                realm.copyToRealm(newMessageItem);
+            }
+        }, new Realm.Transaction.Callback() {
+            @Override
+            public void onSuccess() {
+                super.onSuccess();
+                chat.sendMessages();
+            }
+        });
+        realm.close();
     }
 
     public String createFileMessage(String account, String user, File file) {
@@ -429,27 +442,38 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
      * @param account
      * @param user
      */
-    public void clearHistory(String account, String user) {
-        AbstractChat chat = getChat(account, user);
-        if (chat == null) {
-            return;
-        }
-        chat.removeAllMessages();
-        onChatChanged(chat.getAccount(), chat.getUser(), false);
+    public void clearHistory(final String account, final String user) {
+
+        Realm realm = Realm.getDefaultInstance();
+        realm.executeTransaction(new Realm.Transaction() {
+            @Override
+            public void execute(Realm realm) {
+                realm.where(MessageItem.class)
+                        .equalTo(MessageItem.Fields.ACCOUNT, account)
+                        .equalTo(MessageItem.Fields.USER, user)
+                        .findAll().clear();
+            }
+        }, null);
+        realm.close();
     }
 
     /**
      * Removes message from history.
      *
-     * @param messageItem
      */
-    public void removeMessage(MessageItem messageItem) {
-        AbstractChat chat = getChat(messageItem.getAccount(), messageItem.getUser());
-        if (chat == null) {
-            return;
-        }
-        onChatChanged(messageItem.getAccount(), messageItem.getUser(), false);
-        chat.removeMessage(messageItem);
+    public void removeMessage(final String messageItemId) {
+        Realm realm = Realm.getDefaultInstance();
+
+        realm.executeTransaction(new Realm.Transaction() {
+            @Override
+            public void execute(Realm realm) {
+                MessageItem first = realm.where(MessageItem.class)
+                        .equalTo(MessageItem.Fields.UNIQUE_ID, messageItemId).findFirst();
+                first.removeFromRealm();
+            }
+        });
+
+        realm.close();
     }
 
 
@@ -579,13 +603,14 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
         }
     }
 
-    public void displayForwardedMessage(ConnectionItem connection, Message message, Direction direction) {
+    public void displayForwardedMessage(ConnectionItem connection, final Message message, CarbonExtension.Direction direction) {
 
-        if (!(connection instanceof AccountItem))
+        if (!(connection instanceof AccountItem)) {
             return;
+        }
         String account = ((AccountItem) connection).getAccount();
 
-        if (direction == Direction.sent) {
+        if (direction == CarbonExtension.Direction.sent) {
             String companion = Jid.getBareAddress(message.getTo());
             if (companion == null) {
                 return;
@@ -594,11 +619,23 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
             if (chat == null) {
                 chat = createChat(account, companion);
             }
-            String body = message.getBody();
+            final String body = message.getBody();
             if (body == null) {
                 return;
             }
-            chat.newMessage(body);
+
+            Realm realm = Realm.getDefaultInstance();
+            final AbstractChat finalChat = chat;
+            realm.executeTransaction(new Realm.Transaction() {
+                @Override
+                public void execute(Realm realm) {
+                    MessageItem newMessageItem = finalChat.createNewMessageItem(body);
+                    newMessageItem.setStanzaId(message.getStanzaId());
+                    newMessageItem.setSent(true);
+                    realm.copyToRealm(newMessageItem);
+                }
+            }, null);
+            realm.close();
             return;
         }
 
