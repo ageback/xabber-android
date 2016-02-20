@@ -54,6 +54,7 @@ import com.xabber.android.data.extension.mam.LastHistoryLoadStartedEvent;
 import com.xabber.android.data.extension.mam.MamManager;
 import com.xabber.android.data.extension.mam.PreviousHistoryLoadFinishedEvent;
 import com.xabber.android.data.extension.mam.PreviousHistoryLoadStartedEvent;
+import com.xabber.android.data.extension.mam.SyncInfo;
 import com.xabber.android.data.extension.muc.MUCManager;
 import com.xabber.android.data.extension.muc.RoomChat;
 import com.xabber.android.data.extension.muc.RoomState;
@@ -135,11 +136,13 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
     private View lastHistoryProgressBar;
     private View previousHistoryProgressBar;
 
-    private boolean isRemotePreviousHistoryRequested = false;
+    private boolean isRemoteHistoryRequested = false;
     private float offset;
-    private MessageItem messageItem;
-    private int itemCountBeforeUpdate;
-    private int lastVisibleItemPosition;
+    private String lastVisibleMessageItemId;
+    private int lastVisibleItemPosition = RecyclerView.NO_POSITION;
+    private int firstRemoteSyncedItemPosition = RecyclerView.NO_POSITION;
+    private RealmResults<SyncInfo> syncInfoResults;
+    private RealmResults<MessageItem> messageItems;
 
     public static ChatViewerFragment newInstance(String account, String user) {
         ChatViewerFragment fragment = new ChatViewerFragment();
@@ -179,7 +182,9 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
         EventBus.getDefault().register(this);
         AbstractChat abstractChat = MessageManager.getInstance().getChat(account, user);
 
-        MamManager.getInstance().requestLastHistory(abstractChat);
+        if (!isRemoteHistoryRequested) {
+            MamManager.getInstance().requestLastHistory(abstractChat);
+        }
 
     }
 
@@ -244,10 +249,15 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
 
         layoutManager.setStackFromEnd(true);
 
-        final RealmResults<MessageItem> messageItems = ((ChatViewer)getActivity()).getRealm().where(MessageItem.class)
+        messageItems = ((ChatViewer)getActivity()).getRealm().where(MessageItem.class)
                 .equalTo(MessageItem.Fields.ACCOUNT, account)
                 .equalTo(MessageItem.Fields.USER, this.user)
                 .findAllSortedAsync(MessageItem.Fields.TIMESTAMP, Sort.ASCENDING);
+
+        syncInfoResults = ((ChatViewer) getActivity()).getRealm().where(SyncInfo.class)
+                .equalTo(SyncInfo.FIELD_ACCOUNT, account)
+                .equalTo(SyncInfo.FIELD_USER, user)
+                .findAllAsync();
 
         chatMessageAdapter = new ChatMessageAdapter(getActivity(), messageItems, getChat(), this);
         realmRecyclerView.setAdapter(chatMessageAdapter);
@@ -257,9 +267,15 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
             public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
                 super.onScrolled(recyclerView, dx, dy);
 
-//                if (chat.isLocalHistoryLoadedCompletely()) {
-//                    return;
-//                }
+                lastVisibleItemPosition = layoutManager.findLastVisibleItemPosition();
+                lastVisibleMessageItemId = chatMessageAdapter.getMessageItemId(lastVisibleItemPosition);
+
+                View view = layoutManager.findViewByPosition(lastVisibleItemPosition);
+                if (view == null) {
+                    offset = 0;
+                } else {
+                    offset = view.getTop();
+                }
 
                 if (dy < 0) {
                     loadHistoryIfNeeded();
@@ -445,33 +461,43 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
 
 
         lastHistoryProgressBar = view.findViewById(R.id.chat_last_history_progress_bar);
-        previousHistoryProgressBar = view.findViewById(R.id.progress_bar_toolbar);
+        previousHistoryProgressBar = view.findViewById(R.id.chat_previous_history_progress_bar);
 
         return view;
     }
 
     private void loadHistoryIfNeeded() {
+        if (isRemoteHistoryRequested) {
+            return;
+        }
+
         int visibleItemCount = layoutManager.getChildCount();
 
         if (visibleItemCount == 0) {
             return;
         }
 
-        if (isRemotePreviousHistoryRequested) {
+        int pastVisibleItems = layoutManager.findFirstVisibleItemPosition();
+        int firstVisibleItemPosition = pastVisibleItems;
+
+        if (pastVisibleItems / visibleItemCount <= 2) {
+            requestRemoteHistoryLoad();
             return;
         }
 
-        int pastVisibleItems = layoutManager.findFirstVisibleItemPosition();
-
-        if (pastVisibleItems / visibleItemCount <= 2) {
-            LogManager.i(this, "pastVisibleItems / visibleItemCount <= 2");
+        if (firstVisibleItemPosition < firstRemoteSyncedItemPosition) {
             requestRemoteHistoryLoad();
+            return;
+        }
+
+        if (firstVisibleItemPosition - firstRemoteSyncedItemPosition < visibleItemCount * 2) {
+            requestRemoteHistoryLoad();
+            return;
         }
     }
 
     private void requestRemoteHistoryLoad() {
-        if (!isRemotePreviousHistoryRequested) {
-            LogManager.i("CHAT", "remote history requested");
+        if (!isRemoteHistoryRequested) {
             AbstractChat chat = getChat();
             if (chat != null) {
                 MamManager.getInstance().requestPreviousHistory(chat);
@@ -490,6 +516,7 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
     public void onEvent(LastHistoryLoadStartedEvent event) {
         if (event.getAccount().equals(account) && event.getUser().equals(user)) {
             lastHistoryProgressBar.setVisibility(View.VISIBLE);
+            isRemoteHistoryRequested = true;
         }
     }
 
@@ -497,6 +524,7 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
     public void onEvent(LastHistoryLoadFinishedEvent event) {
         if (event.getAccount().equals(account) && event.getUser().equals(user)) {
             lastHistoryProgressBar.setVisibility(View.GONE);
+            isRemoteHistoryRequested = false;
         }
     }
 
@@ -505,7 +533,7 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
         if (event.getAccount().equals(account) && event.getUser().equals(user)) {
             LogManager.i(this, "PreviousHistoryLoadStartedEvent");
             previousHistoryProgressBar.setVisibility(View.VISIBLE);
-            isRemotePreviousHistoryRequested = true;
+            isRemoteHistoryRequested = true;
         }
     }
 
@@ -513,9 +541,14 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
     public void onEvent(PreviousHistoryLoadFinishedEvent event) {
         if (event.getAccount().equals(account) && event.getUser().equals(user)) {
             LogManager.i(this, "PreviousHistoryLoadFinishedEvent");
-            isRemotePreviousHistoryRequested = false;
+            isRemoteHistoryRequested = false;
             previousHistoryProgressBar.setVisibility(View.GONE);
         }
+    }
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onEvent(MessageUpdateEvent event) {
+        chatMessageAdapter.onChange();
     }
 
     private void onAttachButtonPressed() {
@@ -608,7 +641,6 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
         super.onResume();
         listener.registerChat(this);
         updateContact();
-        updateMessages();
         restoreInputState();
     }
 
@@ -779,37 +811,6 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
         updateSecurityButton();
     }
 
-    // update messages and keep scrolled state
-    public void updateMessages() {
-//        int itemCountBeforeUpdate = chatMessageAdapter.getItemCount();
-//
-//        int lastVisibleItemPosition = layoutManager.findLastVisibleItemPosition();
-//        MessageItem messageItem = chatMessageAdapter.getMessageItem(lastVisibleItemPosition);
-//
-//        View view = layoutManager.findViewByPosition(lastVisibleItemPosition);
-//        float offset;
-//        if (view == null) {
-//            offset = 0;
-//        } else {
-//            offset = view.getTop();
-//        }
-//
-////        chatMessageAdapter.onChange();
-//
-//        // if chat is scrolled to bottom we need to show new message
-//        if (lastVisibleItemPosition == -1 || lastVisibleItemPosition == (itemCountBeforeUpdate - 1)) {
-//            scrollDown();
-//        } else {
-//            if (messageItem != null) {
-//                layoutManager.scrollToPositionWithOffset(chatMessageAdapter.findMessagePosition(messageItem), (int) offset);
-//            }
-//        }
-//
-//        isLocalHistoryLoadRequested = false;
-//
-//        loadHistoryIfNeeded();
-    }
-
     private void scrollDown() {
         LogManager.i(this, "scrollDown");
         realmRecyclerView.scrollToPosition(chatMessageAdapter.getItemCount() - 1);
@@ -948,8 +949,7 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
                 return true;
 
             case R.id.action_message_remove:
-                MessageManager.getInstance().removeMessage(clickedMessageItem);
-                updateMessages();
+                MessageManager.getInstance().removeMessage(clickedMessageItem.getUniqueId());
                 return true;
 
             case R.id.action_message_open_file:
@@ -1136,10 +1136,43 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
 
     @Override
     public void onChange(int prevItemCount) {
-        int lastVisibleItemPosition = layoutManager.findLastVisibleItemPosition();
+        // if chat is scrolled to bottom we need to show new message
         if (lastVisibleItemPosition == -1 || lastVisibleItemPosition == (prevItemCount - 1)) {
             scrollDown();
+        } else {
+            if (lastVisibleMessageItemId != null) {
+                layoutManager.scrollToPositionWithOffset(chatMessageAdapter.findMessagePosition(lastVisibleMessageItemId), (int) offset);
+            }
         }
+
+        updateFirstRemoteSyncedItemPosition();
+
+        loadHistoryIfNeeded();
+    }
+
+    private void updateFirstRemoteSyncedItemPosition() {
+        if (!syncInfoResults.isLoaded() || !messageItems.isLoaded() || syncInfoResults.isEmpty()) {
+            return;
+        }
+
+        SyncInfo syncInfo = syncInfoResults.first();
+
+        String firstMamMessageStanzaId = syncInfo.getFirstMamMessageStanzaId();
+        if (firstMamMessageStanzaId == null) {
+            return;
+        }
+
+        RealmResults<MessageItem> allSorted = messageItems.where()
+                .equalTo(MessageItem.Fields.STANZA_ID, firstMamMessageStanzaId)
+                .findAllSorted(MessageItem.Fields.TIMESTAMP, Sort.ASCENDING);
+        if (allSorted.isEmpty()) {
+            return;
+        }
+
+        String firstRemotelySyncedMessageUniqueId = allSorted.last().getUniqueId();
+
+        firstRemoteSyncedItemPosition = chatMessageAdapter.findMessagePosition(firstRemotelySyncedMessageUniqueId);
+        LogManager.i(this, "firstRemoteSyncedItemPosition: " + firstRemoteSyncedItemPosition);
     }
 
     public interface ChatViewerFragmentListener {

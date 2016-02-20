@@ -53,6 +53,7 @@ import com.xabber.android.utils.StringUtils;
 import java.io.File;
 import java.util.Date;
 
+import io.realm.Realm;
 import io.realm.RealmRecyclerViewAdapter;
 import io.realm.RealmResults;
 
@@ -76,12 +77,12 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
     /**
      * Text with extra information.
      */
-    private String hint;
     private Listener listener;
 
     private String account;
     private String user;
     private int prevItemCount;
+    private long lastUpdateTimeMillis;
 
     public ChatMessageAdapter(Context context, RealmResults<MessageItem> messageItems, AbstractChat chat, ChatViewerFragment chatViewerFragment) {
         super(context, messageItems, true);
@@ -96,7 +97,6 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
         if (isMUC) {
             mucNickname = MUCManager.getInstance().getNickname(account, user);
         }
-        hint = null;
         appearanceStyle = SettingsManager.chatsAppearanceStyle();
 
         this.listener = chatViewerFragment;
@@ -188,6 +188,10 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
         messageView.messageFileInfo.setVisibility(View.GONE);
         messageView.messageTextForFileName.setVisibility(View.GONE);
 
+        if (messageItem.isError()) {
+            return;
+        }
+
         String filePath = messageItem.getFilePath();
 
         if (filePath == null) {
@@ -241,6 +245,8 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
             return;
         }
 
+        final String uniqueId = messageItem.getUniqueId();
+
         messageView.downloadButton.setVisibility(View.GONE);
         messageView.downloadProgressBar.setVisibility(View.VISIBLE);
         FileManager.getInstance().downloadFile(messageItem, new FileManager.ProgressListener() {
@@ -268,9 +274,19 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
 
             @Override
             public void onError() {
-                setUpFileMessage(messageView, messageItem);
-            }
+                Realm realm = Realm.getDefaultInstance();
 
+                realm.executeTransaction(new Realm.Transaction() {
+                    @Override
+                    public void execute(Realm realm) {
+                        MessageItem first = realm.where(MessageItem.class)
+                                .equalTo(MessageItem.Fields.UNIQUE_ID, uniqueId).findFirst();
+                        first.setError(true);
+                    }
+                }, null);
+
+                realm.close();
+            }
 
         });
     }
@@ -297,11 +313,7 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
 
     @Override
     public int getItemCount() {
-        if (hint == null) {
-            return realmResults.size();
-        } else {
-            return realmResults.size() + 1;
-        }
+        return realmResults.size();
     }
 
     public MessageItem getMessageItem(int position) {
@@ -313,6 +325,15 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
             return realmResults.get(position);
         } else {
             return null;
+        }
+    }
+
+    public String getMessageItemId(int position) {
+        MessageItem messageItem = getMessageItem(position);
+        if (messageItem == null) {
+            return null;
+        } else {
+            return messageItem.getUniqueId();
         }
     }
 
@@ -347,7 +368,7 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
 
         switch (viewType) {
             case VIEW_TYPE_HINT:
-                holder.messageText.setText(hint);
+//                holder.messageText.setText(hint);
                 break;
 
             case VIEW_TYPE_ACTION_MESSAGE:
@@ -397,11 +418,9 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
 
     @Override
     public void onChange() {
-        hint = getHint();
-
+        lastUpdateTimeMillis = System.currentTimeMillis();
         notifyDataSetChanged();
         int itemCount = getItemCount();
-        LogManager.i(this, "onChange itemCount: " + itemCount + " prev " + prevItemCount);
         if (prevItemCount != itemCount) {
             listener.onChange(prevItemCount);
             prevItemCount = itemCount;
@@ -453,14 +472,17 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
         }
 
         int messageIcon = R.drawable.ic_message_delivered_14dp;
-        if (messageItem.isReceivedFromMessageArchive()) {
+        if (messageItem.isForwarded()) {
+            messageIcon = R.drawable.ic_message_forwarded_14dp;
+        } else if (messageItem.isReceivedFromMessageArchive()) {
             messageIcon = R.drawable.ic_message_synced_14dp;
         } else if (messageItem.isError()) {
             messageIcon = R.drawable.ic_message_has_error_14dp;
-        } else if (!isFileUploadInProgress && !messageItem.isSent()) {
+        } else if (!isFileUploadInProgress && !messageItem.isSent()
+                && lastUpdateTimeMillis - messageItem.getTimestamp() > 1000) {
             messageIcon = R.drawable.ic_message_not_sent_14dp;
         } else if (!messageItem.isDelivered()) {
-            message.statusIcon.setVisibility(View.GONE);
+            message.statusIcon.setVisibility(View.INVISIBLE);
         }
 
         message.statusIcon.setImageResource(messageIcon);
@@ -490,13 +512,6 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
             message.avatar.setVisibility(View.GONE);
         }
     }
-
-//    @Override
-//    public void onChange() {
-//        messages = new ArrayList<>(MessageManager.getInstance().getMessages(account, user));
-//        hint = getHint();
-//        notifyDataSetChanged();
-//    }
 
     public int findMessagePosition(String uniqueId) {
         for (int i = 0; i < realmResults.size(); i++) {

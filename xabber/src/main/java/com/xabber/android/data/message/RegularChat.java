@@ -15,13 +15,10 @@
 package com.xabber.android.data.message;
 
 import com.xabber.android.data.LogManager;
-import com.xabber.android.data.NetworkException;
-import com.xabber.android.data.SettingsManager;
-import com.xabber.android.data.SettingsManager.SecurityOtrMode;
+import com.xabber.android.data.database.realm.MessageItem;
 import com.xabber.android.data.extension.muc.MUCManager;
 import com.xabber.android.data.extension.otr.OTRManager;
 import com.xabber.android.data.extension.otr.OTRUnencryptedException;
-import com.xabber.android.data.extension.otr.SecurityLevel;
 import com.xabber.xmpp.address.Jid;
 import com.xabber.xmpp.delay.Delay;
 import com.xabber.xmpp.muc.MUC;
@@ -100,8 +97,8 @@ public class RegularChat extends AbstractChat {
     }
 
     @Override
-    protected void newMessage(String text) {
-        newMessage(
+    protected MessageItem createNewMessageItem(String text) {
+        return createMessageItem(
                 null,
                 text,
                 null,
@@ -110,7 +107,7 @@ public class RegularChat extends AbstractChat {
                 false,
                 false,
                 false,
-                true, null);
+                null);
     }
 
     @Override
@@ -162,7 +159,7 @@ public class RegularChat extends AbstractChat {
                 return true;
             if (!"".equals(resource))
                 this.resource = resource;
-            newMessage(
+            createAndSaveNewMessage(
                     resource,
                     text,
                     null,
@@ -171,7 +168,7 @@ public class RegularChat extends AbstractChat {
                     true,
                     unencrypted,
                     Delay.isOfflineMessage(Jid.getServer(account), packet),
-                    true, packet.getStanzaId());
+                    packet.getStanzaId());
         }
         return true;
     }
