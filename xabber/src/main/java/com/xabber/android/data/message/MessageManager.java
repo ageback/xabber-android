@@ -47,6 +47,7 @@ import com.xabber.android.data.roster.RosterManager;
 import com.xabber.android.utils.StringUtils;
 import com.xabber.xmpp.address.Jid;
 
+import org.greenrobot.eventbus.EventBus;
 import org.jivesoftware.smack.packet.ExtensionElement;
 import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.packet.Stanza;
@@ -207,6 +208,7 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
      * @param chat
      */
     public void removeChat(AbstractChat chat) {
+        chat.closeChat();
         chats.remove(chat.getAccount(), chat.getUser());
     }
 
@@ -233,14 +235,9 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
                 MessageItem newMessageItem = chat.createNewMessageItem(text);
                 realm.copyToRealm(newMessageItem);
             }
-        }, new Realm.Transaction.Callback() {
-            @Override
-            public void onSuccess() {
-                super.onSuccess();
-                chat.sendMessages();
-            }
         });
         realm.close();
+        chat.sendMessages();
     }
 
     public String createFileMessage(String account, String user, File file) {
@@ -632,10 +629,12 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
                     MessageItem newMessageItem = finalChat.createNewMessageItem(body);
                     newMessageItem.setStanzaId(message.getStanzaId());
                     newMessageItem.setSent(true);
+                    newMessageItem.setForwarded(true);
                     realm.copyToRealm(newMessageItem);
                 }
-            }, null);
+            });
             realm.close();
+            EventBus.getDefault().post(new NewMessageEvent());
             return;
         }
 
@@ -747,26 +746,6 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
             throw new NetworkException(R.string.FILE_NOT_FOUND);
         }
         return file;
-    }
-
-    /**
-     * Notifies registered {@link OnChatChangedListener}.
-     *
-     * @param account
-     * @param user
-     * @param incoming
-     */
-    public void onChatChanged(final String account, final String user,
-                              final boolean incoming) {
-        Application.getInstance().runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                for (OnChatChangedListener onChatChangedListener
-                        : Application.getInstance().getUIListeners(OnChatChangedListener.class)) {
-                    onChatChangedListener.onChatChanged(account, user, incoming);
-                }
-            }
-        });
     }
 
     private boolean isStatusTrackingEnabled(String account, String bareAddress) {

@@ -18,7 +18,6 @@ import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
-import android.support.annotation.Nullable;
 import android.support.v4.graphics.drawable.DrawableCompat;
 import android.support.v7.widget.RecyclerView;
 import android.text.Spannable;
@@ -53,6 +52,7 @@ import com.xabber.android.utils.StringUtils;
 import java.io.File;
 import java.util.Date;
 
+import io.realm.Realm;
 import io.realm.RealmRecyclerViewAdapter;
 import io.realm.RealmResults;
 
@@ -81,6 +81,7 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
     private String account;
     private String user;
     private int prevItemCount;
+    private long lastUpdateTimeMillis;
 
     public ChatMessageAdapter(Context context, RealmResults<MessageItem> messageItems, AbstractChat chat, ChatViewerFragment chatViewerFragment) {
         super(context, messageItems, true);
@@ -103,7 +104,8 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
 
     public interface Listener {
         void onNoDownloadFilePermission();
-        void onChange(int prevItemCount);
+        void onMessageNumberChanged(int prevItemCount);
+        void onMessagesUpdated();
     }
 
     private void setUpOutgoingMessage(Message holder, MessageItem messageItem) {
@@ -186,6 +188,10 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
         messageView.messageFileInfo.setVisibility(View.GONE);
         messageView.messageTextForFileName.setVisibility(View.GONE);
 
+        if (messageItem.isError()) {
+            return;
+        }
+
         String filePath = messageItem.getFilePath();
 
         if (filePath == null) {
@@ -239,6 +245,8 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
             return;
         }
 
+        final String uniqueId = messageItem.getUniqueId();
+
         messageView.downloadButton.setVisibility(View.GONE);
         messageView.downloadProgressBar.setVisibility(View.VISIBLE);
         FileManager.getInstance().downloadFile(messageItem, new FileManager.ProgressListener() {
@@ -266,9 +274,19 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
 
             @Override
             public void onError() {
-                setUpFileMessage(messageView, messageItem);
-            }
+                Realm realm = Realm.getDefaultInstance();
 
+                realm.executeTransaction(new Realm.Transaction() {
+                    @Override
+                    public void execute(Realm realm) {
+                        MessageItem first = realm.where(MessageItem.class)
+                                .equalTo(MessageItem.Fields.UNIQUE_ID, uniqueId).findFirst();
+                        first.setError(true);
+                    }
+                }, null);
+
+                realm.close();
+            }
 
         });
     }
@@ -400,10 +418,12 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
 
     @Override
     public void onChange() {
+        lastUpdateTimeMillis = System.currentTimeMillis();
         notifyDataSetChanged();
+        listener.onMessagesUpdated();
         int itemCount = getItemCount();
         if (prevItemCount != itemCount) {
-            listener.onChange(prevItemCount);
+            listener.onMessageNumberChanged(prevItemCount);
             prevItemCount = itemCount;
         }
     }
@@ -453,14 +473,17 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
         }
 
         int messageIcon = R.drawable.ic_message_delivered_14dp;
-        if (messageItem.isReceivedFromMessageArchive()) {
+        if (messageItem.isForwarded()) {
+            messageIcon = R.drawable.ic_message_forwarded_14dp;
+        } else if (messageItem.isReceivedFromMessageArchive()) {
             messageIcon = R.drawable.ic_message_synced_14dp;
         } else if (messageItem.isError()) {
             messageIcon = R.drawable.ic_message_has_error_14dp;
-        } else if (!isFileUploadInProgress && !messageItem.isSent()) {
+        } else if (!isFileUploadInProgress && !messageItem.isSent()
+                && lastUpdateTimeMillis - messageItem.getTimestamp() > 1000) {
             messageIcon = R.drawable.ic_message_not_sent_14dp;
         } else if (!messageItem.isDelivered()) {
-            message.statusIcon.setVisibility(View.GONE);
+            message.statusIcon.setVisibility(View.INVISIBLE);
         }
 
         message.statusIcon.setImageResource(messageIcon);

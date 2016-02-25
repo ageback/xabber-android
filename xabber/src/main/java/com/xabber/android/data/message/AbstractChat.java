@@ -21,14 +21,15 @@ import com.xabber.android.data.connection.ConnectionManager;
 import com.xabber.android.data.database.realm.MessageItem;
 import com.xabber.android.data.entity.BaseEntity;
 import com.xabber.android.data.extension.blocking.PrivateMucChatBlockingManager;
+import com.xabber.android.data.extension.carbons.CarbonManager;
 import com.xabber.android.data.extension.cs.ChatStateManager;
 import com.xabber.android.data.extension.file.FileManager;
-import com.xabber.android.data.extension.mam.SyncCache;
+import com.xabber.android.data.extension.mam.SyncInfo;
 import com.xabber.android.data.message.chat.ChatManager;
 import com.xabber.android.data.notification.NotificationManager;
 import com.xabber.xmpp.address.Jid;
-import com.xabber.android.data.extension.carbons.CarbonManager;
 
+import org.greenrobot.eventbus.EventBus;
 import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.packet.Message.Type;
 import org.jivesoftware.smack.packet.Stanza;
@@ -81,8 +82,10 @@ public abstract class AbstractChat extends BaseEntity {
 
     private boolean isRemotePreviousHistoryCompletelyLoaded = false;
 
-    private SyncCache syncCache;
-
+    private Date lastSyncedTime;
+    private RealmResults<MessageItem> messageItems;
+    private Realm realm;
+    private RealmResults<SyncInfo> syncInfo;
 
     protected AbstractChat(final String account, final String user, boolean isPrivateMucChat) {
         super(account, isPrivateMucChat ? user : Jid.getBareAddress(user));
@@ -94,9 +97,6 @@ public abstract class AbstractChat extends BaseEntity {
         this.isPrivateMucChat = isPrivateMucChat;
         isPrivateMucChatAccepted = false;
         updateCreationTime();
-
-        syncCache = new SyncCache();
-
     }
 
     public boolean isRemotePreviousHistoryCompletelyLoaded() {
@@ -106,6 +106,15 @@ public abstract class AbstractChat extends BaseEntity {
     public void setRemotePreviousHistoryCompletelyLoaded(boolean remotePreviousHistoryCompletelyLoaded) {
         isRemotePreviousHistoryCompletelyLoaded = remotePreviousHistoryCompletelyLoaded;
     }
+
+    public Date getLastSyncedTime() {
+        return lastSyncedTime;
+    }
+
+    public void setLastSyncedTime(Date lastSyncedTime) {
+        this.lastSyncedTime = lastSyncedTime;
+    }
+
 
     public boolean isActive() {
         if (isPrivateMucChat && !isPrivateMucChatAccepted) {
@@ -127,6 +136,41 @@ public abstract class AbstractChat extends BaseEntity {
     void closeChat() {
         active = false;
         firstNotification = true;
+
+        if (realm != null && !realm.isClosed()) {
+            realm.close();
+        }
+    }
+
+    public RealmResults<MessageItem> getMessages() {
+        if (realm == null || realm.isClosed()) {
+            realm = Realm.getDefaultInstance();
+        }
+
+        if (messageItems == null) {
+            LogManager.i(this, "Requesting message items...");
+            messageItems = realm.where(MessageItem.class)
+                    .equalTo(MessageItem.Fields.ACCOUNT, account)
+                    .equalTo(MessageItem.Fields.USER, this.user)
+                    .findAllSortedAsync(MessageItem.Fields.TIMESTAMP, Sort.ASCENDING);
+        }
+
+        return messageItems;
+    }
+
+    public RealmResults<SyncInfo> getSyncInfo() {
+        if (realm == null || realm.isClosed()) {
+            realm = Realm.getDefaultInstance();
+        }
+
+        if (syncInfo == null) {
+            syncInfo = realm.where(SyncInfo.class)
+                    .equalTo(SyncInfo.FIELD_ACCOUNT, account)
+                    .equalTo(SyncInfo.FIELD_USER, user)
+                    .findAllAsync();
+        }
+
+        return syncInfo;
     }
 
     boolean isStatusTrackingEnabled() {
@@ -203,6 +247,7 @@ public abstract class AbstractChat extends BaseEntity {
         final MessageItem messageItem = createMessageItem(resource, text, action, delayTimestamp,
                 incoming, notify, unencrypted, offline, stanzaId);
         saveMessageItem(messageItem);
+        EventBus.getDefault().post(new NewMessageEvent());
     }
 
     public void saveMessageItem(final MessageItem messageItem) {
@@ -213,7 +258,7 @@ public abstract class AbstractChat extends BaseEntity {
             public void execute(Realm realm) {
                 realm.copyToRealm(messageItem);
             }
-        }, null);
+        });
 
         realm.close();
     }
@@ -375,17 +420,12 @@ public abstract class AbstractChat extends BaseEntity {
     }
 
     public MessageItem getLastMessage() {
-        Realm realm = Realm.getDefaultInstance();
-        RealmResults<MessageItem> allSorted = realm.where(MessageItem.class)
-                .equalTo(MessageItem.Fields.ACCOUNT, account)
-                .equalTo(MessageItem.Fields.USER, user)
-                .findAllSorted(MessageItem.Fields.TIMESTAMP, Sort.ASCENDING);
-        realm.close();
+        RealmResults<MessageItem> messages = getMessages();
 
-        if (allSorted.isEmpty()) {
+        if (!messages.isLoaded() || messages.isEmpty()) {
             return null;
         } else {
-            return allSorted.last();
+            return messages.last();
         }
     }
 
@@ -393,12 +433,11 @@ public abstract class AbstractChat extends BaseEntity {
      * @return Time of last message in chat. Can be <code>null</code>.
      */
     public Date getLastTime() {
-        Realm realm = Realm.getDefaultInstance();
-        Number max = realm.where(MessageItem.class)
-                .equalTo(MessageItem.Fields.ACCOUNT, account)
-                .equalTo(MessageItem.Fields.USER, user)
-                .max(MessageItem.Fields.TIMESTAMP);
-        realm.close();
+        RealmResults<MessageItem> messages = getMessages();
+        Number max = null;
+        if (messages.isLoaded()) {
+            max = messages.where().max(MessageItem.Fields.TIMESTAMP);
+        }
 
         if (max != null) {
             return new Date(max.longValue());
@@ -569,9 +608,5 @@ public abstract class AbstractChat extends BaseEntity {
 
     public boolean isPrivateMucChatAccepted() {
         return isPrivateMucChatAccepted;
-    }
-
-    public SyncCache getSyncCache() {
-        return syncCache;
     }
 }
