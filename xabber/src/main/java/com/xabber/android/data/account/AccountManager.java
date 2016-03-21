@@ -105,6 +105,7 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
      */
     private boolean xa;
 
+    @SuppressWarnings("ResourceType")
     private AccountManager() {
         this.application = Application.getInstance();
         accountItems = new HashMap<>();
