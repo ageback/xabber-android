@@ -12,35 +12,23 @@
  * You should have received a copy of the GNU General Public License,
  * along with this program. If not, see http://www.gnu.org/licenses/.
  */
-package com.xabber.xmpp.muc;
+package com.xabber.android.data.account.listeners;
 
-import java.util.NoSuchElementException;
+import com.xabber.android.data.BaseUIListener;
+
+import java.util.Collection;
 
 /**
- * Role in the room.
- * <p/>
- * http://xmpp.org/extensions/xep-0045.html#roles
+ * Listener for any account state change.
  *
  * @author alexander.ivanov
  */
-public enum Role {
+public interface OnAccountChangedListener extends BaseUIListener {
 
-    none,
-
-    visitor,
-
-    participant,
-
-    moderator;
-
-    public static Role fromString(String value) throws NoSuchElementException {
-        if (value == null)
-            throw new NoSuchElementException();
-        try {
-            return valueOf(value);
-        } catch (IllegalArgumentException e) {
-            throw new NoSuchElementException();
-        }
-    }
-
+    /**
+     * State changed on connection, disconnection, authorization, etc.
+     *
+     * @param accounts
+     */
+    void onAccountsChanged(Collection<String> accounts);
 }

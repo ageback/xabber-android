@@ -12,17 +12,28 @@
  * You should have received a copy of the GNU General Public License,
  * along with this program. If not, see http://www.gnu.org/licenses/.
  */
-package com.xabber.android.data.account;
+package com.xabber.android.data.connection.listeners;
 
 import com.xabber.android.data.BaseManagerInterface;
+import com.xabber.android.data.connection.ConnectionItem;
 
-public interface OnAccountOfflineListener extends BaseManagerInterface {
+import org.jivesoftware.smack.packet.Stanza;
+
+/**
+ * Listener for incoming packet.
+ *
+ * @author alexander.ivanov
+ */
+public interface OnPacketListener extends BaseManagerInterface {
 
     /**
-     * Go offline requested.
+     * Process packet from connection.
      *
-     * @param accountItem
+     * @param connection
+     * @param bareAddress
+     * @param packet
+     * @return
      */
-    void onAccountOffline(AccountItem accountItem);
+    void onPacket(ConnectionItem connection, String bareAddress, Stanza packet);
 
 }

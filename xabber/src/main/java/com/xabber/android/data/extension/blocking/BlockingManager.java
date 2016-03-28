@@ -5,9 +5,9 @@ import com.xabber.android.data.LogManager;
 import com.xabber.android.data.NetworkException;
 import com.xabber.android.data.connection.ConnectionItem;
 import com.xabber.android.data.connection.ConnectionManager;
-import com.xabber.android.data.connection.OnAuthorizedListener;
-import com.xabber.android.data.connection.OnPacketListener;
-import com.xabber.android.data.connection.OnResponseListener;
+import com.xabber.android.data.connection.listeners.OnAuthorizedListener;
+import com.xabber.android.data.connection.listeners.OnPacketListener;
+import com.xabber.android.data.connection.listeners.OnResponseListener;
 import com.xabber.android.data.entity.BaseEntity;
 import com.xabber.android.data.message.MessageManager;
 import com.xabber.android.data.notification.NotificationManager;
@@ -277,6 +277,10 @@ public class BlockingManager implements OnAuthorizedListener, OnPacketListener {
 
     @Override
     public void onAuthorized(final ConnectionItem connection) {
+        if (connection.getConnectionThread() == null) {
+            return;
+        }
+
         new Thread("Thread to check " + connection.getRealJid() + " for blocking command support") {
             @Override
             public void run() {

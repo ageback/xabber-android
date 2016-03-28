@@ -12,20 +12,25 @@
  * You should have received a copy of the GNU General Public License,
  * along with this program. If not, see http://www.gnu.org/licenses/.
  */
-package com.xabber.android.data.account;
+package com.xabber.android.data.connection.listeners;
 
 import com.xabber.android.data.BaseManagerInterface;
+import com.xabber.android.data.connection.ConnectionItem;
 
-public interface OnAccountEnabledListener extends BaseManagerInterface {
+/**
+ * Listener for authorization.
+ *
+ * @author alexander.ivanov
+ */
+public interface OnAuthorizedListener extends BaseManagerInterface {
 
     /**
-     * Account was enabled.
+     * Authorization was complied.
      * <p/>
-     * {@link OnAccountAddedListener#onAccountAdded(AccountItem)} will be called
-     * first.
+     * No one another other packets has been sent or received yet.
      *
-     * @param accountItem
+     * @param connection
      */
-    void onAccountEnabled(AccountItem accountItem);
+    void onAuthorized(ConnectionItem connection);
 
 }

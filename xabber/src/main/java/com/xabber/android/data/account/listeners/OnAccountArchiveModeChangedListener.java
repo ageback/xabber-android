@@ -12,22 +12,19 @@
  * You should have received a copy of the GNU General Public License,
  * along with this program. If not, see http://www.gnu.org/licenses/.
  */
-package com.xabber.android.data.connection;
+package com.xabber.android.data.account.listeners;
 
 import com.xabber.android.data.BaseManagerInterface;
+import com.xabber.android.data.account.AccountItem;
 
-/**
- * Listener for connection state change.
- *
- * @author alexander.ivanov
- */
-public interface OnConnectionListener extends BaseManagerInterface {
+public interface OnAccountArchiveModeChangedListener extends
+        BaseManagerInterface {
 
     /**
-     * New {@link ConnectionThread} was created.
+     * Account's archive mode has been changed.
      *
-     * @param connection
+     * @param accountItem
      */
-    void onConnection(ConnectionItem connection);
+    void onAccountArchiveModeChanged(AccountItem accountItem);
 
 }

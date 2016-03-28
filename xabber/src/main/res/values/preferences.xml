@@ -23,7 +23,6 @@
         <item>com.xabber.android.data.account.ScreenManager</item>
         <item>com.xabber.android.data.connection.ReconnectionManager</item>
         <item>com.xabber.android.data.account.AccountManager</item>
-        <item>com.xabber.android.data.account.AccountAuthenticator</item>
         <item>com.xabber.android.data.extension.muc.MUCManager</item>
         <item>com.xabber.android.data.message.MessageManager</item>
         <item>com.xabber.android.data.message.chat.ChatManager</item>
@@ -36,10 +35,8 @@
         <item>com.xabber.android.data.notification.NotificationManager</item>
         <item>com.xabber.android.data.ActivityManager</item>
         <item>com.xabber.android.data.extension.capability.CapabilitiesManager</item>
-        <item>com.xabber.android.data.extension.ping.PingManager</item>
         <item>com.xabber.android.data.extension.cs.ChatStateManager</item>
         <item>com.xabber.android.data.connection.NetworkManager</item>
-        <item>com.xabber.android.data.account.OAuthManager</item>
         <item>com.xabber.android.data.message.ReceiptManager</item>
         <item>com.xabber.android.data.extension.ssn.SSNManager</item>
         <item>com.xabber.android.data.extension.attention.AttentionManager</item>
@@ -47,11 +44,6 @@
         <item>com.xabber.android.data.extension.httpfileupload.HttpFileUploadManager</item>
         <item>com.xabber.android.data.extension.blocking.BlockingManager</item>
         <item>com.xabber.android.data.extension.mam.MamManager</item>
-    </string-array>
-
-    <string-array name="contact_managers">
-        <item>com.xabber.android.data.account.AccountAuthenticator</item>
-        <item>com.xabber.android.data.roster.SyncManager</item>
     </string-array>
 
     <string-array name="tables">

@@ -12,23 +12,24 @@
  * You should have received a copy of the GNU General Public License,
  * along with this program. If not, see http://www.gnu.org/licenses/.
  */
-package com.xabber.android.data.account;
+package com.xabber.android.data.account.listeners;
 
 import com.xabber.android.data.BaseManagerInterface;
+import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.connection.ConnectionItem;
-import com.xabber.android.data.connection.OnDisconnectListener;
+import com.xabber.android.data.connection.listeners.OnConnectionListener;
 
-public interface OnAccountDisabledListener extends BaseManagerInterface {
+public interface OnAccountOnlineListener extends BaseManagerInterface {
 
     /**
-     * Account was disabled.
+     * Go online requested.
      * <p/>
-     * {@link OnAccountOfflineListener#onAccountOffline(AccountItem)} and
-     * {@link OnDisconnectListener#onDisconnect(ConnectionItem)} will be call
+     * {@link OnAccountEnabledListener#onAccountEnabled(AccountItem)} and
+     * {@link OnConnectionListener#onConnection(ConnectionItem)} will be called
      * first.
      *
      * @param accountItem
      */
-    void onAccountDisabled(AccountItem accountItem);
+    void onAccountOnline(AccountItem accountItem);
 
 }

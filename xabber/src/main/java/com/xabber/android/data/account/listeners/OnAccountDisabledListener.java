@@ -12,22 +12,24 @@
  * You should have received a copy of the GNU General Public License,
  * along with this program. If not, see http://www.gnu.org/licenses/.
  */
-package com.xabber.android.data.connection;
+package com.xabber.android.data.account.listeners;
 
 import com.xabber.android.data.BaseManagerInterface;
+import com.xabber.android.data.account.AccountItem;
+import com.xabber.android.data.connection.ConnectionItem;
+import com.xabber.android.data.connection.listeners.OnDisconnectListener;
 
-/**
- * Listener for connection state change.
- *
- * @author alexander.ivanov
- */
-public interface OnDisconnectListener extends BaseManagerInterface {
+public interface OnAccountDisabledListener extends BaseManagerInterface {
 
     /**
-     * Disconnection occur on some reason.
+     * Account was disabled.
+     * <p/>
+     * {@link OnAccountOfflineListener#onAccountOffline(AccountItem)} and
+     * {@link OnDisconnectListener#onDisconnect(ConnectionItem)} will be call
+     * first.
      *
-     * @param connection
+     * @param accountItem
      */
-    void onDisconnect(ConnectionItem connection);
+    void onAccountDisabled(AccountItem accountItem);
 
 }

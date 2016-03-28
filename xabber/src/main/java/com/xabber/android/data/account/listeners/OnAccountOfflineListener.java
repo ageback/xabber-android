@@ -12,17 +12,18 @@
  * You should have received a copy of the GNU General Public License,
  * along with this program. If not, see http://www.gnu.org/licenses/.
  */
-package com.xabber.android.data.account;
+package com.xabber.android.data.account.listeners;
 
 import com.xabber.android.data.BaseManagerInterface;
+import com.xabber.android.data.account.AccountItem;
 
-public interface OnAccountSyncableChangedListener extends BaseManagerInterface {
+public interface OnAccountOfflineListener extends BaseManagerInterface {
 
     /**
-     * Account's syncable has been changed.
+     * Go offline requested.
      *
      * @param accountItem
      */
-    void onAccountSyncableChanged(AccountItem accountItem);
+    void onAccountOffline(AccountItem accountItem);
 
 }

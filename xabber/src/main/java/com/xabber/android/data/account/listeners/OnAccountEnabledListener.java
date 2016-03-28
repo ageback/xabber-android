@@ -12,27 +12,21 @@
  * You should have received a copy of the GNU General Public License,
  * along with this program. If not, see http://www.gnu.org/licenses/.
  */
-package com.xabber.android.data.connection;
+package com.xabber.android.data.account.listeners;
 
 import com.xabber.android.data.BaseManagerInterface;
+import com.xabber.android.data.account.AccountItem;
 
-import org.jivesoftware.smack.packet.Stanza;
-
-/**
- * Listener for incoming packet.
- *
- * @author alexander.ivanov
- */
-public interface OnPacketListener extends BaseManagerInterface {
+public interface OnAccountEnabledListener extends BaseManagerInterface {
 
     /**
-     * Process packet from connection.
+     * Account was enabled.
+     * <p/>
+     * {@link OnAccountAddedListener#onAccountAdded(AccountItem)} will be called
+     * first.
      *
-     * @param connection
-     * @param bareAddress
-     * @param packet
-     * @return
+     * @param accountItem
      */
-    void onPacket(ConnectionItem connection, String bareAddress, Stanza packet);
+    void onAccountEnabled(AccountItem accountItem);
 
 }

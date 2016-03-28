@@ -25,6 +25,15 @@ import com.xabber.android.data.NetworkException;
 import com.xabber.android.data.OnLoadListener;
 import com.xabber.android.data.OnWipeListener;
 import com.xabber.android.data.SettingsManager;
+import com.xabber.android.data.account.listeners.OnAccountAddedListener;
+import com.xabber.android.data.account.listeners.OnAccountArchiveModeChangedListener;
+import com.xabber.android.data.account.listeners.OnAccountChangedListener;
+import com.xabber.android.data.account.listeners.OnAccountDisabledListener;
+import com.xabber.android.data.account.listeners.OnAccountEnabledListener;
+import com.xabber.android.data.account.listeners.OnAccountOfflineListener;
+import com.xabber.android.data.account.listeners.OnAccountOnlineListener;
+import com.xabber.android.data.account.listeners.OnAccountRemovedListener;
+import com.xabber.android.data.account.listeners.OnAccountSyncableChangedListener;
 import com.xabber.android.data.connection.ConnectionSettings;
 import com.xabber.android.data.connection.ConnectionState;
 import com.xabber.android.data.connection.ProxyType;
@@ -848,20 +857,12 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
             return account;
         }
         if (accountItem.getConnectionSettings().getProtocol().isOAuth()) {
-            String jid = OAuthManager.getInstance().getAssignedJid(account);
             AccountProtocol accountProtocol = accountItem.getConnectionSettings().getProtocol();
             String name;
-            if (jid == null) {
-                if (hasSameProtocol(account)) {
-                    name = accountItem.getConnectionSettings().getUserName();
-                } else {
-                    return application.getString(accountProtocol.getNameResource());
-                }
+            if (hasSameProtocol(account)) {
+                name = accountItem.getConnectionSettings().getUserName();
             } else {
-                name = Jid.getBareAddress(jid);
-                if (!hasSameBareAddress(jid)) {
-                    return name;
-                }
+                return application.getString(accountProtocol.getNameResource());
             }
             return application.getString(accountProtocol.getShortResource()) + " - " + name;
         } else {
@@ -879,8 +880,7 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
      * specified.
      */
     public String getNickName(String account) {
-        String jid = OAuthManager.getInstance().getAssignedJid(account);
-        String result = VCardManager.getInstance().getName(Jid.getBareAddress(jid));
+        String result = VCardManager.getInstance().getName(Jid.getBareAddress(account));
         if ("".equals(result)) {
             return getVerboseName(account);
         } else {

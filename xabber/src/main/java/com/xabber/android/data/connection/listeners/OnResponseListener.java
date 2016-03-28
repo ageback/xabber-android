@@ -12,17 +12,23 @@
  * You should have received a copy of the GNU General Public License,
  * along with this program. If not, see http://www.gnu.org/licenses/.
  */
-package com.xabber.android.data.account;
+package com.xabber.android.data.connection.listeners;
 
-import com.xabber.android.data.BaseManagerInterface;
+import org.jivesoftware.smack.packet.IQ;
 
-public interface OnAccountAddedListener extends BaseManagerInterface {
+/**
+ * Listen for the response to the packet.
+ *
+ * @author alexander.ivanov
+ */
+public interface OnResponseListener {
 
-    /**
-     * New account was added to the account list.
-     *
-     * @param accountItem
-     */
-    void onAccountAdded(AccountItem accountItem);
+    void onReceived(String account, String packetId, IQ iq);
+
+    void onError(String account, String packetId, IQ iq);
+
+    void onTimeout(String account, String packetId);
+
+    void onDisconnect(String account, String packetId);
 
 }

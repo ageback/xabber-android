@@ -31,14 +31,13 @@ import com.xabber.android.data.OnLoadListener;
 import com.xabber.android.data.OnLowMemoryListener;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.account.AccountItem;
-import com.xabber.android.data.account.OAuthManager;
 import com.xabber.android.data.connection.ConnectionItem;
-import com.xabber.android.data.connection.OnPacketListener;
+import com.xabber.android.data.connection.listeners.OnPacketListener;
 import com.xabber.android.data.database.sqlite.AvatarTable;
 import com.xabber.android.data.extension.vcard.VCardManager;
 import com.xabber.android.ui.color.ColorManager;
 import com.xabber.xmpp.address.Jid;
-import com.xabber.xmpp.avatar.VCardUpdate;
+import com.xabber.xmpp.vcardupdate.VCardUpdate;
 
 import org.jivesoftware.smack.packet.ExtensionElement;
 import org.jivesoftware.smack.packet.Presence;
@@ -284,11 +283,7 @@ public class AvatarManager implements OnLoadListener, OnLowMemoryListener, OnPac
      * </ul>
      */
     public Drawable getAccountAvatar(String account) {
-        String jid = OAuthManager.getInstance().getAssignedJid(account);
-        if (jid == null) {
-            jid = account;
-        }
-        Bitmap value = getBitmap(Jid.getBareAddress(jid));
+        Bitmap value = getBitmap(Jid.getBareAddress(account));
         if (value != null) {
             return new BitmapDrawable(application.getResources(), value);
         } else {

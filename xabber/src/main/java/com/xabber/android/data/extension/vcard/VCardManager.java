@@ -23,11 +23,11 @@ import com.xabber.android.data.OnLoadListener;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.account.AccountManager;
-import com.xabber.android.data.account.OnAccountRemovedListener;
+import com.xabber.android.data.account.listeners.OnAccountRemovedListener;
 import com.xabber.android.data.connection.ConnectionItem;
 import com.xabber.android.data.connection.ConnectionManager;
 import com.xabber.android.data.connection.ConnectionThread;
-import com.xabber.android.data.connection.OnPacketListener;
+import com.xabber.android.data.connection.listeners.OnPacketListener;
 import com.xabber.android.data.database.sqlite.VCardTable;
 import com.xabber.android.data.extension.avatar.AvatarManager;
 import com.xabber.android.data.extension.muc.MUCManager;
@@ -288,6 +288,10 @@ public class VCardManager implements OnLoadListener, OnPacketListener,
         final String userBareJid = srcUser;
 
         AccountItem accountItem = AccountManager.getInstance().getAccount(account);
+        if (accountItem == null) {
+            return;
+        }
+
         ConnectionThread connectionThread = accountItem.getConnectionThread();
 
         if (!accountItem.getFactualStatusMode().isOnline() || connectionThread == null) {
