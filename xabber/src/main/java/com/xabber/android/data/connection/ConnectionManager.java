@@ -123,7 +123,7 @@ public class ConnectionManager implements OnInitializedListener, OnCloseListener
         ArrayList<ConnectionThread> connections = new ArrayList<>(managedConnections);
         managedConnections.clear();
         for (ConnectionThread connectionThread : connections) {
-            connectionThread.getConnectionItem().disconnect(connectionThread);
+            connectionThread.getAccountItem().disconnect(connectionThread);
         }
     }
 
@@ -196,13 +196,13 @@ public class ConnectionManager implements OnInitializedListener, OnCloseListener
     public @NonNull XMPPTCPConnection getXmppTcpConnection(String account) throws NetworkException {
         ConnectionThread connectionThread = null;
         for (ConnectionThread check : managedConnections) {
-            if (check.getConnectionItem() instanceof AccountItem
-                    && ((AccountItem) check.getConnectionItem()).getAccount().equals(account)) {
+            if (check.getAccountItem() instanceof AccountItem
+                    && ((AccountItem) check.getAccountItem()).getAccount().equals(account)) {
                 connectionThread = check;
                 break;
             }
         }
-        if (connectionThread == null || !connectionThread.getConnectionItem().getState().isConnected()) {
+        if (connectionThread == null || !connectionThread.getAccountItem().getState().isConnected()) {
             throw new NetworkException(R.string.NOT_CONNECTED);
         }
         return (XMPPTCPConnection) connectionThread.getXMPPConnection();
@@ -228,7 +228,7 @@ public class ConnectionManager implements OnInitializedListener, OnCloseListener
         LogManager.i(this, "onConnection");
         managedConnections.add(connectionThread);
         for (OnConnectionListener listener : Application.getInstance().getManagers(OnConnectionListener.class)) {
-            listener.onConnection(connectionThread.getConnectionItem());
+            listener.onConnection(connectionThread.getAccountItem());
         }
     }
 
@@ -237,21 +237,33 @@ public class ConnectionManager implements OnInitializedListener, OnCloseListener
         if (!managedConnections.contains(connectionThread)) {
             return;
         }
-        for (OnConnectedListener listener : Application.getInstance().getManagers(OnConnectedListener.class)) {
-            listener.onConnected(connectionThread.getConnectionItem());
-        }
+
+        Application.getInstance().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                for (OnConnectedListener listener : Application.getInstance().getManagers(OnConnectedListener.class)) {
+                    listener.onConnected(connectionThread.getAccountItem());
+                }
+            }
+        });
     }
 
-    public void onAuthorized(ConnectionThread connectionThread) {
-        LogManager.i(this, "onAuthorized");
+    public void onAuthorized(final ConnectionThread connectionThread) {
         if (!managedConnections.contains(connectionThread)) {
             return;
         }
-        LogManager.i(this, "onAuthorized: " + connectionThread.getConnectionItem());
-        for (OnAuthorizedListener listener : Application.getInstance().getManagers(OnAuthorizedListener.class)) {
-            listener.onAuthorized(connectionThread.getConnectionItem());
-        }
-        LogManager.i(this, "onAuthorized: finished");
+        Application.getInstance().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                for (OnAuthorizedListener listener : Application.getInstance().getManagers(OnAuthorizedListener.class)) {
+                    listener.onAuthorized(connectionThread.getAccountItem());
+                }
+
+                AccountManager.getInstance().removeAuthorizationError(
+                        ((AccountItem)connectionThread.getAccountItem()).getAccount());
+
+            }
+        });
     }
 
     public void onDisconnect(ConnectionThread connectionThread) {
@@ -259,7 +271,7 @@ public class ConnectionManager implements OnInitializedListener, OnCloseListener
         if (!managedConnections.remove(connectionThread)) {
             return;
         }
-        ConnectionItem connectionItem = connectionThread.getConnectionItem();
+        ConnectionItem connectionItem = connectionThread.getAccountItem();
         if (connectionItem instanceof AccountItem) {
             String account = ((AccountItem) connectionItem).getAccount();
             for (Entry<String, RequestHolder> entry : requests.getNested(account).entrySet()) {
@@ -268,7 +280,7 @@ public class ConnectionManager implements OnInitializedListener, OnCloseListener
             requests.clear(account);
         }
         for (OnDisconnectListener listener : Application.getInstance().getManagers(OnDisconnectListener.class)) {
-            listener.onDisconnect(connectionThread.getConnectionItem());
+            listener.onDisconnect(connectionThread.getAccountItem());
         }
     }
 
@@ -276,7 +288,7 @@ public class ConnectionManager implements OnInitializedListener, OnCloseListener
         if (!managedConnections.contains(connectionThread)) {
             return;
         }
-        ConnectionItem connectionItem = connectionThread.getConnectionItem();
+        ConnectionItem connectionItem = connectionThread.getAccountItem();
         if (stanza instanceof IQ && connectionItem instanceof AccountItem) {
             IQ iq = (IQ) stanza;
             String packetId = iq.getStanzaId();
