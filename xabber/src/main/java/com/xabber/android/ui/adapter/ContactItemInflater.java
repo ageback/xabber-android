@@ -9,6 +9,8 @@ import android.view.ViewGroup;
 
 import com.xabber.android.R;
 import com.xabber.android.data.SettingsManager;
+import com.xabber.android.data.account.AccountManager;
+import com.xabber.android.data.connection.ConnectionState;
 import com.xabber.android.data.database.realm.MessageItem;
 import com.xabber.android.data.extension.capability.ClientSoftware;
 import com.xabber.android.data.extension.muc.MUCManager;
@@ -43,7 +45,7 @@ public class ContactItemInflater {
             viewHolder = (ContactListItemViewHolder) view.getTag();
         }
 
-        if (contact.isConnected()) {
+        if (AccountManager.getInstance().getAccount(contact.getAccount()).getState() == ConnectionState.connected) {
             viewHolder.offlineShadow.setVisibility(View.GONE);
         } else {
             viewHolder.offlineShadow.setVisibility(View.VISIBLE);
@@ -134,10 +136,14 @@ public class ContactItemInflater {
             view.setBackgroundColor(ColorManager.getInstance().getActiveChatBackgroundColor());
             viewHolder.separator.setBackgroundColor(ColorManager.getInstance().getActiveChatSeparatorColor());
             viewHolder.largeClientIcon.setColorFilter(ColorManager.getInstance().getActiveChatLargeClientIconColor());
+            viewHolder.smallRightIcon.setColorFilter(ColorManager.getInstance().getActiveChatLargeClientIconColor());
+            viewHolder.smallRightText.setTextColor(ColorManager.getInstance().getActiveChatLargeClientIconColor());
         } else {
             view.setBackgroundColor(ColorManager.getInstance().getContactBackground());
             viewHolder.separator.setBackgroundColor(ColorManager.getInstance().getContactSeparatorColor());
             viewHolder.largeClientIcon.setColorFilter(ColorManager.getInstance().getContactLargeClientIconColor());
+            viewHolder.smallRightIcon.setColorFilter(ColorManager.getInstance().getContactLargeClientIconColor());
+            viewHolder.smallRightText.setTextColor(ColorManager.getInstance().getContactLargeClientIconColor());
         }
 
         if (statusText.isEmpty()) {

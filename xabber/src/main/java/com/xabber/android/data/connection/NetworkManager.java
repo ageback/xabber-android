@@ -23,6 +23,7 @@ import android.net.wifi.WifiManager;
 import android.net.wifi.WifiManager.WifiLock;
 import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
+import android.support.annotation.Nullable;
 
 import com.xabber.android.data.Application;
 import com.xabber.android.data.LogManager;
@@ -41,6 +42,9 @@ public class NetworkManager implements OnCloseListener, OnInitializedListener {
     private final ConnectivityReceiver connectivityReceiver;
 
     private final ConnectivityManager connectivityManager;
+
+    // strange hidden action
+    public static final String INET_CONDITION_ACTION = "android.net.conn.INET_CONDITION_ACTION";
 
     /**
      * Type of last active network.
@@ -74,40 +78,44 @@ public class NetworkManager implements OnCloseListener, OnInitializedListener {
 
     private NetworkManager(Application application) {
         connectivityReceiver = new ConnectivityReceiver();
-        connectivityManager = (ConnectivityManager) application
-                .getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo active = connectivityManager.getActiveNetworkInfo();
-        type = getType(active);
-        suspended = isSuspended(active);
+        connectivityManager = (ConnectivityManager) application.getSystemService(Context.CONNECTIVITY_SERVICE);
+        updateNetworkInfo();
 
         wifiLock = ((WifiManager) application
-                .getSystemService(Context.WIFI_SERVICE)).createWifiLock(
-                WifiManager.WIFI_MODE_FULL, "Xabber Wifi Lock");
+                .getSystemService(Context.WIFI_SERVICE))
+                .createWifiLock(WifiManager.WIFI_MODE_FULL, "Xabber Wifi Lock");
         wifiLock.setReferenceCounted(false);
+
         wakeLock = ((PowerManager) application
-                .getSystemService(Context.POWER_SERVICE)).newWakeLock(
-                PowerManager.PARTIAL_WAKE_LOCK, "Xabber Wake Lock");
+                .getSystemService(Context.POWER_SERVICE))
+                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Xabber Wake Lock");
         wakeLock.setReferenceCounted(false);
+
         state = NetworkState.available;
     }
 
+    private void updateNetworkInfo() {
+        NetworkInfo active = connectivityManager.getActiveNetworkInfo();
+        type = getType(active);
+        suspended = isSuspended(active);
+    }
+
     /**
-     * @param networkInfo
      * @return Type of network. <code>null</code> if network is
      * <code>null</code> or it is not connected and is not suspended.
      */
+    @Nullable
     private Integer getType(NetworkInfo networkInfo) {
         if (networkInfo != null
-                && (networkInfo.getState() == State.CONNECTED || networkInfo
-                .getState() == State.SUSPENDED))
+                && (networkInfo.getState() == State.CONNECTED
+                || networkInfo.getState() == State.SUSPENDED)) {
             return networkInfo.getType();
+        }
         return null;
     }
 
     /**
-     * @param networkInfo
-     * @return <code>true</code> if network is not <code>null</code> and is
-     * suspended.
+     * @return <code>true</code> if network is not <code>null</code> and is suspended.
      */
     private boolean isSuspended(NetworkInfo networkInfo) {
         return networkInfo != null && networkInfo.getState() == State.SUSPENDED;
@@ -120,10 +128,9 @@ public class NetworkManager implements OnCloseListener, OnInitializedListener {
     @Override
     public void onInitialized() {
         IntentFilter filter = new IntentFilter();
-        filter.addAction(ConnectivityManager.ACTION_BACKGROUND_DATA_SETTING_CHANGED);
         filter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
-        Application.getInstance()
-                .registerReceiver(connectivityReceiver, filter);
+        filter.addAction(INET_CONDITION_ACTION);
+        Application.getInstance().registerReceiver(connectivityReceiver, filter);
         onWakeLockSettingsChanged();
         onWifiLockSettingsChanged();
     }
@@ -133,50 +140,50 @@ public class NetworkManager implements OnCloseListener, OnInitializedListener {
         Application.getInstance().unregisterReceiver(connectivityReceiver);
     }
 
-    public void onNetworkChange(NetworkInfo networkInfo) {
-        NetworkInfo active = connectivityManager.getActiveNetworkInfo();
-        LogManager.i(this, "Network: " + networkInfo + ", active: " + active);
-        Integer type;
-        boolean suspended;
-        if (active == null && this.type != null
-                && this.type == networkInfo.getType()) {
-            type = getType(networkInfo);
-            suspended = isSuspended(networkInfo);
+    public void onNetworkChange() {
+        NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
+        LogManager.i(this, "Active network info: " + networkInfo);
+        if (networkInfo != null && networkInfo.getState() == State.CONNECTED) {
+            onAvailable(getType(networkInfo));
+            state = NetworkState.available;
         } else {
-            type = getType(active);
-            suspended = isSuspended(active);
+            state = NetworkState.unavailable;
         }
-        if (this.type == type) {
-            if (this.suspended == suspended)
-                LogManager.i(this, "State does not changed.");
-            else if (suspended)
-                onSuspend();
-            else
-                onResume();
-        } else {
-            if (suspended) {
-                type = null;
-                suspended = false;
-            }
-            if (type == null)
-                onUnavailable();
-            else
-                onAvailable(type);
-        }
-        this.type = type;
-        this.suspended = suspended;
+//
+//        if (this.type != null && this.type.equals(type)) {
+//            if (this.suspended == suspended) {
+//                LogManager.i(this, "State does not changed.");
+//            } else if (suspended) {
+//                onSuspend();
+//            } else {
+//                onResume();
+//            }
+//        } else {
+//            if (suspended) {
+//                type = null;
+//                suspended = false;
+//            }
+//            if (type == null) {
+//                onUnavailable();
+//            } else {
+//                onAvailable(type);
+//            }
+//        }
+//        this.type = type;
+//        this.suspended = suspended;
     }
 
     /**
      * New network is available. Start connection.
      */
-    private void onAvailable(int type) {
+    private void onAvailable(Integer type) {
         state = NetworkState.available;
         LogManager.i(this, "Available");
-        if (type == ConnectivityManager.TYPE_WIFI)
-            ConnectionManager.getInstance().forceReconnect();
-        else
-            ConnectionManager.getInstance().updateConnections(false);
+//        if (type == ConnectivityManager.TYPE_WIFI) {
+//            ConnectionManager.getInstance().forceReconnect();
+//        } else {
+//            ConnectionManager.getInstance().reconnect();
+//        }
     }
 
     /**
@@ -194,7 +201,7 @@ public class NetworkManager implements OnCloseListener, OnInitializedListener {
     private void onResume() {
         state = NetworkState.available;
         LogManager.i(this, "Resume");
-        ConnectionManager.getInstance().updateConnections(false);
+//        ConnectionManager.getInstance().updateConnections(false);
         // TODO: ConnectionManager.getInstance().forceKeepAlive();
     }
 
@@ -204,21 +211,23 @@ public class NetworkManager implements OnCloseListener, OnInitializedListener {
     private void onUnavailable() {
         state = NetworkState.unavailable;
         LogManager.i(this, "Unavailable");
-        ConnectionManager.getInstance().updateConnections(false);
+//        ConnectionManager.getInstance().updateConnections(false);
     }
 
     public void onWifiLockSettingsChanged() {
-        if (SettingsManager.connectionWifiLock())
+        if (SettingsManager.connectionWifiLock()) {
             wifiLock.acquire();
-        else
+        } else {
             wifiLock.release();
+        }
     }
 
     public void onWakeLockSettingsChanged() {
-        if (SettingsManager.connectionWakeLock())
+        if (SettingsManager.connectionWakeLock()) {
             wakeLock.acquire();
-        else
+        } else {
             wakeLock.release();
+        }
     }
 
 }

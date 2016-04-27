@@ -31,6 +31,7 @@ import com.xabber.android.data.account.CommonState;
 import com.xabber.android.data.account.StatusMode;
 import com.xabber.android.data.account.listeners.OnAccountChangedListener;
 import com.xabber.android.data.connection.ConnectionManager;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.BaseEntity;
 import com.xabber.android.data.message.NewMessageEvent;
 import com.xabber.android.data.roster.AbstractContact;
@@ -180,16 +181,18 @@ public class ContactListFragment extends Fragment implements OnAccountChangedLis
     @Override
     public void onCreateContextMenu(ContextMenu menu, View view, ContextMenuInfo menuInfo) {
         AdapterContextMenuInfo info = (AdapterContextMenuInfo) menuInfo;
-        BaseEntity baseEntity = (BaseEntity) listView.getItemAtPosition(info.position);
-        if (baseEntity instanceof AbstractContact) {
+        Object itemAtPosition = listView.getItemAtPosition(info.position);
+        if (itemAtPosition instanceof AbstractContact) {
             ContextMenuHelper.createContactContextMenu(
-                    (ManagedActivity) getActivity(), adapter, (AbstractContact) baseEntity, menu);
-        } else if (baseEntity instanceof AccountConfiguration) {
+                    (ManagedActivity) getActivity(), adapter, (AbstractContact) itemAtPosition, menu);
+        } else if (itemAtPosition instanceof AccountConfiguration) {
+            AccountConfiguration accountConfiguration = (AccountConfiguration) itemAtPosition;
             ContextMenuHelper.createAccountContextMenu(
-                    (ManagedActivity) getActivity(), adapter, baseEntity.getAccount(), menu);
-        } else if (baseEntity instanceof GroupConfiguration) {
+                    (ManagedActivity) getActivity(), adapter, accountConfiguration.getAccount(), menu);
+        } else if (itemAtPosition instanceof GroupConfiguration) {
+            GroupConfiguration groupConfiguration = (GroupConfiguration) itemAtPosition;
             ContextMenuHelper.createGroupContextMenu((ManagedActivity) getActivity(), adapter,
-                    baseEntity.getAccount(), baseEntity.getUser(), menu);
+                    groupConfiguration.getAccount(), groupConfiguration.getGroup(), menu);
         } else {
             throw new IllegalStateException();
         }
@@ -202,7 +205,7 @@ public class ContactListFragment extends Fragment implements OnAccountChangedLis
             contactListFragmentListener.onContactClick((AbstractContact) object);
         } else if (object instanceof GroupConfiguration) {
             GroupConfiguration groupConfiguration = (GroupConfiguration) object;
-            adapter.setExpanded(groupConfiguration.getAccount(), groupConfiguration.getUser(),
+            adapter.setExpanded(groupConfiguration.getAccount(), groupConfiguration.getGroup(),
                     !groupConfiguration.isExpanded());
         }
     }
@@ -213,7 +216,7 @@ public class ContactListFragment extends Fragment implements OnAccountChangedLis
     }
 
     @Override
-    public void onAccountsChanged(Collection<String> accounts) {
+    public void onAccountsChanged(Collection<AccountJid> accounts) {
         adapter.refreshRequest();
         scrollToChatsActionButton.setColorNormal(accountPainter.getDefaultMainColor());
         scrollToChatsActionButton.setColorPressed(accountPainter.getDefaultDarkColor());
@@ -379,12 +382,12 @@ public class ContactListFragment extends Fragment implements OnAccountChangedLis
      *
      * @param account
      */
-    void scrollTo(String account) {
+    void scrollTo(AccountJid account) {
         long count = listView.getCount();
         for (int position = 0; position < (int) count; position++) {
-            BaseEntity baseEntity = (BaseEntity) listView.getItemAtPosition(position);
-            if (baseEntity != null && baseEntity instanceof AccountConfiguration
-                    && baseEntity.getAccount().equals(account)) {
+            Object itemAtPosition = listView.getItemAtPosition(position);
+            if (itemAtPosition != null && itemAtPosition instanceof AccountConfiguration
+                    && ((AccountConfiguration)itemAtPosition).getAccount().equals(account)) {
                 stopMovement();
                 listView.setSelection(position);
                 break;
@@ -397,9 +400,9 @@ public class ContactListFragment extends Fragment implements OnAccountChangedLis
      *
      * @param account
      */
-    void setSelectedAccount(String account) {
+    void setSelectedAccount(AccountJid account) {
         if (account.equals(AccountManager.getInstance().getSelectedAccount())) {
-            SettingsManager.setContactsSelectedAccount("");
+            SettingsManager.setContactsSelectedAccount(null);
         } else {
             SettingsManager.setContactsSelectedAccount(account);
         }
@@ -435,7 +438,7 @@ public class ContactListFragment extends Fragment implements OnAccountChangedLis
         }
 
 
-        String account = accountActionButtonsAdapter.getItemForView(view);
+        AccountJid account = accountActionButtonsAdapter.getItemForView(view);
         if (account == null) { // Check for tap on account in the title
             return;
         }
@@ -460,7 +463,7 @@ public class ContactListFragment extends Fragment implements OnAccountChangedLis
     }
 
     @Override
-    public void onAccountMenuClick(View view, final String account) {
+    public void onAccountMenuClick(View view, final AccountJid account) {
         PopupMenu popup = new PopupMenu(getActivity(), view);
         popup.inflate(R.menu.account);
         ContextMenuHelper.setUpAccountMenu((ManagedActivity) getActivity(), adapter, account, popup.getMenu());

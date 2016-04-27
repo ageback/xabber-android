@@ -14,12 +14,13 @@
  */
 package com.xabber.android.ui.adapter;
 
+import com.xabber.android.data.entity.AccountJid;
+import com.xabber.android.data.roster.GroupStateProvider;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.TreeMap;
-
-import com.xabber.android.data.roster.GroupStateProvider;
 
 /**
  * Account representation in the contact list.
@@ -28,16 +29,15 @@ public class AccountConfiguration extends GroupConfiguration {
 
     private final TreeMap<String, GroupConfiguration> groups;
 
-    public AccountConfiguration(String account, String user,
+    public AccountConfiguration(AccountJid account, String group,
                                 GroupStateProvider groupStateProvider) {
-        super(account, user, groupStateProvider);
+        super(account, group, groupStateProvider);
         groups = new TreeMap<>();
     }
 
     /**
      * Gets group by name.
      *
-     * @param group
      * @return <code>null</code> will be returns if there is no such group.
      */
     public GroupConfiguration getGroupConfiguration(String group) {
@@ -46,21 +46,16 @@ public class AccountConfiguration extends GroupConfiguration {
 
     /**
      * Adds new group.
-     *
-     * @param groupConfiguration
      */
     public void addGroupConfiguration(GroupConfiguration groupConfiguration) {
-        groups.put(groupConfiguration.getUser(), groupConfiguration);
+        groups.put(groupConfiguration.getGroup(), groupConfiguration);
     }
 
     /**
      * Returns sorted list of groups.
-     *
-     * @return
      */
     public Collection<GroupConfiguration> getSortedGroupConfigurations() {
-        ArrayList<GroupConfiguration> groups = new ArrayList<GroupConfiguration>(
-                this.groups.values());
+        ArrayList<GroupConfiguration> groups = new ArrayList<>(this.groups.values());
         Collections.sort(groups);
         return Collections.unmodifiableCollection(groups);
     }

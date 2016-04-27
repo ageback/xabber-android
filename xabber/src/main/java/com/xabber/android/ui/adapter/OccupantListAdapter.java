@@ -23,6 +23,9 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.xabber.android.R;
+import com.xabber.android.data.LogManager;
+import com.xabber.android.data.entity.AccountJid;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.avatar.AvatarManager;
 import com.xabber.android.data.extension.muc.MUCManager;
 import com.xabber.android.data.extension.muc.Occupant;
@@ -30,6 +33,8 @@ import com.xabber.android.ui.activity.ContactViewer;
 import com.xabber.android.ui.activity.OccupantList;
 
 import org.jivesoftware.smackx.muc.MUCRole;
+import org.jxmpp.jid.EntityBareJid;
+import org.jxmpp.jid.impl.JidCreate;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -43,16 +48,16 @@ public class OccupantListAdapter extends BaseAdapter implements
         UpdatableAdapter {
 
     private final Activity activity;
-    private final String account;
-    private final String room;
+    private final AccountJid account;
+    private final EntityBareJid room;
 
     private final ArrayList<Occupant> occupants;
 
-    public OccupantListAdapter(Activity activity, String account, String room) {
+    public OccupantListAdapter(Activity activity, AccountJid account, EntityBareJid room) {
         this.activity = activity;
         this.account = account;
         this.room = room;
-        occupants = new ArrayList<Occupant>();
+        occupants = new ArrayList<>();
     }
 
     @Override
@@ -93,8 +98,14 @@ public class OccupantListAdapter extends BaseAdapter implements
             @Override
             public void onClick(View v) {
                 Intent intent;
-                intent = ContactViewer.createIntent(activity, account, room + "/" + occupant.getNickname());
-                activity.startActivity(intent);
+                try {
+                    intent = ContactViewer.createIntent(activity, account,
+                            UserJid.from(JidCreate.domainFullFrom(room.asDomainBareJid(), occupant.getNickname())));
+                    activity.startActivity(intent);
+                } catch (UserJid.UserJidCreateException e) {
+                    LogManager.exception(this, e);
+                }
+
             }
         });
 
@@ -106,13 +117,16 @@ public class OccupantListAdapter extends BaseAdapter implements
                 .findViewById(R.id.status);
         final ImageView statusModeView = (ImageView) view
                 .findViewById(R.id.status_icon);
-        if (MUCManager.getInstance().getNickname(account, room)
-                .equalsIgnoreCase(occupant.getNickname()))
-            avatarView.setImageDrawable(AvatarManager.getInstance()
-                    .getAccountAvatar(account));
-        else
-            avatarView.setImageDrawable(AvatarManager.getInstance()
-                    .getUserAvatarForContactList(room + "/" + occupant.getNickname()));
+        if (MUCManager.getInstance().getNickname(account, room).equals(occupant.getNickname())) {
+            avatarView.setImageDrawable(AvatarManager.getInstance() .getAccountAvatar(account));
+        } else {
+            try {
+                avatarView.setImageDrawable(AvatarManager.getInstance()
+                        .getUserAvatarForContactList(UserJid.from(occupant.getJid())));
+            } catch (UserJid.UserJidCreateException e) {
+                LogManager.exception(this, e);
+            }
+        }
         affilationView.setImageLevel(occupant.getAffiliation().ordinal());
         nameView.setText(occupant.getNickname());
         int textStyle;

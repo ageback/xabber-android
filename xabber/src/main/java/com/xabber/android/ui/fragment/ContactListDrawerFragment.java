@@ -21,6 +21,7 @@ import com.xabber.android.R;
 import com.xabber.android.data.Application;
 import com.xabber.android.data.LogManager;
 import com.xabber.android.data.account.listeners.OnAccountChangedListener;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.ui.adapter.NavigationDrawerAccountAdapter;
 import com.xabber.android.ui.color.AccountPainter;
 import com.xabber.android.ui.color.ColorManager;
@@ -129,7 +130,7 @@ public class ContactListDrawerFragment extends Fragment implements View.OnClickL
     }
 
     @Override
-    public void onAccountsChanged(Collection<String> accounts) {
+    public void onAccountsChanged(Collection<AccountJid> accounts) {
         update();
     }
 
@@ -153,12 +154,12 @@ public class ContactListDrawerFragment extends Fragment implements View.OnClickL
 
     @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-        listener.onAccountSelected((String) listView.getItemAtPosition(position));
+        listener.onAccountSelected((AccountJid) listView.getItemAtPosition(position));
     }
 
     public interface ContactListDrawerListener {
         void onContactListDrawerListener(int viewId);
 
-        void onAccountSelected(String account);
+        void onAccountSelected(AccountJid account);
     }
 }

@@ -14,12 +14,15 @@
  */
 package com.xabber.android.data.message;
 
-import com.xabber.android.data.LogManager;
+import android.support.annotation.NonNull;
+
 import com.xabber.android.data.NetworkException;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.connection.ConnectionManager;
 import com.xabber.android.data.database.realm.MessageItem;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.BaseEntity;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.blocking.PrivateMucChatBlockingManager;
 import com.xabber.android.data.extension.carbons.CarbonManager;
 import com.xabber.android.data.extension.cs.ChatStateManager;
@@ -27,7 +30,6 @@ import com.xabber.android.data.extension.file.FileManager;
 import com.xabber.android.data.extension.mam.SyncInfo;
 import com.xabber.android.data.message.chat.ChatManager;
 import com.xabber.android.data.notification.NotificationManager;
-import com.xabber.xmpp.address.Jid;
 
 import org.greenrobot.eventbus.EventBus;
 import org.jivesoftware.smack.SmackException;
@@ -37,6 +39,8 @@ import org.jivesoftware.smack.packet.Message.Type;
 import org.jivesoftware.smack.packet.Stanza;
 import org.jivesoftware.smack.util.StringUtils;
 import org.jivesoftware.smackx.delay.packet.DelayInformation;
+import org.jxmpp.jid.Jid;
+import org.jxmpp.jid.parts.Resourcepart;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -89,9 +93,8 @@ public abstract class AbstractChat extends BaseEntity {
     private Realm realm;
     private RealmResults<SyncInfo> syncInfo;
 
-    protected AbstractChat(final String account, final String user, boolean isPrivateMucChat) {
-        super(account, isPrivateMucChat ? user : Jid.getBareAddress(user));
-        LogManager.i("AbstractChat", "AbstractChat user: " + user);
+    protected AbstractChat(@NonNull final AccountJid account, @NonNull final UserJid user, boolean isPrivateMucChat) {
+        super(account, isPrivateMucChat ? user : user.getBareUserJid());
         threadId = StringUtils.randomString(12);
         active = false;
         trackStatus = false;
@@ -144,16 +147,23 @@ public abstract class AbstractChat extends BaseEntity {
         }
     }
 
+    private String getAccountString() {
+        return account.toString();
+    }
+
+    private String getUserString() {
+        return user.toString();
+    }
+
     public RealmResults<MessageItem> getMessages() {
         if (realm == null || realm.isClosed()) {
             realm = Realm.getDefaultInstance();
         }
 
         if (messageItems == null) {
-            LogManager.i(this, "Requesting message items...");
             messageItems = realm.where(MessageItem.class)
-                    .equalTo(MessageItem.Fields.ACCOUNT, account)
-                    .equalTo(MessageItem.Fields.USER, this.user)
+                    .equalTo(MessageItem.Fields.ACCOUNT, getAccountString())
+                    .equalTo(MessageItem.Fields.USER, getUserString())
                     .findAllSortedAsync(MessageItem.Fields.TIMESTAMP, Sort.ASCENDING);
         }
 
@@ -167,8 +177,8 @@ public abstract class AbstractChat extends BaseEntity {
 
         if (syncInfo == null) {
             syncInfo = realm.where(SyncInfo.class)
-                    .equalTo(SyncInfo.FIELD_ACCOUNT, account)
-                    .equalTo(SyncInfo.FIELD_USER, user)
+                    .equalTo(SyncInfo.FIELD_ACCOUNT, getAccountString())
+                    .equalTo(SyncInfo.FIELD_USER, getUserString())
                     .findAllAsync();
         }
 
@@ -182,7 +192,8 @@ public abstract class AbstractChat extends BaseEntity {
     /**
      * @return Target address for sending message.
      */
-    public abstract String getTo();
+    @NonNull
+    public abstract Jid getTo();
 
     /**
      * @return Message type to be assigned.
@@ -207,10 +218,18 @@ public abstract class AbstractChat extends BaseEntity {
     }
 
     /**
-     * @param text
-     * @return New message instance.
+     *
+     * @param resource
+     * @param s
+     *@param action
+     * @param delay
+     * @param incoming
+     * @param notify
+     * @param unencrypted
+     * @param offline
+     * @param text  @return New message instance.
      */
-    protected void createAndSaveNewMessage(String text) {
+    protected void createAndSaveNewMessage(Resourcepart resource, String s, Object action, Date delay, boolean incoming, boolean notify, boolean unencrypted, boolean offline, String text) {
         MessageItem newMessageItem = createNewMessageItem(text);
         saveMessageItem(newMessageItem);
     }
@@ -219,12 +238,11 @@ public abstract class AbstractChat extends BaseEntity {
 
     /**
      * Creates new action.
-     *
      * @param resource can be <code>null</code>.
      * @param text     can be <code>null</code>.
      * @param action
      */
-    public void newAction(String resource, String text, ChatAction action) {
+    public void newAction(Resourcepart resource, String text, ChatAction action) {
         createAndSaveNewMessage(resource, text, action, null, true, false, false, false, null);
     }
 
@@ -243,7 +261,7 @@ public abstract class AbstractChat extends BaseEntity {
      * @param offline        Whether message was received from server side offline storage.
      * @return
      */
-    protected void createAndSaveNewMessage(String resource, String text,
+    protected void createAndSaveNewMessage(Resourcepart resource, String text,
                                            final ChatAction action, final Date delayTimestamp, final boolean incoming,
                                            boolean notify, final boolean unencrypted, final boolean offline, final String stanzaId) {
         final MessageItem messageItem = createMessageItem(resource, text, action, delayTimestamp,
@@ -265,17 +283,14 @@ public abstract class AbstractChat extends BaseEntity {
         realm.close();
     }
 
-    protected MessageItem createMessageItem(String resource, String text, ChatAction action,
-                                          Date delayTimestamp, boolean incoming, boolean notify,
-                                          boolean unencrypted, boolean offline, String stanzaId) {
+    protected MessageItem createMessageItem(Resourcepart resource, String text, ChatAction action,
+                                            Date delayTimestamp, boolean incoming, boolean notify,
+                                            boolean unencrypted, boolean offline, String stanzaId) {
         final boolean visible = MessageManager.getInstance().isVisibleChat(this);
         boolean read = incoming ? visible : true;
         boolean send = incoming;
         if (action == null && text == null) {
             throw new IllegalArgumentException();
-        }
-        if (resource == null) {
-            resource = "";
         }
         if (text == null) {
             text = "";
@@ -309,7 +324,10 @@ public abstract class AbstractChat extends BaseEntity {
 
         messageItem.setAccount(account);
         messageItem.setUser(user);
-        messageItem.setResource(resource);
+
+        if (resource == null) {
+            messageItem.setResource(Resourcepart.EMPTY);
+        }
         if (action != null) {
             messageItem.setAction(action.toString());
         }
@@ -329,7 +347,7 @@ public abstract class AbstractChat extends BaseEntity {
         if (notify && notifyAboutMessage()) {
             if (visible) {
                 if (ChatManager.getInstance().isNotifyVisible(account, user)) {
-                    NotificationManager.getInstance().onCurrentChatMessageNotification(messageItem);
+                    NotificationManager.getInstance().onMessageNotification(messageItem);
                 }
             } else {
                 NotificationManager.getInstance().onMessageNotification(messageItem);
@@ -344,7 +362,7 @@ public abstract class AbstractChat extends BaseEntity {
 
         final String messageId = UUID.randomUUID().toString();
 
-        realm.executeTransaction(new Realm.Transaction() {
+        realm.executeTransactionAsync(new Realm.Transaction() {
             @Override
             public void execute(Realm realm) {
                 MessageItem messageItem = new MessageItem(messageId);
@@ -359,7 +377,7 @@ public abstract class AbstractChat extends BaseEntity {
                 messageItem.setIncoming(false);
                 realm.copyToRealm(messageItem);
             }
-        }, null);
+        });
 
 
         realm.close();
@@ -413,12 +431,10 @@ public abstract class AbstractChat extends BaseEntity {
     }
 
     /**
-     * @param bareAddress bareAddress of the user.
-     * @param user        full jid.
      * @return Whether chat accepts packets from specified user.
      */
-    boolean accept(String bareAddress, String user) {
-        return this.user.equals(bareAddress);
+    boolean accept(UserJid jid) {
+        return this.user.equals(jid);
     }
 
     public MessageItem getLastMessage() {
@@ -485,16 +501,14 @@ public abstract class AbstractChat extends BaseEntity {
 
 
     public void sendMessages() {
-        LogManager.i(this, "sendMessages. user: " + user);
-
         final Realm realm = Realm.getDefaultInstance();
 
-        realm.executeTransaction(new Realm.Transaction() {
+        realm.executeTransactionAsync(new Realm.Transaction() {
             @Override
             public void execute(Realm realm) {
                 RealmResults<MessageItem> messagesToSend = realm.where(MessageItem.class)
-                        .equalTo(MessageItem.Fields.ACCOUNT, account)
-                        .equalTo(MessageItem.Fields.USER, user)
+                        .equalTo(MessageItem.Fields.ACCOUNT, account.toString())
+                        .equalTo(MessageItem.Fields.USER, user.toString())
                         .equalTo(MessageItem.Fields.SENT, false)
                         .findAllSorted(MessageItem.Fields.TIMESTAMP, Sort.ASCENDING);
                 if (messagesToSend.isEmpty()) {
@@ -503,15 +517,13 @@ public abstract class AbstractChat extends BaseEntity {
 
                 List<MessageItem> messageItemList = new ArrayList<>(messagesToSend);
 
-                LogManager.i(AbstractChat.this, "sendMessages " + messageItemList.size());
-
                 for (final MessageItem messageItem : messageItemList) {
                     if (!sendMessage(messageItem)) {
                         break;
                     }
                 }
             }
-        }, null);
+        });
         realm.close();
     }
 
@@ -530,8 +542,6 @@ public abstract class AbstractChat extends BaseEntity {
 
         Message message = null;
         if (text != null) {
-
-            LogManager.i(AbstractChat.this, "Sending message user: " + messageItem.getUser() + " text: " + messageItem.getText());
             message = createMessagePacket(text);
         }
 
@@ -604,12 +614,12 @@ public abstract class AbstractChat extends BaseEntity {
     /**
      * Processes incoming packet.
      *
-     * @param bareAddress
+     * @param userJid
      * @param packet
      * @return Whether packet was directed to this chat.
      */
-    protected boolean onPacket(String bareAddress, Stanza packet) {
-        return accept(bareAddress, packet.getFrom());
+    protected boolean onPacket(UserJid userJid, Stanza packet) {
+        return accept(userJid);
     }
 
     /**

@@ -18,7 +18,9 @@ import android.content.Intent;
 
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.BaseEntity;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.notification.EntityNotificationItem;
 import com.xabber.android.data.roster.RosterManager;
 import com.xabber.android.ui.activity.ChatViewer;
@@ -26,7 +28,7 @@ import com.xabber.android.ui.activity.ChatViewer;
 public class AttentionRequest extends BaseEntity implements
         EntityNotificationItem {
 
-    public AttentionRequest(String account, String user) {
+    public AttentionRequest(AccountJid account, UserJid user) {
         super(account, user);
     }
 

@@ -17,7 +17,6 @@ package com.xabber.android.data.account.listeners;
 import com.xabber.android.data.BaseManagerInterface;
 import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.connection.ConnectionItem;
-import com.xabber.android.data.connection.listeners.OnConnectionListener;
 
 public interface OnAccountOnlineListener extends BaseManagerInterface {
 
@@ -27,8 +26,6 @@ public interface OnAccountOnlineListener extends BaseManagerInterface {
      * {@link OnAccountEnabledListener#onAccountEnabled(AccountItem)} and
      * {@link OnConnectionListener#onConnection(ConnectionItem)} will be called
      * first.
-     *
-     * @param accountItem
      */
     void onAccountOnline(AccountItem accountItem);
 

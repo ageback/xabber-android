@@ -9,6 +9,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 
 import com.xabber.android.R;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.message.AbstractChat;
 import com.xabber.android.ui.color.AccountPainter;
 import com.xabber.android.ui.color.ColorManager;
@@ -59,7 +60,7 @@ public class ChatScrollIndicatorAdapter {
             final AccountPainter accountPainter = ColorManager.getInstance().getAccountPainter();
 
             if (i > 0) {
-                final String account = activeChats.get(i - 1).getAccount();
+                final AccountJid account = activeChats.get(i - 1).getAccount();
                 ((GradientDrawable)accountViewHolder.body.getDrawable()).setColor(accountPainter.getAccountMainColor(account));
                 ((GradientDrawable)accountViewHolder.selection.getDrawable()).setColor(accountPainter.getAccountMainColor(account));
             } else {

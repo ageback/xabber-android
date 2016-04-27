@@ -22,7 +22,9 @@ import android.widget.Filterable;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.account.CommonState;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.BaseEntity;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.blocking.BlockingManager;
 import com.xabber.android.data.extension.muc.MUCManager;
 import com.xabber.android.data.extension.muc.RoomChat;
@@ -35,8 +37,6 @@ import com.xabber.android.data.roster.GroupManager;
 import com.xabber.android.data.roster.RosterContact;
 import com.xabber.android.data.roster.RosterManager;
 
-import org.jivesoftware.smack.roster.RosterEntry;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -45,7 +45,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 import java.util.TreeMap;
 
 /**
@@ -147,8 +146,8 @@ public class ContactListAdapter extends GroupedContactAdapter implements Runnabl
 
         final Collection<RosterContact> allRosterContacts = RosterManager.getInstance().getContacts();
 
-        Map<String, Collection<String>> blockedContacts = new TreeMap<>();
-        for (String account : AccountManager.getInstance().getAccounts()) {
+        Map<AccountJid, Collection<UserJid>> blockedContacts = new TreeMap<>();
+        for (AccountJid account : AccountManager.getInstance().getAccounts()) {
             blockedContacts.put(account, BlockingManager.getInstance().getBlockedContacts(account));
         }
 
@@ -169,7 +168,7 @@ public class ContactListAdapter extends GroupedContactAdapter implements Runnabl
         final boolean showAccounts = SettingsManager.contactsShowAccounts();
         final Comparator<AbstractContact> comparator = SettingsManager.contactsOrder();
         final CommonState commonState = AccountManager.getInstance().getCommonState();
-        final String selectedAccount = AccountManager.getInstance().getSelectedAccount();
+        final AccountJid selectedAccount = AccountManager.getInstance().getSelectedAccount();
 
 
         /**
@@ -197,22 +196,22 @@ public class ContactListAdapter extends GroupedContactAdapter implements Runnabl
          */
         boolean hasVisibleContacts = false;
 
-        final Map<String, AccountConfiguration> accounts = new TreeMap<>();
+        final Map<AccountJid, AccountConfiguration> accounts = new TreeMap<>();
 
-        for (String account : AccountManager.getInstance().getAccounts()) {
+        for (AccountJid account : AccountManager.getInstance().getAccounts()) {
             accounts.put(account, null);
         }
 
         /**
          * List of rooms and active chats grouped by users inside accounts.
          */
-        final Map<String, Map<String, AbstractChat>> abstractChats = new TreeMap<>();
+        final Map<AccountJid, Map<UserJid, AbstractChat>> abstractChats = new TreeMap<>();
 
         for (AbstractChat abstractChat : MessageManager.getInstance().getChats()) {
             if ((abstractChat instanceof RoomChat || abstractChat.isActive())
                     && accounts.containsKey(abstractChat.getAccount())) {
-                final String account = abstractChat.getAccount();
-                Map<String, AbstractChat> users = abstractChats.get(account);
+                final AccountJid account = abstractChat.getAccount();
+                Map<UserJid, AbstractChat> users = abstractChats.get(account);
                 if (users == null) {
                     users = new TreeMap<>();
                     abstractChats.put(account, users);
@@ -226,7 +225,7 @@ public class ContactListAdapter extends GroupedContactAdapter implements Runnabl
             if (showAccounts) {
                 groups = null;
                 contacts = null;
-                for (Entry<String, AccountConfiguration> entry : accounts.entrySet()) {
+                for (Entry<AccountJid, AccountConfiguration> entry : accounts.entrySet()) {
                     entry.setValue(new AccountConfiguration(entry.getKey(),
                             GroupManager.IS_ACCOUNT, GroupManager.getInstance()));
                 }
@@ -253,8 +252,8 @@ public class ContactListAdapter extends GroupedContactAdapter implements Runnabl
                 }
                 hasContacts = true;
                 final boolean online = rosterContact.getStatusMode().isOnline();
-                final String account = rosterContact.getAccount();
-                final Map<String, AbstractChat> users = abstractChats.get(account);
+                final AccountJid account = rosterContact.getAccount();
+                final Map<UserJid, AbstractChat> users = abstractChats.get(account);
                 final AbstractChat abstractChat;
                 if (users == null) {
                     abstractChat = null;
@@ -280,7 +279,7 @@ public class ContactListAdapter extends GroupedContactAdapter implements Runnabl
                     hasVisibleContacts = true;
                 }
             }
-            for (Map<String, AbstractChat> users : abstractChats.values()) {
+            for (Map<UserJid, AbstractChat> users : abstractChats.values())
                 for (AbstractChat abstractChat : users.values()) {
                     final AbstractContact abstractContact;
                     if (abstractChat instanceof RoomChat) {
@@ -318,7 +317,6 @@ public class ContactListAdapter extends GroupedContactAdapter implements Runnabl
                     addContact(abstractContact, group, online, accounts, groups, contacts,
                             showAccounts, showGroups);
                 }
-            }
 
             hasActiveChats = activeChats != null && activeChats.getTotal() > 0;
 
@@ -402,7 +400,7 @@ public class ContactListAdapter extends GroupedContactAdapter implements Runnabl
 
     private ArrayList<AbstractContact> getSearchResults(Collection<RosterContact> rosterContacts,
                                                         Comparator<AbstractContact> comparator,
-                                                        Map<String, Map<String, AbstractChat>> abstractChats) {
+                                                        Map<AccountJid, Map<UserJid, AbstractChat>> abstractChats) {
         final ArrayList<AbstractContact> baseEntities = new ArrayList<>();
 
         // Build structure.
@@ -410,8 +408,8 @@ public class ContactListAdapter extends GroupedContactAdapter implements Runnabl
             if (!rosterContact.isEnabled()) {
                 continue;
             }
-            final String account = rosterContact.getAccount();
-            final Map<String, AbstractChat> users = abstractChats.get(account);
+            final AccountJid account = rosterContact.getAccount();
+            final Map<UserJid, AbstractChat> users = abstractChats.get(account);
             if (users != null) {
                 users.remove(rosterContact.getUser());
             }
@@ -419,7 +417,7 @@ public class ContactListAdapter extends GroupedContactAdapter implements Runnabl
                 baseEntities.add(rosterContact);
             }
         }
-        for (Map<String, AbstractChat> users : abstractChats.values()) {
+        for (Map<UserJid, AbstractChat> users : abstractChats.values()) {
             for (AbstractChat abstractChat : users.values()) {
                 final AbstractContact abstractContact;
                 if (abstractChat instanceof RoomChat) {
@@ -454,13 +452,13 @@ public class ContactListAdapter extends GroupedContactAdapter implements Runnabl
     }
 
     public static class AccountTopSeparator extends BaseEntity {
-        public AccountTopSeparator(String account, String user) {
+        public AccountTopSeparator(AccountJid account, UserJid user) {
             super(account, user);
         }
     }
 
     public static class AccountBottomSeparator extends BaseEntity {
-        public AccountBottomSeparator(String account, String user) {
+        public AccountBottomSeparator(AccountJid account, UserJid user) {
             super(account, user);
         }
     }

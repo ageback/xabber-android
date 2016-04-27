@@ -32,7 +32,9 @@ import com.xabber.android.R;
 import com.xabber.android.data.Application;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.account.listeners.OnAccountChangedListener;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.BaseEntity;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.otr.OTRManager;
 import com.xabber.android.data.intent.AccountIntentBuilder;
 import com.xabber.android.data.intent.EntityIntentBuilder;
@@ -40,7 +42,8 @@ import com.xabber.android.data.roster.AbstractContact;
 import com.xabber.android.data.roster.OnContactChangedListener;
 import com.xabber.android.data.roster.RosterManager;
 import com.xabber.android.ui.helper.ContactTitleActionBarInflater;
-import com.xabber.xmpp.address.Jid;
+
+import org.jxmpp.jid.BareJid;
 
 import java.util.Collection;
 
@@ -51,8 +54,8 @@ public class FingerprintViewer extends ManagedActivity implements
     private static final String SAVED_REMOTE_FINGERPRINT = "com.xabber.android.ui.activity.FingerprintViewer.SAVED_REMOTE_FINGERPRINT";
     private static final String SAVED_LOCAL_FINGERPRINT = "com.xabber.android.ui.activity.FingerprintViewer.SAVED_LOCAL_FINGERPRINT";
     ContactTitleActionBarInflater contactTitleActionBarInflater;
-    private String account;
-    private String user;
+    private AccountJid account;
+    private UserJid user;
     private String remoteFingerprint;
     private String localFingerprint;
     /**
@@ -68,16 +71,16 @@ public class FingerprintViewer extends ManagedActivity implements
      */
     private IntentIntegrator integrator;
 
-    public static Intent createIntent(Context context, String account, String user) {
+    public static Intent createIntent(Context context, AccountJid account, UserJid user) {
         return new EntityIntentBuilder(context, FingerprintViewer.class)
                 .setAccount(account).setUser(user).build();
     }
 
-    private static String getAccount(Intent intent) {
+    private static AccountJid getAccount(Intent intent) {
         return AccountIntentBuilder.getAccount(intent);
     }
 
-    private static String getUser(Intent intent) {
+    private static UserJid getUser(Intent intent) {
         return EntityIntentBuilder.getUser(intent);
     }
 
@@ -172,7 +175,7 @@ public class FingerprintViewer extends ManagedActivity implements
 
     @Override
     public void onContactsChanged(Collection<BaseEntity> entities) {
-        String thisBareAddress = Jid.getBareAddress(user);
+        BareJid thisBareAddress = user.getBareJid();
         for (BaseEntity entity : entities) {
             if (entity.equals(account, thisBareAddress)) {
                 update();
@@ -182,7 +185,7 @@ public class FingerprintViewer extends ManagedActivity implements
     }
 
     @Override
-    public void onAccountsChanged(Collection<String> accounts) {
+    public void onAccountsChanged(Collection<AccountJid> accounts) {
         if (accounts.contains(account)) {
             update();
         }

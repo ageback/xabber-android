@@ -14,17 +14,20 @@
  */
 package com.xabber.android.data.extension.muc;
 
+import android.support.annotation.NonNull;
+
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.SettingsManager.ChatsShowStatusChange;
 import com.xabber.android.data.account.StatusMode;
 import com.xabber.android.data.database.realm.MessageItem;
+import com.xabber.android.data.entity.AccountJid;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.message.AbstractChat;
 import com.xabber.android.data.message.ChatAction;
 import com.xabber.android.data.message.chat.ChatManager;
 import com.xabber.android.data.roster.RosterManager;
-import com.xabber.xmpp.address.Jid;
 
 import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.packet.Message.Type;
@@ -36,7 +39,8 @@ import org.jivesoftware.smackx.muc.MUCRole;
 import org.jivesoftware.smackx.muc.MultiUserChat;
 import org.jivesoftware.smackx.muc.packet.MUCItem;
 import org.jivesoftware.smackx.muc.packet.MUCUser;
-import org.jxmpp.util.XmppStringUtils;
+import org.jxmpp.jid.EntityBareJid;
+import org.jxmpp.jid.parts.Resourcepart;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -59,11 +63,11 @@ public class RoomChat extends AbstractChat {
     /**
      * Information about occupants for STRING-PREPed resource.
      */
-    private final Map<String, Occupant> occupants;
+    private final Map<Resourcepart, Occupant> occupants;
     /**
      * Invited user for the sent packet ID.
      */
-    private final Map<String, String> invites;
+    private final Map<String, UserJid> invites;
     /**
      * Joining was requested from the UI.
      */
@@ -71,7 +75,7 @@ public class RoomChat extends AbstractChat {
     /**
      * Nickname used in the room.
      */
-    private String nickname;
+    private Resourcepart nickname;
     private String password;
     private RoomState state;
     private String subject;
@@ -80,7 +84,11 @@ public class RoomChat extends AbstractChat {
      */
     private MultiUserChat multiUserChat;
 
-    RoomChat(String account, String user, String nickname, String password) {
+    public static RoomChat create(AccountJid account, EntityBareJid user, Resourcepart nickname, String password) throws UserJid.UserJidCreateException {
+        return new RoomChat(account, UserJid.from(user), nickname, password);
+    }
+
+    private RoomChat(AccountJid account, UserJid user, Resourcepart nickname, String password) {
         super(account, user, false);
         this.nickname = nickname;
         this.password = password;
@@ -92,9 +100,10 @@ public class RoomChat extends AbstractChat {
         invites = new HashMap<>();
     }
 
+    @NonNull
     @Override
-    public String getTo() {
-        return user;
+    public EntityBareJid getTo() {
+        return getRoom();
     }
 
     @Override
@@ -102,15 +111,15 @@ public class RoomChat extends AbstractChat {
         return Type.groupchat;
     }
 
-    String getRoom() {
-        return user;
+    EntityBareJid getRoom() {
+        return user.getJid().asEntityBareJidIfPossible();
     }
 
-    String getNickname() {
+    Resourcepart getNickname() {
         return nickname;
     }
 
-    void setNickname(String nickname) {
+    void setNickname(Resourcepart nickname) {
         this.nickname = nickname;
     }
 
@@ -162,7 +171,7 @@ public class RoomChat extends AbstractChat {
         this.multiUserChat = multiUserChat;
     }
 
-    void putInvite(String packetID, String user) {
+    void putInvite(String packetID, UserJid user) {
         invites.put(packetID, user);
     }
 
@@ -177,28 +186,28 @@ public class RoomChat extends AbstractChat {
     }
 
     @Override
-    protected boolean onPacket(String bareAddress, Stanza packet) {
-        if (!super.onPacket(bareAddress, packet)) {
+    protected boolean onPacket(UserJid bareAddress, Stanza stanza) {
+        if (!super.onPacket(bareAddress, stanza)) {
             return false;
         }
 
-        MUCUser mucUserExtension = MUCUser.from(packet);
+        MUCUser mucUserExtension = MUCUser.from(stanza);
         if (mucUserExtension != null && mucUserExtension.getInvite() != null) {
             return false;
         }
 
-        final String from = packet.getFrom();
-        final String resource = XmppStringUtils.parseResource(from);
-        if (packet instanceof Message) {
-            final Message message = (Message) packet;
+        final org.jxmpp.jid.Jid from = stanza.getFrom();
+        final Resourcepart resource = from.getResourceOrNull();
+        if (stanza instanceof Message) {
+            final Message message = (Message) stanza;
             if (message.getType() == Message.Type.error) {
-                String invite = invites.remove(message.getStanzaId());
+                UserJid invite = invites.remove(message.getStanzaId());
                 if (invite != null) {
-                    newAction(nickname, invite, ChatAction.invite_error);
+                    newAction(nickname, invite.toString(), ChatAction.invite_error);
                 }
                 return true;
             }
-            MUCUser mucUser = MUCUser.from(packet);
+            MUCUser mucUser = MUCUser.from(stanza);
             if (mucUser != null && mucUser.getDecline() != null) {
                 onInvitationDeclined(mucUser.getDecline().getFrom(), mucUser.getDecline().getReason());
                 return true;
@@ -258,13 +267,12 @@ public class RoomChat extends AbstractChat {
                 updateThreadId(message.getThread());
                 createAndSaveNewMessage(resource, text, null, delay, true, notify, false, false, message.getStanzaId());
             }
-        } else if (packet instanceof Presence) {
-            String stringPrep = Jid.getStringPrep(resource);
-            Presence presence = (Presence) packet;
+        } else if (stanza instanceof Presence) {
+            Presence presence = (Presence) stanza;
             if (presence.getType() == Presence.Type.available) {
-                Occupant oldOccupant = occupants.get(stringPrep);
+                Occupant oldOccupant = occupants.get(resource);
                 Occupant newOccupant = createOccupant(resource, presence);
-                occupants.put(stringPrep, newOccupant);
+                occupants.put(resource, newOccupant);
                 if (oldOccupant == null) {
                     onAvailable(resource);
                     RosterManager.onContactChanged(account, user);
@@ -288,7 +296,7 @@ public class RoomChat extends AbstractChat {
                     }
                 }
             } else if (presence.getType() == Presence.Type.unavailable && state == RoomState.available) {
-                occupants.remove(stringPrep);
+                occupants.remove(resource);
                 MUCUser mucUser = MUCUser.from(presence);
                 if (mucUser != null && mucUser.getStatus() != null) {
                     if (mucUser.getStatus().contains(MUCUser.Status.KICKED_307)) {
@@ -296,13 +304,13 @@ public class RoomChat extends AbstractChat {
                     } else if (mucUser.getStatus().contains(MUCUser.Status.BANNED_301)){
                         onBan(resource, mucUser.getItem().getActor());
                     } else if (mucUser.getStatus().contains(MUCUser.Status.NEW_NICKNAME_303)) {
-                        String newNick = mucUser.getItem().getNick();
+                        Resourcepart newNick = mucUser.getItem().getNick();
                         if (newNick == null) {
                             return true;
                         }
                         onRename(resource, newNick);
                         Occupant occupant = createOccupant(newNick, presence);
-                        occupants.put(Jid.getStringPrep(newNick), occupant);
+                        occupants.put(newNick, occupant);
                     } else if (mucUser.getStatus().contains(MUCUser.Status.REMOVED_AFFIL_CHANGE_321)) {
                         onRevoke(resource, mucUser.getItem().getActor());
                     }
@@ -324,9 +332,10 @@ public class RoomChat extends AbstractChat {
 
     /**
      * @return Whether resource is own nickname.
+     * @param resource
      */
-    private boolean isSelf(String resource) {
-        return Jid.getStringPrep(nickname).equals(Jid.getStringPrep(resource));
+    private boolean isSelf(Resourcepart resource) {
+        return nickname.equals(resource);
     }
 
     /**
@@ -338,8 +347,9 @@ public class RoomChat extends AbstractChat {
 
     /**
      * A occupant becomes available.
+     * @param resource
      */
-    private void onAvailable(String resource) {
+    private void onAvailable(Resourcepart resource) {
         if (isSelf(resource)) {
             setState(RoomState.available);
             if (isRequested()) {
@@ -369,9 +379,9 @@ public class RoomChat extends AbstractChat {
      *
      * @return New occupant based on presence information.
      */
-    private Occupant createOccupant(String resource, Presence presence) {
+    private Occupant createOccupant(Resourcepart resource, Presence presence) {
         Occupant occupant = new Occupant(resource);
-        String jid = null;
+        org.jxmpp.jid.Jid jid = null;
         MUCAffiliation affiliation = MUCAffiliation.none;
         MUCRole role = MUCRole.none;
 
@@ -406,19 +416,20 @@ public class RoomChat extends AbstractChat {
         return occupant;
     }
 
-    private void onAffiliationChanged(String resource, MUCAffiliation affiliation) {
+    private void onAffiliationChanged(Resourcepart resource, MUCAffiliation affiliation) {
     }
 
-    private void onRoleChanged(String resource, MUCRole role) {
+    private void onRoleChanged(Resourcepart resource, MUCRole role) {
     }
 
-    private void onStatusChanged(String resource, StatusMode statusMode, String statusText) {
+    private void onStatusChanged(Resourcepart resource, StatusMode statusMode, String statusText) {
     }
 
     /**
      * A occupant leaves room.
+     * @param resource
      */
-    private void onLeave(String resource) {
+    private void onLeave(Resourcepart resource) {
         if (showStatusChange()) {
             newAction(resource, null, ChatAction.leave);
         }
@@ -431,49 +442,57 @@ public class RoomChat extends AbstractChat {
     /**
      * A occupant was kicked.
      *
+     * @param resource
+     * @param actor
      */
-    private void onKick(String resource, String actor) {
+    private void onKick(Resourcepart resource, org.jxmpp.jid.Jid actor) {
         if (showStatusChange()) {
-            newAction(resource, actor, ChatAction.kick);
+            newAction(resource, actor.toString(), ChatAction.kick);
         }
         if (isSelf(resource)) {
-            MUCManager.getInstance().leaveRoom(account, user);
+            MUCManager.getInstance().leaveRoom(account, getRoom());
         }
     }
 
     /**
      * A occupant was banned.
      *
+     * @param resource
+     * @param actor
      */
-    private void onBan(String resource, String actor) {
+    private void onBan(Resourcepart resource, org.jxmpp.jid.Jid actor) {
         if (showStatusChange()) {
-            newAction(resource, actor, ChatAction.ban);
+            newAction(resource, actor.toString(), ChatAction.ban);
         }
         if (isSelf(resource)) {
-            MUCManager.getInstance().leaveRoom(account, user);
+            MUCManager.getInstance().leaveRoom(account, getRoom());
         }
     }
 
     /**
      * A occupant has changed his nickname in the room.
      *
+     * @param resource
+     * @param newNick
      */
-    private void onRename(String resource, String newNick) {
+    private void onRename(Resourcepart resource, Resourcepart newNick) {
         if (showStatusChange()) {
-            newAction(resource, newNick, ChatAction.nickname);
+            newAction(resource, newNick.toString(), ChatAction.nickname);
         }
     }
 
     /**
      * A user's membership was revoked from the room
      *
+     * @param resource
+     * @param actor
      */
-    private void onRevoke(String resource, String actor) {
+    private void onRevoke(Resourcepart resource, org.jxmpp.jid.Jid actor) {
         if (showStatusChange()) {
-            newAction(resource, actor, ChatAction.kick);
+            newAction(resource, actor.toString(), ChatAction.kick);
         }
         if (isSelf(resource)) {
-            MUCManager.getInstance().leaveRoom(account, user);
+            MUCManager.getInstance().leaveRoom(account, getRoom());
         }
     }
 
@@ -481,7 +500,7 @@ public class RoomChat extends AbstractChat {
     protected void onComplete() {
         super.onComplete();
         if (getState() == RoomState.waiting) {
-            MUCManager.getInstance().joinRoom(account, user, false);
+            MUCManager.getInstance().joinRoom(account, getRoom(), false);
         }
     }
 

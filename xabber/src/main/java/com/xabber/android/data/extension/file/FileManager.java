@@ -23,6 +23,8 @@ import com.xabber.android.data.Application;
 import com.xabber.android.data.LogManager;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.database.realm.MessageItem;
+import com.xabber.android.data.entity.AccountJid;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.message.MessageUpdateEvent;
 
 import org.greenrobot.eventbus.EventBus;
@@ -177,8 +179,8 @@ public class FileManager {
         startedDownloads.add(downloadUrl);
 
 
-        final String account = messageItem.getAccount();
-        final String user = messageItem.getUser();
+        final AccountJid account = messageItem.getAccount();
+        final UserJid user = messageItem.getUser();
         final String uniqueId = messageItem.getUniqueId();
         final String filePath = messageItem.getFilePath();
 

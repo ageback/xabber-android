@@ -9,17 +9,19 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.xabber.android.R;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.extension.muc.MUCManager;
 
 import org.jivesoftware.smackx.muc.RoomInfo;
+import org.jxmpp.jid.EntityBareJid;
 
 public class ConferenceInfoFragment extends Fragment implements MUCManager.RoomInfoListener {
     public static final String ARGUMENT_ACCOUNT = "com.xabber.android.ui.fragment.ConferenceInfoFragment.ARGUMENT_ACCOUNT";
     public static final String ARGUMENT_ROOM = "com.xabber.android.ui.fragment.ConferenceInfoFragment.ARGUMENT_ROOM";
     public static final String SAVE_IS_LOADED = "com.xabber.android.ui.fragment.ConferenceInfoFragment.SAVE_IS_LOADED";
 
-    private String account;
-    private String room;
+    private AccountJid account;
+    private EntityBareJid room;
 
     private TextView jidTextView;
     private TextView nameTextView;
@@ -35,11 +37,11 @@ public class ConferenceInfoFragment extends Fragment implements MUCManager.RoomI
 
     private boolean isInfoLoaded;
 
-    public static ConferenceInfoFragment newInstance(String account, String room) {
+    public static ConferenceInfoFragment newInstance(AccountJid account, EntityBareJid room) {
         ConferenceInfoFragment fragment = new ConferenceInfoFragment();
         Bundle args = new Bundle();
-        args.putString(ARGUMENT_ACCOUNT, account);
-        args.putString(ARGUMENT_ROOM, room);
+        args.putSerializable(ARGUMENT_ACCOUNT, account);
+        args.putSerializable(ARGUMENT_ROOM, room);
         fragment.setArguments(args);
         return fragment;
     }
@@ -52,8 +54,8 @@ public class ConferenceInfoFragment extends Fragment implements MUCManager.RoomI
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         if (getArguments() != null) {
-            account = getArguments().getString(ARGUMENT_ACCOUNT);
-            room = getArguments().getString(ARGUMENT_ROOM);
+            account = (AccountJid) getArguments().getSerializable(ARGUMENT_ACCOUNT);
+            room = (EntityBareJid) getArguments().getSerializable(ARGUMENT_ROOM);
         }
 
         if (savedInstanceState != null) {

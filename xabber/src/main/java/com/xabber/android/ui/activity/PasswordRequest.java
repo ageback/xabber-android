@@ -24,6 +24,7 @@ import android.widget.EditText;
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
 import com.xabber.android.data.account.AccountManager;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.intent.AccountIntentBuilder;
 
 import cn.net.wesoft.android.utils.MD5;
@@ -35,18 +36,18 @@ import cn.net.wesoft.android.utils.MD5;
  */
 public class PasswordRequest extends ManagedDialog {
 
-    private String account;
+    private AccountJid account;
 
     private EditText passwordView;
     private CheckBox storePasswordView;
     private CheckBox md5EncryptView;
 
-    public static Intent createIntent(Context context, String account) {
+    public static Intent createIntent(Context context, AccountJid account) {
         return new AccountIntentBuilder(context, PasswordRequest.class)
                 .setAccount(account).build();
     }
 
-    private static String getAccount(Intent intent) {
+    private static AccountJid getAccount(Intent intent) {
         return AccountIntentBuilder.getAccount(intent);
     }
 

@@ -18,6 +18,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.support.annotation.Nullable;
 import android.support.v4.view.ViewPager;
 import android.view.View;
 import android.view.WindowManager;
@@ -27,9 +28,12 @@ import android.widget.LinearLayout;
 import com.xabber.android.R;
 import com.xabber.android.data.ActivityManager;
 import com.xabber.android.data.Application;
+import com.xabber.android.data.LogManager;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.account.listeners.OnAccountChangedListener;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.BaseEntity;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.attention.AttentionManager;
 import com.xabber.android.data.extension.blocking.BlockingManager;
 import com.xabber.android.data.extension.blocking.OnBlockedListChangedListener;
@@ -51,9 +55,11 @@ import com.xabber.android.ui.fragment.RecentChatFragment;
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
+import org.jxmpp.stringprep.XmppStringprepException;
 
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 
 
 /**
@@ -66,6 +72,8 @@ public class ChatViewer extends ManagedActivity implements OnContactChangedListe
         OnAccountChangedListener, ViewPager.OnPageChangeListener,
         ChatViewerAdapter.FinishUpdateListener, RecentChatFragment.RecentChatFragmentInteractionListener,
         ChatViewerFragment.ChatViewerFragmentListener, OnBlockedListChangedListener {
+
+    private static final String LOG_TAG = ChatViewer.class.getSimpleName();
 
     /**
      * Attention request.
@@ -108,27 +116,39 @@ public class ChatViewer extends ManagedActivity implements OnContactChangedListe
         }
     }
 
-    private static String getAccount(Intent intent) {
-        String value = EntityIntentBuilder.getAccount(intent);
+    @Nullable
+    private static AccountJid getAccount(Intent intent) {
+        AccountJid value = EntityIntentBuilder.getAccount(intent);
         if (value != null)
             return value;
         // Backward compatibility.
-        return intent.getStringExtra("com.xabber.android.data.account");
+        try {
+            return AccountJid.from(intent.getStringExtra("com.xabber.android.data.account"));
+        } catch (XmppStringprepException e) {
+            LogManager.exception(LOG_TAG, e);
+            return null;
+        }
     }
 
-    private static String getUser(Intent intent) {
-        String value = EntityIntentBuilder.getUser(intent);
+    @Nullable
+    private static UserJid getUser(Intent intent) {
+        UserJid value = EntityIntentBuilder.getUser(intent);
         if (value != null)
             return value;
         // Backward compatibility.
-        return intent.getStringExtra("com.xabber.android.data.user");
+        try {
+            return UserJid.from(intent.getStringExtra("com.xabber.android.data.user"));
+        } catch (UserJid.UserJidCreateException e) {
+            LogManager.exception(LOG_TAG, e);
+            return null;
+        }
     }
 
     private static boolean hasAttention(Intent intent) {
         return ACTION_ATTENTION.equals(intent.getAction());
     }
 
-    public static Intent createSpecificChatIntent(Context context, String account, String user) {
+    public static Intent createSpecificChatIntent(Context context, AccountJid account, UserJid user) {
         Intent intent = new EntityIntentBuilder(context, ChatViewer.class).setAccount(account).setUser(user).build();
         intent.setAction(ACTION_SPECIFIC_CHAT);
         return intent;
@@ -140,13 +160,13 @@ public class ChatViewer extends ManagedActivity implements OnContactChangedListe
         return intent;
     }
 
-    public static Intent createClearTopIntent(Context context, String account, String user) {
+    public static Intent createClearTopIntent(Context context, AccountJid account, UserJid user) {
         Intent intent = createSpecificChatIntent(context, account, user);
         intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         return intent;
     }
 
-    public static Intent createShortCutIntent(Context context, String account, String user) {
+    public static Intent createShortCutIntent(Context context, AccountJid account, UserJid user) {
         Intent intent = createClearTopIntent(context, account, user);
         intent.setAction(ACTION_SHORTCUT);
         return intent;
@@ -164,14 +184,14 @@ public class ChatViewer extends ManagedActivity implements OnContactChangedListe
      *                of messages. Else only one message can be send.
      * @return
      */
-    public static Intent createSendIntent(Context context, String account, String user, String text) {
+    public static Intent createSendIntent(Context context, AccountJid account, UserJid user, String text) {
         Intent intent = ChatViewer.createSpecificChatIntent(context, account, user);
         intent.setAction(Intent.ACTION_SEND);
         intent.putExtra(Intent.EXTRA_TEXT, text);
         return intent;
     }
 
-    public static Intent createAttentionRequestIntent(Context context, String account, String user) {
+    public static Intent createAttentionRequestIntent(Context context, AccountJid account, UserJid user) {
         Intent intent = ChatViewer.createClearTopIntent(context, account, user);
         intent.setAction(ACTION_ATTENTION);
         return intent;
@@ -234,8 +254,8 @@ public class ChatViewer extends ManagedActivity implements OnContactChangedListe
 
     private void getInitialChatFromIntent() {
         Intent intent = getIntent();
-        String account = getAccount(intent);
-        String user = getUser(intent);
+        AccountJid account = getAccount(intent);
+        UserJid user = getUser(intent);
         if (account != null && user != null) {
             initialChat = new BaseEntity(account, user);
         }
@@ -286,13 +306,13 @@ public class ChatViewer extends ManagedActivity implements OnContactChangedListe
         if (isRecentChatsSelected) {
             selectedChat = null;
         } else {
-            selectedChat = new BaseEntity(savedInstanceState.getString(SAVED_SELECTED_ACCOUNT),
-                    savedInstanceState.getString(SAVED_SELECTED_USER));
+            selectedChat = new BaseEntity((AccountJid) savedInstanceState.getSerializable(SAVED_SELECTED_ACCOUNT),
+                    (UserJid) savedInstanceState.getSerializable(SAVED_SELECTED_USER));
         }
         exitOnSend = savedInstanceState.getBoolean(SAVED_EXIT_ON_SEND);
 
-        String initialAccount = savedInstanceState.getString(SAVED_INITIAL_ACCOUNT);
-        String initialUser = savedInstanceState.getString(SAVED_INITIAL_USER);
+        AccountJid initialAccount = (AccountJid) savedInstanceState.getSerializable(SAVED_INITIAL_ACCOUNT);
+        UserJid initialUser = (UserJid) savedInstanceState.getSerializable(SAVED_INITIAL_USER);
 
         if (initialAccount != null && initialUser != null) {
             initialChat = new BaseEntity(initialAccount, initialUser);
@@ -342,14 +362,14 @@ public class ChatViewer extends ManagedActivity implements OnContactChangedListe
         super.onSaveInstanceState(outState);
         outState.putBoolean(SAVED_IS_RECENT_CHATS_SELECTED, isRecentChatsSelected);
         if (!isRecentChatsSelected && selectedChat != null) {
-            outState.putString(SAVED_SELECTED_ACCOUNT, selectedChat.getAccount());
-            outState.putString(SAVED_SELECTED_USER, selectedChat.getUser());
+            outState.putSerializable(SAVED_SELECTED_ACCOUNT, selectedChat.getAccount());
+            outState.putSerializable(SAVED_SELECTED_USER, selectedChat.getUser());
         }
         outState.putBoolean(SAVED_EXIT_ON_SEND, exitOnSend);
 
         if (initialChat != null) {
-            outState.putString(SAVED_INITIAL_ACCOUNT, initialChat.getAccount());
-            outState.putString(SAVED_INITIAL_USER, initialChat.getUser());
+            outState.putSerializable(SAVED_INITIAL_ACCOUNT, initialChat.getAccount());
+            outState.putSerializable(SAVED_INITIAL_USER, initialChat.getUser());
         }
     }
 
@@ -403,7 +423,7 @@ public class ChatViewer extends ManagedActivity implements OnContactChangedListe
     }
 
     @Override
-    public void onAccountsChanged(Collection<String> accounts) {
+    public void onAccountsChanged(Collection<AccountJid> accounts) {
         updateRegisteredChats();
         updateRegisteredRecentChatsFragments();
         updateStatusBar();
@@ -534,15 +554,15 @@ public class ChatViewer extends ManagedActivity implements OnContactChangedListe
     }
 
     @Override
-    public void onBlockedListChanged(String account) {
+    public void onBlockedListChanged(AccountJid account) {
         // if chat of blocked contact is currently opened, it should be closed
         if (selectedChat != null) {
-            final Collection<String> blockedContacts = BlockingManager.getInstance().getBlockedContacts(account);
+            final Collection<UserJid> blockedContacts = BlockingManager.getInstance().getBlockedContacts(account);
             if (blockedContacts.contains(selectedChat.getUser())) {
                 close();
             }
 
-            final Collection<String> blockedMucContacts = PrivateMucChatBlockingManager.getInstance().getBlockedContacts(account);
+            final List<UserJid> blockedMucContacts = PrivateMucChatBlockingManager.getInstance().getBlockedContacts(account);
             if (blockedMucContacts.contains(selectedChat.getUser())) {
                 close();
             }

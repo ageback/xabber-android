@@ -42,7 +42,9 @@ import com.xabber.android.data.LogManager;
 import com.xabber.android.data.NetworkException;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.database.realm.MessageItem;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.BaseEntity;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.attention.AttentionManager;
 import com.xabber.android.data.extension.cs.ChatStateManager;
 import com.xabber.android.data.extension.file.FileManager;
@@ -88,6 +90,7 @@ import com.xabber.android.ui.preferences.ChatContactSettings;
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
+import org.jxmpp.jid.impl.JidCreate;
 
 import java.io.File;
 import java.io.IOException;
@@ -117,8 +120,8 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
     private EditText inputView;
     private ChatMessageAdapter chatMessageAdapter;
     private boolean skipOnTextChanges = false;
-    private String account;
-    private String user;
+    private AccountJid account;
+    private UserJid user;
     private ImageButton sendButton;
     private ImageButton securityButton;
     private Toolbar toolbar;
@@ -143,12 +146,12 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
     private RealmResults<MessageItem> messageItems;
     private boolean toBeScrolled;
 
-    public static ChatViewerFragment newInstance(String account, String user) {
+    public static ChatViewerFragment newInstance(AccountJid account, UserJid user) {
         ChatViewerFragment fragment = new ChatViewerFragment();
 
         Bundle arguments = new Bundle();
-        arguments.putString(ARGUMENT_ACCOUNT, account);
-        arguments.putString(ARGUMENT_USER, user);
+        arguments.putSerializable(ARGUMENT_ACCOUNT, account);
+        arguments.putSerializable(ARGUMENT_USER, user);
         fragment.setArguments(arguments);
         return fragment;
     }
@@ -170,8 +173,8 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
         super.onCreate(savedInstanceState);
 
         Bundle args = getArguments();
-        account = args.getString(ARGUMENT_ACCOUNT, null);
-        user = args.getString(ARGUMENT_USER, null);
+        account = (AccountJid) args.getSerializable(ARGUMENT_ACCOUNT);
+        user = (UserJid) args.getSerializable(ARGUMENT_USER);
 
     }
 
@@ -833,11 +836,11 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
         skipOnTextChanges = false;
     }
 
-    public String getAccount() {
+    public AccountJid getAccount() {
         return account;
     }
 
-    public String getUser() {
+    public UserJid getUser() {
         return user;
     }
 
@@ -888,7 +891,7 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
                 return true;
 
             case R.id.action_authorization_settings:
-                startActivity(ConferenceAdd.createIntent(getActivity(), account, user));
+                startActivity(ConferenceAdd.createIntent(getActivity(), account, user.getBareUserJid()));
                 return true;
 
             case R.id.action_close_chat:
@@ -914,11 +917,11 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
             /* conference specific options menu */
 
             case R.id.action_join_conference:
-                MUCManager.getInstance().joinRoom(account, user, true);
+                MUCManager.getInstance().joinRoom(account, user.getJid().asEntityBareJidIfPossible(), true);
                 return true;
 
             case R.id.action_invite_to_chat:
-                startActivity(ContactList.createRoomInviteIntent(getActivity(), account, user));
+                startActivity(ContactList.createRoomInviteIntent(getActivity(), account, user.getBareUserJid()));
                 return true;
 
             case R.id.action_leave_conference:
@@ -962,9 +965,18 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
                 return true;
 
             case R.id.action_message_open_muc_private_chat:
-                String occupantFullJid = user + "/" + clickedMessageItem.getResource();
-                MessageManager.getInstance().openChat(account, occupantFullJid);
-                startActivity(ChatViewer.createSpecificChatIntent(getActivity(), account, occupantFullJid));
+                UserJid occupantFullJid = null;
+                try {
+                    occupantFullJid = UserJid.from(
+                            JidCreate.domainFullFrom(user.getJid().asDomainBareJid(),
+                                    clickedMessageItem.getResource()));
+                    MessageManager.getInstance().openChat(account, occupantFullJid);
+                    startActivity(ChatViewer.createSpecificChatIntent(getActivity(), account, occupantFullJid));
+
+                } catch (UserJid.UserJidCreateException e) {
+                    LogManager.exception(this, e);
+                }
+
                 return true;
 
             default:
@@ -1015,7 +1027,7 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
         });
     }
 
-    private void stopEncryption(String account, String user) {
+    private void stopEncryption(AccountJid account, UserJid user) {
         try {
             OTRManager.getInstance().endSession(account, user);
         } catch (NetworkException e) {
@@ -1023,7 +1035,7 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
         }
     }
 
-    private void restartEncryption(String account, String user) {
+    private void restartEncryption(AccountJid account, UserJid user) {
         try {
             OTRManager.getInstance().refreshSession(account, user);
         } catch (NetworkException e) {
@@ -1031,7 +1043,7 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
         }
     }
 
-    private void startEncryption(String account, String user) {
+    private void startEncryption(AccountJid account, UserJid user) {
         try {
             OTRManager.getInstance().startSession(account, user);
         } catch (NetworkException e) {
@@ -1056,18 +1068,18 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
         startActivity(intent);
     }
 
-    private void closeChat(String account, String user) {
+    private void closeChat(AccountJid account, UserJid user) {
         MessageManager.getInstance().closeChat(account, user);
         NotificationManager.getInstance().removeMessageNotification(account, user);
         listener.onCloseChat();
     }
 
-    private void clearHistory(String account, String user) {
+    private void clearHistory(AccountJid account, UserJid user) {
         MessageManager.getInstance().clearHistory(account, user);
     }
 
-    private void leaveConference(String account, String user) {
-        MUCManager.getInstance().leaveRoom(account, user);
+    private void leaveConference(AccountJid account, UserJid user) {
+        MUCManager.getInstance().leaveRoom(account, user.getJid().asEntityBareJidIfPossible());
         closeChat(account, user);
     }
 
@@ -1111,7 +1123,8 @@ public class ChatViewerFragment extends Fragment implements PopupMenu.OnMenuItem
                 menu.findItem(R.id.action_message_save_file).setVisible(true);
             }
 
-            if (clickedMessageItem.isIncoming() && MUCManager.getInstance().hasRoom(account, user)) {
+            if (clickedMessageItem.isIncoming() && MUCManager.getInstance()
+                    .hasRoom(account, user.getJid().asEntityBareJidIfPossible())) {
                 menu.findItem(R.id.action_message_open_muc_private_chat).setVisible(true);
             }
 

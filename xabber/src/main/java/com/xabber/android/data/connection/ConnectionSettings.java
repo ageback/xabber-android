@@ -16,6 +16,10 @@ package com.xabber.android.data.connection;
 
 import com.xabber.android.data.account.AccountProtocol;
 
+import org.jxmpp.jid.DomainBareJid;
+import org.jxmpp.jid.parts.Localpart;
+import org.jxmpp.jid.parts.Resourcepart;
+
 /**
  * Settings for connection.
  *
@@ -31,17 +35,17 @@ public class ConnectionSettings {
     /**
      * User part of jid.
      */
-    private final String userName;
+    private final Localpart userName;
 
     /**
      * Server part of jid.
      */
-    private final String serverName;
+    private final DomainBareJid serverName;
 
     /**
      * Resource part of jid.
      */
-    private final String resource;
+    private final Resourcepart resource;
 
     /**
      * Use custom connection host and port.
@@ -88,8 +92,8 @@ public class ConnectionSettings {
 
     private String proxyPassword;
 
-    public ConnectionSettings(AccountProtocol protocol, String userName,
-                              String serverName, String resource, boolean custom, String host,
+    public ConnectionSettings(AccountProtocol protocol, Localpart userName,
+                              DomainBareJid serverName, Resourcepart resource, boolean custom, String host,
                               int port, String password, boolean saslEnabled, TLSMode tlsMode,
                               boolean compression, ProxyType proxyType, String proxyHost,
                               int proxyPort, String proxyUser, String proxyPassword) {
@@ -119,14 +123,14 @@ public class ConnectionSettings {
     /**
      * @return User part of jid.
      */
-    public String getUserName() {
+    public Localpart getUserName() {
         return userName;
     }
 
     /**
      * @return Server part of jid.
      */
-    public String getServerName() {
+    public DomainBareJid getServerName() {
         return serverName;
     }
 
@@ -148,7 +152,7 @@ public class ConnectionSettings {
         return port;
     }
 
-    public String getResource() {
+    public Resourcepart getResource() {
         return resource;
     }
 
@@ -199,14 +203,6 @@ public class ConnectionSettings {
 
     /**
      * Updates options.
-     *
-     * @param custom
-     * @param host
-     * @param port
-     * @param password
-     * @param saslEnabled
-     * @param tlsMode
-     * @param compression
      */
     public void update(boolean custom, String host, int port, String password,
                        boolean saslEnabled, TLSMode tlsMode, boolean compression,
@@ -228,8 +224,6 @@ public class ConnectionSettings {
 
     /**
      * Sets password.
-     *
-     * @param password
      */
     public void setPassword(String password) {
         this.password = password;

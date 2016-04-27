@@ -18,23 +18,12 @@ import android.support.annotation.NonNull;
 
 import com.xabber.android.data.Application;
 import com.xabber.android.data.LogManager;
-import com.xabber.android.data.account.AccountItem;
-import com.xabber.android.data.roster.AccountRosterListener;
 
-import org.jivesoftware.smack.ConnectionListener;
 import org.jivesoftware.smack.SmackException;
-import org.jivesoftware.smack.StanzaListener;
-import org.jivesoftware.smack.XMPPConnection;
 import org.jivesoftware.smack.XMPPException;
-import org.jivesoftware.smack.packet.Stanza;
-import org.jivesoftware.smack.parsing.ExceptionLoggingCallback;
-import org.jivesoftware.smack.roster.Roster;
 import org.jivesoftware.smack.sasl.SASLErrorException;
-import org.jivesoftware.smack.sm.predicates.ForEveryStanza;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smackx.iqregister.AccountManager;
-import org.jivesoftware.smackx.ping.PingFailedListener;
-import org.jivesoftware.smackx.ping.PingManager;
 
 import java.io.IOException;
 
@@ -43,29 +32,20 @@ import java.io.IOException;
  *
  * @author alexander.ivanov
  */
-public class ConnectionThread {
+class ConnectionThread {
 
-    private final AccountItem accountItem;
+    @NonNull
     private final XMPPTCPConnection connection;
+    @NonNull
+    private final ConnectionItem connectionItem;
 
-    public ConnectionThread(@NonNull final AccountItem accountItem) {
-        this.accountItem = accountItem;
-        connection = ConnectionBuilder.build(accountItem.getConnectionSettings());
-        configureConnection();
-    }
-
-    public @NonNull XMPPTCPConnection getXMPPConnection() {
-        return connection;
-    }
-
-    public @NonNull AccountItem getAccountItem() {
-        return accountItem;
+    ConnectionThread(@NonNull XMPPTCPConnection connection, @NonNull ConnectionItem connectionItem) {
+        this.connection = connection;
+        this.connectionItem = connectionItem;
     }
 
     void start(final boolean registerNewAccount) {
         LogManager.i(this, "start. registerNewAccount " + registerNewAccount);
-
-        ConnectionManager.getInstance().onConnection(this);
 
         Thread thread = new Thread(
                 new Runnable() {
@@ -85,31 +65,11 @@ public class ConnectionThread {
                         }
                     }
                 },
-                "Connection thread for " + accountItem.getRealJid());
+                "Connection thread for " + connectionItem.getRealJid());
         thread.setPriority(Thread.MIN_PRIORITY);
         thread.setDaemon(true);
         thread.start();
     }
-
-    private void configureConnection() {
-        // enable Stream Management support. SMACK will only enable SM if supported by the server,
-        // so no additional checks are required.
-        connection.setUseStreamManagement(true);
-
-        // by default Smack disconnects in case of parsing errors
-        connection.setParsingExceptionCallback(new ExceptionLoggingCallback());
-
-        AccountRosterListener rosterListener = new AccountRosterListener(accountItem.getAccount());
-        final Roster roster = Roster.getInstanceFor(connection);
-        roster.addRosterListener(rosterListener);
-        roster.addRosterLoadedListener(rosterListener);
-        roster.setSubscriptionMode(Roster.SubscriptionMode.manual);
-        roster.setRosterLoadedAtLogin(true);
-
-        connection.addAsyncStanzaListener(everyStanzaListener, ForEveryStanza.INSTANCE);
-        connection.addConnectionListener(connectionListener);
-    }
-
 
     private boolean connect() {
         boolean success = false;
@@ -119,13 +79,30 @@ public class ConnectionThread {
             success = true;
         } catch (SmackException e) {
             // There is no connection listeners yet, so we call onClose.
-            LogManager.w(this, "Connection failed. SmackException " + e.getMessage());
+
+            LogManager.exception(this, e);
+
+            if (e instanceof SmackException.ConnectionException) {
+                LogManager.w(this, "Connection failed. SmackException.ConnectionException " + e.getMessage());
+            } else {
+                LogManager.w(this, "Connection failed. SmackException " + e.getMessage());
+            }
+
+            connectionItem.connectionClosed();
         } catch (IOException e) {
             // There is no connection listeners yet, so we call onClose.
             LogManager.w(this, "Connection failed. IOException " + e.getMessage());
+            LogManager.exception(this, e);
+            connectionItem.connectionClosed();
         } catch (XMPPException e) {
             // There is no connection listeners yet, so we call onClose.
             LogManager.w(this, "Connection failed. XMPPException " + e.getMessage());
+            LogManager.exception(this, e);
+            connectionItem.connectionClosed();
+        } catch (InterruptedException e) {
+            LogManager.w(this, "Connection failed. InterruptedException " + e.getMessage());
+            LogManager.exception(this, e);
+            connectionItem.connectionClosed();
         }
         return success;
     }
@@ -134,23 +111,18 @@ public class ConnectionThread {
         boolean success = false;
         try {
             AccountManager.getInstance(connection)
-                    .createAccount(accountItem.getConnectionSettings().getUserName(),
-                            accountItem.getConnectionSettings().getPassword());
+                    .createAccount(connectionItem.getConnectionSettings().getUserName(),
+                            connectionItem.getConnectionSettings().getPassword());
             success = true;
-        } catch (SmackException.NoResponseException | SmackException.NotConnectedException | XMPPException.XMPPErrorException e) {
-            LogManager.exception(accountItem, e);
+        } catch (SmackException.NoResponseException | SmackException.NotConnectedException | XMPPException.XMPPErrorException | InterruptedException e) {
+            LogManager.exception(this, e);
         }
 
         if (success) {
-            onAccountCreated();
+            connectionItem.onAccountRegistered();
         }
 
         return success;
-    }
-
-    private void onAccountCreated() {
-        LogManager.i(this, "Account created");
-        accountItem.onAccountRegistered(this);
     }
 
     private boolean login() {
@@ -169,89 +141,19 @@ public class ConnectionThread {
                 @Override
                 public void run() {
                     // Login failed. We don`t want to reconnect.
-                    accountItem.onAuthFailed();
+                    connectionItem.onAuthFailed();
                 }
             });
-            connectionListener.connectionClosed();
+            connectionItem.connectionClosed();
         } catch (XMPPException e) {
             LogManager.exception(this, e);
-            connectionListener.connectionClosedOnError(e);
-        } catch (SmackException | IOException e) {
+            connectionItem.connectionClosed();
+        } catch (SmackException | IOException | InterruptedException e) {
             LogManager.exception(this, e);
         }
 
         return success;
     }
 
-    private ConnectionListener connectionListener = new ConnectionListener() {
-        @Override
-        public void connected(XMPPConnection connection) {
-            LogManager.d(this, "connected " + getAccountItem().getRealJid());
-
-            accountItem.onConnected(ConnectionThread.this);
-            ConnectionManager.getInstance().onConnected(ConnectionThread.this);
-        }
-
-        @Override
-        public void authenticated(XMPPConnection connection, boolean resumed) {
-            LogManager.d(this, "authenticated " + getAccountItem().getRealJid() + " resumed " + resumed);
-
-            PingManager.getInstanceFor(ConnectionThread.this.connection).registerPingFailedListener(pingFailedListener);
-
-            accountItem.onAuthorized(ConnectionThread.this);
-            ConnectionManager.getInstance().onAuthorized(ConnectionThread.this);
-        }
-
-        @Override
-        public void connectionClosed() {
-            LogManager.d(this, "connectionClosed " + getAccountItem().getRealJid());
-
-            accountItem.onClose(ConnectionThread.this);
-        }
-
-        @Override
-        public void connectionClosedOnError(final Exception e) {
-            LogManager.d(this, "connectionClosedOnError " + getAccountItem().getRealJid() + " " + e.getMessage());
-
-            PingManager.getInstanceFor(connection).unregisterPingFailedListener(pingFailedListener);
-            connectionClosed();
-        }
-
-        @Override
-        public void reconnectionSuccessful() {
-            LogManager.d(this, "reconnectionSuccessful " + getAccountItem().getRealJid());
-        }
-
-        @Override
-        public void reconnectingIn(int seconds) {
-            LogManager.d(this, "reconnectingIn " + getAccountItem().getRealJid() + " " + seconds + " seconds");
-        }
-
-        @Override
-        public void reconnectionFailed(Exception e) {
-            LogManager.d(this, "reconnectionFailed " + getAccountItem().getRealJid() + " " + e.getMessage());
-        }
-    };
-
-    private StanzaListener everyStanzaListener = new StanzaListener() {
-        @Override
-        public void processPacket(final Stanza stanza) throws SmackException.NotConnectedException {
-            Application.getInstance().runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    ConnectionManager.getInstance().processPacket(ConnectionThread.this, stanza);
-                }
-            });
-
-        }
-    };
-
-    private PingFailedListener pingFailedListener = new PingFailedListener() {
-        @Override
-        public void pingFailed() {
-            LogManager.i(this, "pingFailed for " + getAccountItem().getRealJid());
-            getAccountItem().forceReconnect();
-        }
-    };
 
 }

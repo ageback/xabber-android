@@ -35,6 +35,8 @@ import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.database.realm.MessageItem;
+import com.xabber.android.data.entity.AccountJid;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.avatar.AvatarManager;
 import com.xabber.android.data.extension.file.FileManager;
 import com.xabber.android.data.extension.muc.MUCManager;
@@ -48,6 +50,9 @@ import com.xabber.android.ui.fragment.ChatViewerFragment;
 import com.xabber.android.ui.helper.PermissionsRequester;
 import com.xabber.android.utils.Emoticons;
 import com.xabber.android.utils.StringUtils;
+
+import org.jxmpp.jid.impl.JidCreate;
+import org.jxmpp.jid.parts.Resourcepart;
 
 import java.io.File;
 import java.util.Date;
@@ -71,15 +76,15 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
      */
     private final int appearanceStyle;
     private boolean isMUC;
-    private String mucNickname;
+    private Resourcepart mucNickname;
 
     /**
      * Text with extra information.
      */
     private Listener listener;
 
-    private String account;
-    private String user;
+    private AccountJid account;
+    private UserJid user;
     private int prevItemCount;
     private long lastUpdateTimeMillis;
 
@@ -92,9 +97,9 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
         account = chat.getAccount();
         user = chat.getUser();
 
-        isMUC = MUCManager.getInstance().hasRoom(account, user);
+        isMUC = MUCManager.getInstance().hasRoom(account, user.getJid().asEntityBareJidIfPossible());
         if (isMUC) {
-            mucNickname = MUCManager.getInstance().getNickname(account, user);
+            mucNickname = MUCManager.getInstance().getNickname(account, user.getJid().asEntityBareJidIfPossible());
         }
         appearanceStyle = SettingsManager.chatsAppearanceStyle();
 
@@ -381,7 +386,7 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
 
                 String name;
                 if (isMUC) {
-                    name = messageItem.getResource();
+                    name = messageItem.getResource().toString();
                 } else {
                     name = RosterManager.getInstance().getBestContact(account, messageItem.getUser()).getName();
                 }
@@ -499,19 +504,24 @@ public class ChatMessageAdapter extends RealmRecyclerViewAdapter<MessageItem, Ch
 
     private void setUpAvatar(MessageItem messageItem, IncomingMessage message) {
         if (SettingsManager.chatsShowAvatars()) {
-            final String account = messageItem.getAccount();
-            final String user = messageItem.getUser();
-            final String resource = messageItem.getResource();
+            final AccountJid account = messageItem.getAccount();
+            final UserJid user = messageItem.getUser();
+            final Resourcepart resource = messageItem.getResource();
 
             message.avatar.setVisibility(View.VISIBLE);
-            if ((isMUC && MUCManager.getInstance().getNickname(account, user).equalsIgnoreCase(resource))) {
+            if ((isMUC && MUCManager.getInstance().getNickname(account, user.getJid().asEntityBareJidIfPossible()).equals(resource))) {
                 message.avatar.setImageDrawable(AvatarManager.getInstance().getAccountAvatar(account));
             } else {
                 if (isMUC) {
-                    if ("".equals(resource)) {
+                    if (resource.equals(Resourcepart.EMPTY)) {
                         message.avatar.setImageDrawable(AvatarManager.getInstance().getRoomAvatar(user));
                     } else {
-                        message.avatar.setImageDrawable(AvatarManager.getInstance().getUserAvatar(user + "/" + resource));
+                        try {
+                            message.avatar.setImageDrawable(AvatarManager.getInstance()
+                                    .getUserAvatar(UserJid.from(JidCreate.domainFullFrom(user.getJid().asDomainBareJid(), resource))));
+                        } catch (UserJid.UserJidCreateException e) {
+                            LogManager.exception(this, e);
+                        }
                     }
                 } else {
                     message.avatar.setImageDrawable(AvatarManager.getInstance().getUserAvatar(user));

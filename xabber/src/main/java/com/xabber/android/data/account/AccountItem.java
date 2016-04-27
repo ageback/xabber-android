@@ -19,12 +19,14 @@ import com.xabber.android.data.NetworkException;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.connection.ConnectionItem;
 import com.xabber.android.data.connection.ConnectionState;
-import com.xabber.android.data.connection.ConnectionThread;
 import com.xabber.android.data.connection.ProxyType;
 import com.xabber.android.data.connection.TLSMode;
 
 import org.jivesoftware.smack.packet.Presence;
 import org.jivesoftware.smack.packet.Presence.Type;
+import org.jxmpp.jid.DomainBareJid;
+import org.jxmpp.jid.parts.Localpart;
+import org.jxmpp.jid.parts.Resourcepart;
 
 import java.security.KeyPair;
 import java.util.Date;
@@ -37,11 +39,7 @@ import java.util.Date;
 public class AccountItem extends ConnectionItem {
 
     public static final String UNDEFINED_PASSWORD = "com.xabber.android.data.core.AccountItem.UNDEFINED_PASSWORD";
-    /**
-     * Full jid calculated according to {@link #userName}, {@link #serverName},
-     * {@link #resource}.
-     */
-    private final String account;
+
     /**
      * Id in database.
      * <p/>
@@ -104,7 +102,7 @@ public class AccountItem extends ConnectionItem {
     private ArchiveMode archiveMode;
 
     public AccountItem(AccountProtocol protocol, boolean custom, String host,
-                       int port, String serverName, String userName, String resource,
+                       int port, DomainBareJid serverName, Localpart userName, Resourcepart resource,
                        boolean storePassword, String password, int colorIndex,
                        int priority, StatusMode statusMode, String statusText,
                        boolean enabled, boolean saslEnabled, TLSMode tlsMode,
@@ -116,7 +114,6 @@ public class AccountItem extends ConnectionItem {
                 storePassword, password, saslEnabled, tlsMode, compression,
                 proxyType, proxyHost, proxyPort, proxyUser, proxyPassword);
         this.id = null;
-        this.account = userName + "@" + serverName + "/" + resource;
         this.colorIndex = colorIndex;
 
         this.enabled = enabled;
@@ -134,7 +131,6 @@ public class AccountItem extends ConnectionItem {
     }
 
     /**
-     * @param priority
      * @return Valid priority value between -128 and 128.
      */
     static private int getValidPriority(int priority) {
@@ -152,18 +148,9 @@ public class AccountItem extends ConnectionItem {
      * Set id in db.
      * <p/>
      * MUST BE MANAGED FROM BACKGROUND THREAD ONLY.
-     *
-     * @param id
      */
     void setId(long id) {
         this.id = id;
-    }
-
-    /**
-     * @return Account's JID.
-     */
-    public String getAccount() {
-        return account;
     }
 
     /**
@@ -188,8 +175,6 @@ public class AccountItem extends ConnectionItem {
     /**
      * Sets whether roster contacts can be synchronized with system contact
      * list.
-     *
-     * @param syncable
      */
     void setSyncable(boolean syncable) {
         this.syncable = syncable;
@@ -204,8 +189,6 @@ public class AccountItem extends ConnectionItem {
 
     /**
      * Sets whether password must be stored in database.
-     *
-     * @param storePassword
      */
     void setStorePassword(boolean storePassword) {
         this.storePassword = storePassword;
@@ -272,12 +255,13 @@ public class AccountItem extends ConnectionItem {
      */
     public StatusMode getDisplayStatusMode() {
         ConnectionState state = getState();
-        if (state.isConnected())
+        if (state.isConnected()) {
             return statusMode;
-        else if (state.isConnectable())
+        } else if (state.isConnectable()) {
             return StatusMode.connection;
-        else
+        } else {
             return StatusMode.unavailable;
+        }
     }
 
     /**
@@ -285,10 +269,11 @@ public class AccountItem extends ConnectionItem {
      * authenticated to be used in status editor.
      */
     public StatusMode getFactualStatusMode() {
-        if (getState().isConnected())
+        if (getState().isConnected()) {
             return statusMode;
-        else
+        } else {
             return StatusMode.unavailable;
+        }
     }
 
     /**
@@ -344,14 +329,6 @@ public class AccountItem extends ConnectionItem {
 
     /**
      * Update connection options
-     *
-     * @param custom
-     * @param host
-     * @param port
-     * @param password
-     * @param saslEnabled
-     * @param tlsMode
-     * @param compression
      */
     void updateConnectionSettings(boolean custom, String host, int port,
                                   String password, boolean saslEnabled, TLSMode tlsMode,
@@ -361,7 +338,7 @@ public class AccountItem extends ConnectionItem {
                 saslEnabled, tlsMode, compression, proxyType, proxyHost,
                 proxyPort, proxyUser, proxyPassword);
         passwordRequested = false;
-        AccountManager.getInstance().removePasswordRequest(account);
+        AccountManager.getInstance().removePasswordRequest(getAccount());
     }
 
     @Override
@@ -373,7 +350,7 @@ public class AccountItem extends ConnectionItem {
                 && UNDEFINED_PASSWORD.equals(getConnectionSettings()
                 .getPassword())) {
             passwordRequested = true;
-            AccountManager.getInstance().addPasswordRequest(account);
+            AccountManager.getInstance().addPasswordRequest(getAccount());
         }
         if (userRequest) {
             authFailed = false;
@@ -388,10 +365,11 @@ public class AccountItem extends ConnectionItem {
      * disabled.
      */
     void clearPassword() {
-        if (storePassword)
+        if (storePassword) {
             return;
+        }
         passwordRequested = false;
-        AccountManager.getInstance().removePasswordRequest(account);
+        AccountManager.getInstance().removePasswordRequest(getAccount());
         getConnectionSettings().setPassword(UNDEFINED_PASSWORD);
     }
 
@@ -402,43 +380,11 @@ public class AccountItem extends ConnectionItem {
     }
 
     @Override
-    protected void onSRVResolved(ConnectionThread connectionThread) {
-        super.onSRVResolved(connectionThread);
-        AccountManager.getInstance().onAccountChanged(account);
-    }
-
-    @Override
-    protected void onInvalidCertificate() {
-        super.onInvalidCertificate();
-        invalidCertificate = true;
-        updateConnection(false);
-    }
-
-    @Override
-    public void onConnected(ConnectionThread connectionThread) {
-        super.onConnected(connectionThread);
-        AccountManager.getInstance().onAccountChanged(account);
-    }
-
-    @Override
     public void onAuthFailed() {
-        super.onAuthFailed();
         // Login failed. We don`t want to reconnect.
         authFailed = true;
         updateConnection(false);
-        AccountManager.getInstance().addAuthenticationError(account);
-    }
-
-    @Override
-    public void onAuthorized(ConnectionThread connectionThread) {
-        super.onAuthorized(connectionThread);
-        AccountManager.getInstance().onAccountChanged(account);
-    }
-
-    @Override
-    public void onClose(ConnectionThread connectionThread) {
-        super.onClose(connectionThread);
-        AccountManager.getInstance().onAccountChanged(account);
+        AccountManager.getInstance().addAuthenticationError(getAccount());
     }
 
     @Override

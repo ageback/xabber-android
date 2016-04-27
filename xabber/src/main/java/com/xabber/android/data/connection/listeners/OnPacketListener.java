@@ -28,12 +28,7 @@ public interface OnPacketListener extends BaseManagerInterface {
 
     /**
      * Process packet from connection.
-     *
-     * @param connection
-     * @param bareAddress
-     * @param packet
-     * @return
      */
-    void onPacket(ConnectionItem connection, String bareAddress, Stanza packet);
+    void onStanza(ConnectionItem connection, Stanza packet);
 
 }

@@ -18,13 +18,17 @@ import android.database.Cursor;
 
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
+import com.xabber.android.data.LogManager;
 import com.xabber.android.data.OnLoadListener;
 import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.account.listeners.OnAccountRemovedListener;
 import com.xabber.android.data.database.sqlite.GroupTable;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.NestedMap;
 import com.xabber.android.data.entity.NestedMap.Entry;
+
+import org.jxmpp.stringprep.XmppStringprepException;
 
 public class GroupManager implements OnLoadListener, OnAccountRemovedListener,
         GroupStateProvider {
@@ -52,7 +56,7 @@ public class GroupManager implements OnLoadListener, OnAccountRemovedListener,
     /**
      * Account name used to store information that don't belong to any account.
      */
-    public static final String NO_ACCOUNT = "com.xabber.android.data.NO_ACCOUNT";
+    public static final AccountJid NO_ACCOUNT = null;
     private final static GroupManager instance;
 
     static {
@@ -66,7 +70,7 @@ public class GroupManager implements OnLoadListener, OnAccountRemovedListener,
     private final NestedMap<GroupConfiguration> groupConfigurations;
 
     private GroupManager() {
-        groupConfigurations = new NestedMap<GroupConfiguration>();
+        groupConfigurations = new NestedMap<>();
     }
 
     public static GroupManager getInstance() {
@@ -75,7 +79,7 @@ public class GroupManager implements OnLoadListener, OnAccountRemovedListener,
 
     @Override
     public void onLoad() {
-        final NestedMap<GroupConfiguration> groupConfigurations = new NestedMap<GroupConfiguration>();
+        final NestedMap<GroupConfiguration> groupConfigurations = new NestedMap<>();
         Cursor cursor = GroupTable.getInstance().list();
         try {
             if (cursor.moveToFirst()) {
@@ -106,7 +110,7 @@ public class GroupManager implements OnLoadListener, OnAccountRemovedListener,
 
     @Override
     public void onAccountRemoved(AccountItem accountItem) {
-        groupConfigurations.clear(accountItem.getAccount());
+        groupConfigurations.clear(accountItem.getAccount().toString());
     }
 
     /**
@@ -114,44 +118,49 @@ public class GroupManager implements OnLoadListener, OnAccountRemovedListener,
      * @see {@link #IS_ROOM}, {@link #ACTIVE_CHATS}, {@link #NO_GROUP},
      * {@link #IS_ACCOUNT}, {@link #NO_ACCOUNT}.
      */
-    public String getGroupName(String account, String group) {
-        if (GroupManager.NO_GROUP.equals(group))
+    public String getGroupName(AccountJid account, String group) {
+        if (GroupManager.NO_GROUP.equals(group)) {
             return Application.getInstance().getString(R.string.group_none);
-        else if (GroupManager.IS_ROOM.equals(group))
+        } else if (GroupManager.IS_ROOM.equals(group)) {
             return Application.getInstance().getString(R.string.group_room);
-        else if (GroupManager.ACTIVE_CHATS.equals(group))
-            return Application.getInstance().getString(
-                    R.string.group_active_chat);
-        else if (GroupManager.IS_ACCOUNT.equals(group))
+        } else if (GroupManager.ACTIVE_CHATS.equals(group)) {
+            return Application.getInstance().getString(R.string.group_active_chat);
+        } else if (GroupManager.IS_ACCOUNT.equals(group)) {
             return AccountManager.getInstance().getVerboseName(account);
+        }
         return group;
     }
 
     @Override
-    public boolean isExpanded(String account, String group) {
-        GroupConfiguration configuration = groupConfigurations.get(account,
-                group);
-        if (configuration == null)
+    public boolean isExpanded(AccountJid account, String group) {
+        if (account == null) {
             return true;
+        }
+        GroupConfiguration configuration = groupConfigurations.get(account.toString(), group);
+        if (configuration == null) {
+            return true;
+        }
         return configuration.isExpanded();
     }
 
     @Override
-    public ShowOfflineMode getShowOfflineMode(String account, String group) {
-        GroupConfiguration configuration = groupConfigurations.get(account,
-                group);
-        if (configuration == null)
+    public ShowOfflineMode getShowOfflineMode(AccountJid account, String group) {
+        if (account == null) {
             return ShowOfflineMode.normal;
+        }
+        GroupConfiguration configuration = groupConfigurations.get(account.toString(), group);
+        if (configuration == null) {
+            return ShowOfflineMode.normal;
+        }
         return configuration.getShowOfflineMode();
     }
 
     @Override
-    public void setExpanded(String account, String group, boolean expanded) {
-        GroupConfiguration configuration = groupConfigurations.get(account,
-                group);
+    public void setExpanded(AccountJid account, String group, boolean expanded) {
+        GroupConfiguration configuration = groupConfigurations.get(account.toString(), group);
         if (configuration == null) {
             configuration = new GroupConfiguration();
-            groupConfigurations.put(account, group, configuration);
+            groupConfigurations.put(account.toString(), group, configuration);
         }
         configuration.setExpanded(expanded);
         requestToWriteGroup(account, group, configuration.isExpanded(),
@@ -159,13 +168,12 @@ public class GroupManager implements OnLoadListener, OnAccountRemovedListener,
     }
 
     @Override
-    public void setShowOfflineMode(String account, String group,
+    public void setShowOfflineMode(AccountJid account, String group,
                                    ShowOfflineMode showOfflineMode) {
-        GroupConfiguration configuration = groupConfigurations.get(account,
-                group);
+        GroupConfiguration configuration = groupConfigurations.get(account.toString(), group);
         if (configuration == null) {
             configuration = new GroupConfiguration();
-            groupConfigurations.put(account, group, configuration);
+            groupConfigurations.put(account.toString(), group, configuration);
         }
         configuration.setShowOfflineMode(showOfflineMode);
         requestToWriteGroup(account, group, configuration.isExpanded(),
@@ -176,19 +184,24 @@ public class GroupManager implements OnLoadListener, OnAccountRemovedListener,
      * Reset all show offline modes.
      */
     public void resetShowOfflineModes() {
-        for (Entry<GroupConfiguration> entry : groupConfigurations)
-            if (entry.getValue().getShowOfflineMode() != ShowOfflineMode.normal)
-                setShowOfflineMode(entry.getFirst(), entry.getSecond(),
-                        ShowOfflineMode.normal);
+        for (Entry<GroupConfiguration> entry : groupConfigurations) {
+            if (entry.getValue().getShowOfflineMode() != ShowOfflineMode.normal) {
+                try {
+                    setShowOfflineMode(AccountJid.from(entry.getFirst()), entry.getSecond(),
+                            ShowOfflineMode.normal);
+                } catch (XmppStringprepException e) {
+                    LogManager.exception(this, e);
+                }
+            }
+        }
     }
 
-    private void requestToWriteGroup(final String account, final String group,
+    private void requestToWriteGroup(final AccountJid account, final String group,
                                      final boolean expanded, final ShowOfflineMode showOfflineMode) {
         Application.getInstance().runInBackground(new Runnable() {
             @Override
             public void run() {
-                GroupTable.getInstance().write(account, group, expanded,
-                        showOfflineMode);
+                GroupTable.getInstance().write(account.toString(), group, expanded, showOfflineMode);
             }
         });
     }

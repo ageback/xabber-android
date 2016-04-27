@@ -27,7 +27,9 @@ import com.xabber.android.R;
 import com.xabber.android.data.Application;
 import com.xabber.android.data.LogManager;
 import com.xabber.android.data.account.listeners.OnAccountChangedListener;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.BaseEntity;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.blocking.PrivateMucChatBlockingManager;
 import com.xabber.android.data.extension.muc.MUCManager;
 import com.xabber.android.data.intent.AccountIntentBuilder;
@@ -37,7 +39,9 @@ import com.xabber.android.data.message.MessageManager;
 import com.xabber.android.data.roster.OnContactChangedListener;
 import com.xabber.android.ui.adapter.OccupantListAdapter;
 import com.xabber.android.ui.color.BarPainter;
-import com.xabber.xmpp.address.Jid;
+
+import org.jxmpp.jid.EntityBareJid;
+import org.jxmpp.jid.impl.JidCreate;
 
 import java.util.Collection;
 
@@ -49,20 +53,20 @@ import java.util.Collection;
 public class OccupantList extends ManagedListActivity implements
         OnAccountChangedListener, OnContactChangedListener, AdapterView.OnItemClickListener {
 
-    private String account;
-    private String room;
+    private AccountJid account;
+    private EntityBareJid room;
     private OccupantListAdapter listAdapter;
 
-    public static Intent createIntent(Context context, String account, String user) {
+    public static Intent createIntent(Context context, AccountJid account, UserJid room) {
         return new EntityIntentBuilder(context, OccupantList.class)
-                .setAccount(account).setUser(user).build();
+                .setAccount(account).setUser(room).build();
     }
 
-    private static String getAccount(Intent intent) {
+    private static AccountJid getAccount(Intent intent) {
         return AccountIntentBuilder.getAccount(intent);
     }
 
-    private static String getUser(Intent intent) {
+    private static UserJid getUser(Intent intent) {
         return EntityIntentBuilder.getUser(intent);
     }
 
@@ -74,7 +78,7 @@ public class OccupantList extends ManagedListActivity implements
         }
 
         account = getAccount(getIntent());
-        room = Jid.getBareAddress(getUser(getIntent()));
+        room = getUser(getIntent()).getJid().asEntityBareJidIfPossible();
         if (account == null || room == null || !MUCManager.getInstance().hasRoom(account, room)) {
             Application.getInstance().onError(R.string.ENTRY_IS_NOT_FOUND);
             finish();
@@ -118,13 +122,17 @@ public class OccupantList extends ManagedListActivity implements
 
     @Override
     public void onContactsChanged(Collection<BaseEntity> entities) {
-        if (entities.contains(new BaseEntity(account, room))) {
-            listAdapter.onChange();
+        try {
+            if (entities.contains(new BaseEntity(account, UserJid.from(room)))) {
+                listAdapter.onChange();
+            }
+        } catch (UserJid.UserJidCreateException e) {
+            LogManager.exception(this, e);
         }
     }
 
     @Override
-    public void onAccountsChanged(Collection<String> accounts) {
+    public void onAccountsChanged(Collection<AccountJid> accounts) {
         if (accounts.contains(account)) {
             listAdapter.onChange();
         }
@@ -134,17 +142,29 @@ public class OccupantList extends ManagedListActivity implements
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
         com.xabber.android.data.extension.muc.Occupant occupant
                 = (com.xabber.android.data.extension.muc.Occupant) listAdapter.getItem(position);
-        LogManager.i(this, occupant.getNickname());
+        LogManager.i(this, occupant.getNickname().toString());
 
-        String occupantFullJid = room + "/" + occupant.getNickname();
+        UserJid occupantFullJid = null;
+        try {
+            occupantFullJid = UserJid.from(JidCreate.entityFullFrom(room, occupant.getNickname()));
+        } catch (UserJid.UserJidCreateException e) {
+            LogManager.exception(this, e);
+            return;
+        }
 
         if (PrivateMucChatBlockingManager.getInstance().getBlockedContacts(account).contains(occupantFullJid)) {
             Toast.makeText(this, R.string.contact_is_blocked, Toast.LENGTH_SHORT).show();
             return;
         }
 
-
-        final AbstractChat mucPrivateChat = MessageManager.getInstance().getOrCreatePrivateMucChat(account, occupantFullJid);
+        final AbstractChat mucPrivateChat;
+        try {
+            mucPrivateChat = MessageManager.getInstance()
+                    .getOrCreatePrivateMucChat(account, occupantFullJid.getJid().asFullJidIfPossible());
+        } catch (UserJid.UserJidCreateException e) {
+            LogManager.exception(this, e);
+            return;
+        }
         mucPrivateChat.setIsPrivateMucChatAccepted(true);
 
         startActivity(ChatViewer.createSpecificChatIntent(this, account, occupantFullJid));

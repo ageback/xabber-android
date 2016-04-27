@@ -30,6 +30,7 @@ import com.soundcloud.android.crop.Crop;
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
 import com.xabber.android.data.LogManager;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.extension.avatar.AvatarManager;
 import com.xabber.android.data.extension.file.FileManager;
 import com.xabber.android.data.extension.vcard.OnVCardListener;
@@ -37,14 +38,12 @@ import com.xabber.android.data.extension.vcard.OnVCardSaveListener;
 import com.xabber.android.data.extension.vcard.VCardManager;
 import com.xabber.android.ui.activity.ChatViewer;
 import com.xabber.android.ui.helper.PermissionsRequester;
-import com.xabber.xmpp.address.Jid;
 import com.xabber.xmpp.vcard.AddressProperty;
 import com.xabber.xmpp.vcard.TelephoneType;
 import com.xabber.xmpp.vcard.VCardProperty;
 
-import org.jivesoftware.smack.SmackException;
 import org.jivesoftware.smackx.vcardtemp.packet.VCard;
-import org.xmlpull.v1.XmlPullParserException;
+import org.jxmpp.jid.Jid;
 
 import java.io.File;
 import java.io.IOException;
@@ -82,7 +81,7 @@ public class AccountInfoEditorFragment extends Fragment implements OnVCardSaveLi
     public static final int MAX_IMAGE_SIZE = 512;
 
     private VCard vCard;
-    private String account;
+    private AccountJid account;
     private View progressBar;
     private boolean isSaveSuccess;
     private Listener listener;
@@ -144,11 +143,11 @@ public class AccountInfoEditorFragment extends Fragment implements OnVCardSaveLi
         void enableSave();
     }
 
-    public static AccountInfoEditorFragment newInstance(String account, String vCard) {
+    public static AccountInfoEditorFragment newInstance(AccountJid account, String vCard) {
         AccountInfoEditorFragment fragment = new AccountInfoEditorFragment();
 
         Bundle arguments = new Bundle();
-        arguments.putString(ARGUMENT_ACCOUNT, account);
+        arguments.putSerializable(ARGUMENT_ACCOUNT, account);
         arguments.putString(ARGUMENT_VCARD, vCard);
         fragment.setArguments(arguments);
         return fragment;
@@ -168,12 +167,12 @@ public class AccountInfoEditorFragment extends Fragment implements OnVCardSaveLi
         super.onCreate(savedInstanceState);
 
         Bundle args = getArguments();
-        account = args.getString(ARGUMENT_ACCOUNT, null);
+        account = (AccountJid) args.getSerializable(ARGUMENT_ACCOUNT);
         String vCardString = args.getString(ARGUMENT_VCARD, null);
         if (vCardString != null) {
             try {
                 vCard = ContactVcardViewerFragment.parseVCard(vCardString);
-            } catch (XmlPullParserException | IOException | SmackException e) {
+            } catch (Exception e) {
                 LogManager.exception(this, e);
             }
         }
@@ -291,7 +290,7 @@ public class AccountInfoEditorFragment extends Fragment implements OnVCardSaveLi
         Application.getInstance().addUIListener(OnVCardListener.class, this);
 
         VCardManager vCardManager = VCardManager.getInstance();
-        if (vCardManager.isVCardRequested(account) || vCardManager.isVCardSaveRequested(account)) {
+        if (vCardManager.isVCardRequested(account.getFullJid()) || vCardManager.isVCardSaveRequested(account)) {
             enableProgressMode(getString(R.string.saving));
         }
         updateFromVCardFlag = false;
@@ -324,7 +323,7 @@ public class AccountInfoEditorFragment extends Fragment implements OnVCardSaveLi
     }
 
     private void setFieldsFromVCard() {
-        account_jid.setText(Jid.getBareAddress(account));
+        account_jid.setText(account.getFullJid().asBareJid().toString());
 
         formattedName.setText(vCard.getField(VCardProperty.FN.name()));
         prefixName.setText(vCard.getPrefix());
@@ -724,19 +723,19 @@ public class AccountInfoEditorFragment extends Fragment implements OnVCardSaveLi
     }
 
     @Override
-    public void onVCardSaveSuccess(String account) {
-        if (!Jid.getBareAddress(this.account).equals(Jid.getBareAddress(account))) {
+    public void onVCardSaveSuccess(AccountJid account) {
+        if (!this.account.equals(account)) {
             return;
         }
 
         enableProgressMode(getString(R.string.saving));
-        VCardManager.getInstance().request(account, account);
+        VCardManager.getInstance().request(account, account.getFullJid());
         isSaveSuccess = true;
     }
 
     @Override
-    public void onVCardSaveFailed(String account) {
-        if (!Jid.getBareAddress(this.account).equals(Jid.getBareAddress(account))) {
+    public void onVCardSaveFailed(AccountJid account) {
+        if (!this.account.equals(account)) {
             return;
         }
 
@@ -747,8 +746,8 @@ public class AccountInfoEditorFragment extends Fragment implements OnVCardSaveLi
     }
 
     @Override
-    public void onVCardReceived(String account, String bareAddress, VCard vCard) {
-        if (!Jid.getBareAddress(this.account).equals(Jid.getBareAddress(bareAddress))) {
+    public void onVCardReceived(AccountJid account, Jid bareAddress, VCard vCard) {
+        if (!account.getFullJid().asBareJid().equals(bareAddress.asBareJid())) {
             return;
         }
 
@@ -772,8 +771,8 @@ public class AccountInfoEditorFragment extends Fragment implements OnVCardSaveLi
     }
 
     @Override
-    public void onVCardFailed(String account, String bareAddress) {
-        if (!Jid.getBareAddress(this.account).equals(Jid.getBareAddress(bareAddress))) {
+    public void onVCardFailed(AccountJid account, Jid bareAddress) {
+        if (!account.getFullJid().asBareJid().equals(bareAddress.asBareJid())) {
             return;
         }
 

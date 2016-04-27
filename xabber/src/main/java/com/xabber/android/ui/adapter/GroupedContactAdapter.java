@@ -34,7 +34,7 @@ import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.account.StatusMode;
-import com.xabber.android.data.entity.BaseEntity;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.extension.avatar.AvatarManager;
 import com.xabber.android.data.roster.AbstractContact;
 import com.xabber.android.data.roster.Group;
@@ -87,7 +87,7 @@ public abstract class GroupedContactAdapter extends BaseAdapter implements Updat
         NO_GROUP_LIST = Collections.unmodifiableCollection(groups);
     }
 
-    final ArrayList<BaseEntity> baseEntities = new ArrayList<>();
+    final ArrayList<Object> baseEntities = new ArrayList<>();
     /**
      * Layout inflater
      */
@@ -277,7 +277,7 @@ public abstract class GroupedContactAdapter extends BaseAdapter implements Updat
 
         final AccountConfiguration configuration = (AccountConfiguration) getItem(position);
 
-        final String account = configuration.getAccount();
+        final AccountJid account = configuration.getAccount();
 
         viewHolder.statusIcon.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -289,7 +289,7 @@ public abstract class GroupedContactAdapter extends BaseAdapter implements Updat
         final int level = AccountManager.getInstance().getColorLevel(account);
         view.setBackgroundDrawable(new ColorDrawable(accountGroupColors[level]));
 
-        viewHolder.name.setText(GroupManager.getInstance().getGroupName(account, configuration.getUser()));
+        viewHolder.name.setText(GroupManager.getInstance().getGroupName(account, configuration.getGroup()));
         viewHolder.smallRightText.setText(configuration.getOnline() + "/" + configuration.getTotal());
 
         AccountItem accountItem = AccountManager.getInstance().getAccount(account);
@@ -355,8 +355,7 @@ public abstract class GroupedContactAdapter extends BaseAdapter implements Updat
         final GroupConfiguration configuration = (GroupConfiguration) getItem(position);
         final int level = AccountManager.getInstance().getColorLevel(configuration.getAccount());
 
-        final String name = GroupManager.getInstance()
-                .getGroupName(configuration.getAccount(), configuration.getUser());
+        final String name = GroupManager.getInstance().getGroupName(configuration.getAccount(), configuration.getGroup());
 
 
         viewHolder.indicator.setImageLevel(configuration.isExpanded() ? 1 : 0);
@@ -367,7 +366,7 @@ public abstract class GroupedContactAdapter extends BaseAdapter implements Updat
         viewHolder.groupOfflineIndicator.setVisibility(View.GONE);
         viewHolder.offlineShadow.setVisibility(View.GONE);
 
-        if (configuration.getUser().equals(GroupManager.ACTIVE_CHATS)) {
+        if (configuration.getGroup().equals(GroupManager.ACTIVE_CHATS)) {
             color = activeChatsColor;
             viewHolder.name.setText(name);
         } else {
@@ -398,10 +397,6 @@ public abstract class GroupedContactAdapter extends BaseAdapter implements Updat
 
     /**
      * Gets or creates roster group in roster account.
-     *
-     * @param accountConfiguration
-     * @param name
-     * @return
      */
     protected GroupConfiguration getGroupConfiguration(AccountConfiguration accountConfiguration, String name) {
         GroupConfiguration groupConfiguration = accountConfiguration.getGroupConfiguration(name);
@@ -416,10 +411,6 @@ public abstract class GroupedContactAdapter extends BaseAdapter implements Updat
 
     /**
      * Gets or creates roster group in tree map.
-     *
-     * @param groups
-     * @param name
-     * @return
      */
     protected GroupConfiguration getGroupConfiguration(Map<String, GroupConfiguration> groups, String name) {
         GroupConfiguration groupConfiguration = groups.get(name);
@@ -433,21 +424,12 @@ public abstract class GroupedContactAdapter extends BaseAdapter implements Updat
 
     /**
      * Adds contact to specified group.
-     *
-     * @param abstractContact
-     * @param group
-     * @param online
-     * @param accounts
-     * @param groups
-     * @param contacts
-     * @param showAccounts
-     * @param showGroups
      */
     protected void addContact(AbstractContact abstractContact, String group, boolean online,
-        Map<String, AccountConfiguration> accounts, Map<String, GroupConfiguration> groups,
+        Map<AccountJid, AccountConfiguration> accounts, Map<String, GroupConfiguration> groups,
         List<AbstractContact> contacts, boolean showAccounts, boolean showGroups) {
         if (showAccounts) {
-            final String account = abstractContact.getAccount();
+            final AccountJid account = abstractContact.getAccount();
             final AccountConfiguration accountConfiguration;
             accountConfiguration = accounts.get(account);
             if (accountConfiguration == null) {
@@ -485,19 +467,10 @@ public abstract class GroupedContactAdapter extends BaseAdapter implements Updat
 
     /**
      * Adds contact to there groups.
-     *
-     * @param abstractContact
-     * @param online
-     * @param accounts
-     * @param groups
-     * @param contacts
-     * @param showAccounts
-     * @param showGroups
-     * @param showOffline
      * @return whether contact is visible.
      */
     protected boolean addContact(AbstractContact abstractContact,
-                                 boolean online, Map<String, AccountConfiguration> accounts,
+                                 boolean online, Map<AccountJid, AccountConfiguration> accounts,
                                  Map<String, GroupConfiguration> groups,
                                  List<AbstractContact> contacts, boolean showAccounts,
                                  boolean showGroups, boolean showOffline) {
@@ -579,13 +552,13 @@ public abstract class GroupedContactAdapter extends BaseAdapter implements Updat
     /**
      * Sets whether group in specified account is expanded.
      */
-    public void setExpanded(String account, String group, boolean expanded) {
+    public void setExpanded(AccountJid account, String group, boolean expanded) {
         GroupManager.getInstance().setExpanded(account, group, expanded);
         onChange();
     }
 
     public interface OnClickListener {
-        void onAccountMenuClick(View view, String account);
+        void onAccountMenuClick(View view, AccountJid account);
     }
 
     /**

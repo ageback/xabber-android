@@ -6,6 +6,7 @@ import com.xabber.android.data.Application;
 import com.xabber.android.data.LogManager;
 import com.xabber.android.data.SettingsManager;
 
+import org.jivesoftware.smack.ConnectionConfiguration;
 import org.jivesoftware.smack.SASLAuthentication;
 import org.jivesoftware.smack.proxy.ProxyInfo;
 import org.jivesoftware.smack.sasl.provided.SASLPlainMechanism;
@@ -28,7 +29,7 @@ public class ConnectionBuilder {
     public static @NonNull XMPPTCPConnection build(@NonNull final ConnectionSettings connectionSettings) {
         XMPPTCPConnectionConfiguration.Builder builder = XMPPTCPConnectionConfiguration.builder();
 
-        builder.setServiceName(connectionSettings.getServerName());
+        builder.setXmppDomain(connectionSettings.getServerName());
 
         if (connectionSettings.isCustomHostAndPort()) {
             builder.setHost(connectionSettings.getHost());
@@ -40,6 +41,8 @@ public class ConnectionBuilder {
         builder.setSendPresence(false);
         builder.setUsernameAndPassword(connectionSettings.getUserName(), connectionSettings.getPassword());
         builder.setResource(connectionSettings.getResource());
+
+        builder.setProxyInfo(getProxyInfo(connectionSettings));
 
         try {
             if (SettingsManager.securityCheckCertificate()) {
@@ -59,12 +62,14 @@ public class ConnectionBuilder {
 
         setUpSasl();
 
+
+        LogManager.i(LOG_TAG, "new XMPPTCPConnection " + connectionSettings.getServerName());
         return new XMPPTCPConnection(builder.build());
     }
 
     private static ProxyInfo getProxyInfo(ConnectionSettings connectionSettings) {
 
-        ProxyInfo proxyInfo;
+        ProxyInfo proxyInfo = null;
 
         ProxyType proxyType = connectionSettings.getProxyType();
 
@@ -73,22 +78,20 @@ public class ConnectionBuilder {
         String proxyPassword = connectionSettings.getProxyPassword();
         String proxyUser = connectionSettings.getProxyUser();
 
-        if (proxyType == null) {
-            proxyInfo = ProxyInfo.forDefaultProxy();
-        } else {
+        if (proxyType != null) {
             switch (proxyType) {
-                case none:
-                    proxyInfo = ProxyInfo.forNoProxy();
-                    break;
                 case http:
                     proxyInfo = ProxyInfo.forHttpProxy(proxyHost, proxyPort, proxyUser, proxyPassword);
                     break;
+
                 case socks4:
                     proxyInfo = ProxyInfo.forSocks4Proxy(proxyHost, proxyPort, proxyUser, proxyPassword);
                     break;
+
                 case socks5:
                     proxyInfo = ProxyInfo.forSocks5Proxy(proxyHost, proxyPort, proxyUser, proxyPassword);
                     break;
+
                 case orbot:
                     proxyHost = "localhost";
                     proxyPort = 9050;
@@ -96,8 +99,10 @@ public class ConnectionBuilder {
                     proxyUser = "";
                     proxyInfo = ProxyInfo.forSocks5Proxy(proxyHost, proxyPort, proxyUser, proxyPassword);
                     break;
+
+                case none:
                 default:
-                    proxyInfo = ProxyInfo.forDefaultProxy();
+                    proxyInfo = null;
             }
         }
 
