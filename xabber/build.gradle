@@ -2,19 +2,14 @@ apply plugin: 'com.android.application'
 apply plugin: 'realm-android'
 
 android {
-    compileSdkVersion 23
+    compileSdkVersion 24
     buildToolsVersion "23.0.3"
 
     defaultConfig {
         minSdkVersion 14
-        targetSdkVersion 23
-        versionCode 290
-        versionName '1.0.117'
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_7
-        targetCompatibility JavaVersion.VERSION_1_7
+        targetSdkVersion 24
+        versionCode 292
+        versionName '1.0.119'
     }
 
     lintOptions {
@@ -61,9 +56,8 @@ android {
 }
 
 ext {
-    smackVersion = '4.2.0-beta2-SNAPSHOT'
-    leakCanaryVersion = '1.4-beta2'
-    supportVersion = '23.4.0'
+    smackVersion = '4.2.0-beta2'
+    supportVersion = '24.2.1'
 }
 
 dependencies {
@@ -76,7 +70,9 @@ dependencies {
     compile 'com.google.zxing:android-integration:3.2.1'
     compile 'com.soundcloud.android:android-crop:1.0.1@aar'
     compile 'org.greenrobot:eventbus:3.0.0'
-    compile 'com.squareup.okhttp3:okhttp:3.2.0'
+    compile 'com.squareup.okhttp3:okhttp:3.4.1'
+    compile 'com.jakewharton:butterknife:8.4.0'
+    apt 'com.jakewharton:butterknife-compiler:8.4.0'
 
     compile "org.igniterealtime.smack:smack-android-extensions:$smackVersion"
     compile "org.igniterealtime.smack:smack-experimental:$smackVersion"
@@ -84,10 +80,6 @@ dependencies {
     compile project('otr4j')
     compile project('MemorizingTrustManager')
     compile project('emojicon')
-
-    debugCompile "com.squareup.leakcanary:leakcanary-android:$leakCanaryVersion"
-    releaseCompile "com.squareup.leakcanary:leakcanary-android-no-op:$leakCanaryVersion"
-    testCompile "com.squareup.leakcanary:leakcanary-android-no-op:$leakCanaryVersion"
 }
 
 configurations {

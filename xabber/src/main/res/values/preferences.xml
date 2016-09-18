@@ -36,6 +36,7 @@
         <item>com.xabber.android.data.extension.capability.CapabilitiesManager</item>
         <item>com.xabber.android.data.extension.cs.ChatStateManager</item>
         <item>com.xabber.android.data.connection.NetworkManager</item>
+        <item>com.xabber.android.data.connection.ReconnectionManager</item>
         <item>com.xabber.android.data.message.ReceiptManager</item>
         <item>com.xabber.android.data.extension.ssn.SSNManager</item>
         <item>com.xabber.android.data.extension.attention.AttentionManager</item>
@@ -352,6 +353,8 @@
 
     <string name="debug_connection_errors_key">connection_errors</string>
     <bool name="debug_connection_errors_default">false</bool>
+
+    <string name="debug_log_activity_key">debug_log_activity</string>
 
 <!-- preference_about -->
     <string name="preference_about">@string/about_viewer</string>
