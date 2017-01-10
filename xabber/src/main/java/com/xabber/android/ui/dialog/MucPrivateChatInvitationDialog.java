@@ -5,14 +5,16 @@ import android.widget.Toast;
 
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
+import com.xabber.android.data.log.LogManager;
+import com.xabber.android.data.entity.AccountJid;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.blocking.PrivateMucChatBlockingManager;
 import com.xabber.android.data.message.MessageManager;
-import com.xabber.android.ui.activity.ChatViewer;
-import com.xabber.xmpp.address.Jid;
+import com.xabber.android.ui.activity.ChatActivity;
 
 public class MucPrivateChatInvitationDialog extends BaseContactDialog {
 
-    public static DialogFragment newInstance(String account, String contact) {
+    public static DialogFragment newInstance(AccountJid account, UserJid contact) {
         DialogFragment fragment = new MucPrivateChatInvitationDialog();
         setArguments(account, contact, fragment);
         return fragment;
@@ -26,7 +28,7 @@ public class MucPrivateChatInvitationDialog extends BaseContactDialog {
     @Override
     protected String getMessage() {
         return String.format(getString(R.string.conference_private_chat_invitation),
-                Jid.getResource(getContact()), Jid.getBareAddress(getContact()));
+                getContact().getJid().getResourceOrNull().toString(), getContact().getJid().asBareJid().toString());
     }
 
     @Override
@@ -46,8 +48,13 @@ public class MucPrivateChatInvitationDialog extends BaseContactDialog {
 
     @Override
     protected void onPositiveButtonClick() {
-        MessageManager.getInstance().acceptMucPrivateChat(getAccount(), getContact());
-        startActivity(ChatViewer.createSpecificChatIntent(Application.getInstance(), getAccount(), getContact()));
+        try {
+            MessageManager.getInstance().acceptMucPrivateChat(getAccount(), getContact());
+            startActivity(ChatActivity.createSpecificChatIntent(Application.getInstance(), getAccount(), getContact()));
+        } catch (UserJid.UserJidCreateException e) {
+            LogManager.exception(this, e);
+        }
+
     }
 
     @Override

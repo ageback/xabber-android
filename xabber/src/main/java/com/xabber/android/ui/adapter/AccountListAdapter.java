@@ -27,6 +27,7 @@ import com.xabber.android.R;
 import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.connection.ConnectionState;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.extension.avatar.AvatarManager;
 import com.xabber.android.ui.color.ColorManager;
 import com.xabber.android.ui.preferences.AccountList;
@@ -41,7 +42,7 @@ import java.util.List;
  *
  * @author alexander.ivanov
  */
-public class AccountListAdapter extends BaseListEditorAdapter<String> {
+public class AccountListAdapter extends BaseListEditorAdapter<AccountJid> {
 
     public AccountListAdapter(Activity activity) {
         super(activity);
@@ -52,11 +53,11 @@ public class AccountListAdapter extends BaseListEditorAdapter<String> {
         View view;
         AccountManager accountManager = AccountManager.getInstance();
         if (convertView == null) {
-            view = getActivity().getLayoutInflater().inflate(R.layout.account_list_item, parent, false);
+            view = getActivity().getLayoutInflater().inflate(R.layout.item_account, parent, false);
         } else {
             view = convertView;
         }
-        final String account = getItem(position);
+        final AccountJid account = getItem(position);
 
         ((ImageView) view.findViewById(R.id.color)).setImageDrawable(
                 new ColorDrawable(ColorManager.getInstance().getAccountPainter().getAccountMainColor(account)));
@@ -68,14 +69,6 @@ public class AccountListAdapter extends BaseListEditorAdapter<String> {
 
         final AccountItem accountItem = accountManager.getAccount(account);
 
-        accountSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                AccountManager.getInstance().setEnabled(account, isChecked);
-            }
-        });
-
-
         ConnectionState state;
         if (accountItem == null) {
             state = ConnectionState.offline;
@@ -84,13 +77,21 @@ public class AccountListAdapter extends BaseListEditorAdapter<String> {
             state = accountItem.getState();
             accountSwitch.setChecked(accountItem.isEnabled());
         }
+
+        accountSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                AccountManager.getInstance().setEnabled(account, isChecked);
+            }
+        });
+
         ((TextView) view.findViewById(R.id.status)).setText(getActivity().getString(state.getStringId()));
         return view;
     }
 
     @Override
-    protected Collection<String> getTags() {
-        List<String> list = new ArrayList<>();
+    protected Collection<AccountJid> getTags() {
+        List<AccountJid> list = new ArrayList<>();
         list.addAll(AccountManager.getInstance().getAllAccounts());
         Collections.sort(list);
         return list;

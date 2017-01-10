@@ -3,17 +3,21 @@ package com.xabber.android.data.extension.mam;
 import android.support.annotation.NonNull;
 
 import com.xabber.android.data.Application;
-import com.xabber.android.data.LogManager;
 import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.connection.ConnectionItem;
-import com.xabber.android.data.connection.ConnectionThread;
 import com.xabber.android.data.connection.listeners.OnAuthorizedListener;
 import com.xabber.android.data.database.realm.MessageItem;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.BaseEntity;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.file.FileManager;
+import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.message.AbstractChat;
-import com.xabber.xmpp.address.Jid;
+import com.xabber.android.data.message.MessageManager;
+import com.xabber.android.data.roster.OnRosterReceivedListener;
+import com.xabber.android.data.roster.RosterContact;
+import com.xabber.android.data.roster.RosterManager;
 
 import net.java.otr4j.io.SerializationUtils;
 import net.java.otr4j.io.messages.PlainTextMessage;
@@ -24,8 +28,7 @@ import org.jivesoftware.smack.XMPPException;
 import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smackx.delay.packet.DelayInformation;
 import org.jivesoftware.smackx.forward.packet.Forwarded;
-import org.jivesoftware.smackx.mam.Behaviour;
-import org.jivesoftware.smackx.mam.packet.MamPrefIQ;
+import org.jivesoftware.smackx.mam.element.MamPrefsIQ;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -40,13 +43,13 @@ import java.util.concurrent.TimeUnit;
 import io.realm.Realm;
 import io.realm.RealmResults;
 
-public class MamManager implements OnAuthorizedListener {
+public class MamManager implements OnAuthorizedListener, OnRosterReceivedListener {
     private final static MamManager instance;
     public static final int SYNC_INTERVAL_MINUTES = 5;
 
     public static int PAGE_SIZE = AbstractChat.PRELOADED_MESSAGES;
 
-    private Map<String, Boolean> supportedByAccount;
+    private Map<AccountJid, Boolean> supportedByAccount;
 
     static {
         instance = new MamManager();
@@ -73,6 +76,24 @@ public class MamManager implements OnAuthorizedListener {
             @Override
             public void run() {
                 updateIsSupported(accountItem);
+
+            }
+        });
+    }
+
+
+    @Override
+    public void onRosterReceived(final AccountItem accountItem) {
+        LogManager.i(this, "onRosterReceived " + accountItem.getAccount());
+        Application.getInstance().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Collection<RosterContact> contacts = RosterManager.getInstance().getContacts();
+                for (RosterContact contact : contacts) {
+                    if (contact.getAccount().equals(accountItem.getAccount())) {
+                        requestLastHistory(MessageManager.getInstance().getOrCreateChat(contact.getAccount(), contact.getUser()));
+                    }
+                }
             }
         });
     }
@@ -89,20 +110,21 @@ public class MamManager implements OnAuthorizedListener {
 
     private boolean updateIsSupported(AccountItem accountItem) {
         org.jivesoftware.smackx.mam.MamManager mamManager = org.jivesoftware.smackx.mam.MamManager
-                .getInstanceFor(accountItem.getConnectionThread().getXMPPConnection());
+                .getInstanceFor(accountItem.getConnection());
 
         boolean isSupported;
         try {
             isSupported = mamManager.isSupportedByServer();
 
             if (isSupported) {
-                MamPrefIQ archivingPreferences = mamManager.getArchivingPreferences();
-                LogManager.i(this, "archivingPreferences default behaviour " + archivingPreferences.getBehaviour());
-                boolean success = mamManager.updateArchivingPreferences(Behaviour.always);
-                LogManager.i(this, "updateArchivingPreferences success " + success);
+                org.jivesoftware.smackx.mam.MamManager.MamPrefsResult archivingPreferences = mamManager.retrieveArchivingPreferences();
+                LogManager.i(this, "archivingPreferences default behaviour " + archivingPreferences.mamPrefs.getDefault());
+                org.jivesoftware.smackx.mam.MamManager.MamPrefsResult result = mamManager.updateArchivingPreferences(null, null, MamPrefsIQ.DefaultBehavior.always);
+                LogManager.i(this, "updateArchivingPreferences result " + result.toString());
             }
 
-        } catch (SmackException.NoResponseException | XMPPException.XMPPErrorException | InterruptedException | SmackException.NotConnectedException e) {
+        } catch (SmackException.NoResponseException | XMPPException.XMPPErrorException
+                | InterruptedException | SmackException.NotConnectedException | SmackException.NotLoggedInException e) {
             LogManager.exception(this, e);
             return false;
         }
@@ -126,11 +148,6 @@ public class MamManager implements OnAuthorizedListener {
         if (accountItem == null || !accountItem.getFactualStatusMode().isOnline()) {
             return;
         }
-        ConnectionThread connectionThread = accountItem.getConnectionThread();
-
-        if (connectionThread == null) {
-            return;
-        }
 
         Application.getInstance().runInBackground(new Runnable() {
             @Override
@@ -142,7 +159,7 @@ public class MamManager implements OnAuthorizedListener {
                 EventBus.getDefault().post(new LastHistoryLoadStartedEvent(chat));
 
                 org.jivesoftware.smackx.mam.MamManager mamManager
-                        = org.jivesoftware.smackx.mam.MamManager.getInstanceFor(accountItem.getConnectionThread().getXMPPConnection());
+                        = org.jivesoftware.smackx.mam.MamManager.getInstanceFor(accountItem.getConnection());
 
                 String lastMessageMamId;
                 int receivedMessagesCount;
@@ -187,16 +204,17 @@ public class MamManager implements OnAuthorizedListener {
         final org.jivesoftware.smackx.mam.MamManager.MamQueryResult mamQueryResult;
         try {
             if (lastMessageMamId == null) {
-                mamQueryResult = mamManager.queryPage(chat.getUser(), PAGE_SIZE, null, "");
+                mamQueryResult = mamManager.pageBefore(chat.getUser().getJid(), "", PAGE_SIZE);
             } else {
-                mamQueryResult = mamManager.queryPage(chat.getUser(), PAGE_SIZE, lastMessageMamId, null);
+                mamQueryResult = mamManager.pageAfter(chat.getUser().getJid(), lastMessageMamId, PAGE_SIZE);
             }
-        } catch (SmackException.NoResponseException | XMPPException.XMPPErrorException | InterruptedException | SmackException.NotConnectedException e) {
+        } catch (SmackException.NotLoggedInException | InterruptedException
+                | SmackException.NotConnectedException | SmackException.NoResponseException | XMPPException.XMPPErrorException e) {
             LogManager.exception(this, e);
             return -1;
         }
 
-        int receivedMessagesCount = mamQueryResult.messages.size();
+        int receivedMessagesCount = mamQueryResult.forwardedMessages.size();
 
         LogManager.i(this, "receivedMessagesCount " + receivedMessagesCount);
 
@@ -219,8 +237,8 @@ public class MamManager implements OnAuthorizedListener {
         LogManager.i(this, "syncMessages: " + messagesFromServer.size());
 
         RealmResults<MessageItem> localMessages = realm.where(MessageItem.class)
-                .equalTo(MessageItem.Fields.ACCOUNT, chat.getAccount())
-                .equalTo(MessageItem.Fields.USER, chat.getUser())
+                .equalTo(MessageItem.Fields.ACCOUNT, chat.getAccount().toString())
+                .equalTo(MessageItem.Fields.USER, chat.getUser().toString())
                 .findAll();
 
         Iterator<MessageItem> iterator = messagesFromServer.iterator();
@@ -295,10 +313,10 @@ public class MamManager implements OnAuthorizedListener {
     }
 
     @NonNull
-    private SyncInfo getSyncInfo(Realm realm, String account, String user) {
+    private SyncInfo getSyncInfo(Realm realm, AccountJid account, UserJid user) {
         SyncInfo syncInfo = realm.where(SyncInfo.class)
-                .equalTo(SyncInfo.FIELD_ACCOUNT, account)
-                .equalTo(SyncInfo.FIELD_USER, user).findFirst();
+                .equalTo(SyncInfo.FIELD_ACCOUNT, account.toString())
+                .equalTo(SyncInfo.FIELD_USER, user.toString()).findFirst();
 
         if (syncInfo == null) {
             realm.beginTransaction();
@@ -315,16 +333,16 @@ public class MamManager implements OnAuthorizedListener {
 
         realm.beginTransaction();
 
-        if (mamQueryResult.mamFin.getRsmSet() != null) {
+        if (mamQueryResult.mamFin.getRSMSet() != null) {
 
             if (syncInfo.getFirstMamMessageMamId() == null) {
-                syncInfo.setFirstMamMessageMamId(mamQueryResult.mamFin.getRsmSet().getFirst());
-                if (!mamQueryResult.messages.isEmpty()) {
-                    syncInfo.setFirstMamMessageStanzaId(mamQueryResult.messages.get(0).getForwardedPacket().getStanzaId());
+                syncInfo.setFirstMamMessageMamId(mamQueryResult.mamFin.getRSMSet().getFirst());
+                if (!mamQueryResult.forwardedMessages.isEmpty()) {
+                    syncInfo.setFirstMamMessageStanzaId(mamQueryResult.forwardedMessages.get(0).getForwardedStanza().getStanzaId());
                 }
             }
-            if (mamQueryResult.mamFin.getRsmSet().getLast() != null) {
-                syncInfo.setLastMessageMamId(mamQueryResult.mamFin.getRsmSet().getLast());
+            if (mamQueryResult.mamFin.getRSMSet().getLast() != null) {
+                syncInfo.setLastMessageMamId(mamQueryResult.mamFin.getRSMSet().getLast());
             }
 
         }
@@ -339,11 +357,6 @@ public class MamManager implements OnAuthorizedListener {
 
         final AccountItem accountItem = AccountManager.getInstance().getAccount(chat.getAccount());
         if (accountItem == null || !accountItem.getFactualStatusMode().isOnline()) {
-            return;
-        }
-        ConnectionThread connectionThread = accountItem.getConnectionThread();
-
-        if (connectionThread == null) {
             return;
         }
 
@@ -372,14 +385,14 @@ public class MamManager implements OnAuthorizedListener {
                     return;
                 }
 
-                org.jivesoftware.smackx.mam.MamManager mamManager = org.jivesoftware.smackx.mam.MamManager.getInstanceFor(accountItem.getConnectionThread().getXMPPConnection());
+                org.jivesoftware.smackx.mam.MamManager mamManager = org.jivesoftware.smackx.mam.MamManager.getInstanceFor(accountItem.getConnection());
 
                 final org.jivesoftware.smackx.mam.MamManager.MamQueryResult mamQueryResult;
                 try {
                     EventBus.getDefault().post(new PreviousHistoryLoadStartedEvent(chat));
                     LogManager.i("MAM", "Loading previous history");
-                    mamQueryResult = mamManager.queryPage(chat.getUser(), PAGE_SIZE, null, firstMamMessageMamId);
-                } catch (SmackException.NoResponseException | XMPPException.XMPPErrorException | InterruptedException | SmackException.NotConnectedException e) {
+                    mamQueryResult = mamManager.pageBefore(chat.getUser().getJid(), firstMamMessageMamId, PAGE_SIZE);
+                } catch (SmackException.NotLoggedInException | SmackException.NoResponseException | XMPPException.XMPPErrorException | InterruptedException | SmackException.NotConnectedException e) {
                     LogManager.exception(this, e);
                     EventBus.getDefault().post(new PreviousHistoryLoadFinishedEvent(chat));
                     return;
@@ -387,7 +400,7 @@ public class MamManager implements OnAuthorizedListener {
 
                 EventBus.getDefault().post(new PreviousHistoryLoadFinishedEvent(chat));
 
-                LogManager.i("MAM", "queryArchive finished. fin count expected: " + mamQueryResult.mamFin.getRsmSet().getCount() + " real: " + mamQueryResult.messages.size());
+                LogManager.i("MAM", "queryArchive finished. fin count expected: " + mamQueryResult.mamFin.getRSMSet().getCount() + " real: " + mamQueryResult.forwardedMessages.size());
 
                 Realm realm = Realm.getDefaultInstance();
                 List<MessageItem> messageItems = getMessageItems(mamQueryResult, chat);
@@ -404,13 +417,13 @@ public class MamManager implements OnAuthorizedListener {
         SyncInfo syncInfo = getSyncInfo(realm, chat.getAccount(), chat.getUser());
 
         realm.beginTransaction();
-        if (mamQueryResult.messages.size() < PAGE_SIZE) {
+        if (mamQueryResult.forwardedMessages.size() < PAGE_SIZE) {
             syncInfo.setRemoteHistoryCompletelyLoaded(true);
         }
 
-        syncInfo.setFirstMamMessageMamId(mamQueryResult.mamFin.getRsmSet().getFirst());
-        if (!mamQueryResult.messages.isEmpty()) {
-            syncInfo.setFirstMamMessageStanzaId(mamQueryResult.messages.get(0).getForwardedPacket().getStanzaId());
+        syncInfo.setFirstMamMessageMamId(mamQueryResult.mamFin.getRSMSet().getFirst());
+        if (!mamQueryResult.forwardedMessages.isEmpty()) {
+            syncInfo.setFirstMamMessageStanzaId(mamQueryResult.forwardedMessages.get(0).getForwardedStanza().getStanzaId());
         }
         realm.commitTransaction();
     }
@@ -418,12 +431,12 @@ public class MamManager implements OnAuthorizedListener {
     private List<MessageItem> getMessageItems(org.jivesoftware.smackx.mam.MamManager.MamQueryResult mamQueryResult, AbstractChat chat) {
         List<MessageItem> messageItems = new ArrayList<>();
 
-        for (Forwarded forwarded : mamQueryResult.messages) {
-            if (!(forwarded.getForwardedPacket() instanceof Message)) {
+        for (Forwarded forwarded : mamQueryResult.forwardedMessages) {
+            if (!(forwarded.getForwardedStanza() instanceof Message)) {
                 continue;
             }
 
-            Message message = (Message) forwarded.getForwardedPacket();
+            Message message = (Message) forwarded.getForwardedStanza();
 
             DelayInformation delayInformation = forwarded.getDelayInformation();
 
@@ -442,13 +455,13 @@ public class MamManager implements OnAuthorizedListener {
                 body = ((PlainTextMessage) otrMessage).cleanText;
             }
 
-            boolean incoming = Jid.getBareAddress(message.getFrom()).equalsIgnoreCase(Jid.getBareAddress(chat.getUser()));
+            boolean incoming = message.getFrom().asBareJid().equals(chat.getUser().getJid().asBareJid());
 
             MessageItem messageItem = new MessageItem();
 
             messageItem.setAccount(chat.getAccount());
             messageItem.setUser(chat.getUser());
-            messageItem.setResource(Jid.getResource(chat.getUser()));
+            messageItem.setResource(chat.getUser().getJid().getResourceOrNull());
             messageItem.setText(body);
             messageItem.setTimestamp(delayInformation.getStamp().getTime());
             if (messageDelay != null) {

@@ -9,6 +9,8 @@ import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
 
+import com.xabber.android.data.entity.AccountJid;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.roster.RosterContact;
 import com.xabber.android.data.roster.RosterManager;
 import com.xabber.android.ui.adapter.AccountChooseAdapter;
@@ -20,15 +22,15 @@ public class AccountChooseDialogFragment extends DialogFragment implements Dialo
     public static final String ARGUMENT_USER = "com.xabber.android.ui.dialog.AccountChooseDialogFragment.ARGUMENT_USER";
     public static final String ARGUMENT_TEXT = "com.xabber.android.ui.dialog.AccountChooseDialogFragment.ARGUMENT_TEXT";
 
-    private String user;
+    private UserJid user;
     private String text;
     private Adapter adapter;
 
-    public static DialogFragment newInstance(String user, String text) {
+    public static DialogFragment newInstance(UserJid user, String text) {
         AccountChooseDialogFragment fragment = new AccountChooseDialogFragment();
 
         Bundle arguments = new Bundle();
-        arguments.putString(ARGUMENT_USER, user);
+        arguments.putParcelable(ARGUMENT_USER, user);
         arguments.putString(ARGUMENT_TEXT, text);
         fragment.setArguments(arguments);
         return fragment;
@@ -37,7 +39,7 @@ public class AccountChooseDialogFragment extends DialogFragment implements Dialo
     @Override
     public Dialog onCreateDialog(Bundle savedInstanceState) {
         Bundle args = getArguments();
-        user = args.getString(ARGUMENT_USER, null);
+        user = args.getParcelable(ARGUMENT_USER);
         text = args.getString(ARGUMENT_TEXT, null);
 
         adapter = new Adapter(getActivity());
@@ -49,7 +51,7 @@ public class AccountChooseDialogFragment extends DialogFragment implements Dialo
 
     @Override
     public void onClick(DialogInterface dialog, int which) {
-        String account = (String) adapter.getItem(which);
+        AccountJid account = (AccountJid) adapter.getItem(which);
         OnChooseListener listener = (OnChooseListener) getActivity();
         listener.onChoose(account, user, text);
     }
@@ -58,7 +60,7 @@ public class AccountChooseDialogFragment extends DialogFragment implements Dialo
 
         public Adapter(Activity activity) {
             super(activity);
-            ArrayList<String> available = new ArrayList<>();
+            ArrayList<AccountJid> available = new ArrayList<>();
             for (RosterContact check : RosterManager.getInstance().getContacts()) {
                 if (check.isEnabled() && check.getUser().equals(user)) {
                     available.add(check.getAccount());
@@ -78,7 +80,7 @@ public class AccountChooseDialogFragment extends DialogFragment implements Dialo
     }
 
     public interface OnChooseListener {
-        void onChoose(String account, String user, String text);
+        void onChoose(AccountJid account, UserJid user, String text);
     }
 
 }

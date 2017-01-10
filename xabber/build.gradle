@@ -1,41 +1,38 @@
 apply plugin: 'com.android.application'
+apply plugin: 'com.neenbedankt.android-apt'
 apply plugin: 'realm-android'
-
-buildscript {
-    repositories {
-        jcenter()
-    }
-
-    dependencies {
-        classpath "io.realm:realm-gradle-plugin:0.88.3"
-    }
-}
-
+apply plugin: 'com.frogermcs.androiddevmetrics'
 
 android {
-    compileSdkVersion 23
-    buildToolsVersion "23.0.3"
+    compileSdkVersion 25
+    buildToolsVersion "25.0.2"
 
     defaultConfig {
         minSdkVersion 14
-        targetSdkVersion 23
-        versionCode 278
-        versionName '1.0.105'
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_7
-        targetCompatibility JavaVersion.VERSION_1_7
+        targetSdkVersion 25
+        versionCode 306
+        versionName '1.0.134'
     }
 
     lintOptions {
         // problems with generated "applicationId" string resource
         disable 'MissingTranslation'
         disable 'InvalidPackage'
+
+        abortOnError false
     }
 
-    dexOptions {
-        incremental true
+    subprojects {
+        afterEvaluate {
+            if (getPlugins().hasPlugin('android') ||
+                    getPlugins().hasPlugin('android-library')) {
+
+                configure(android.lintOptions) {
+                    abortOnError false
+
+                }
+            }
+        }
     }
 
     productFlavors {
@@ -48,6 +45,7 @@ android {
         beta {
             applicationId "com.xabber.android.beta"
             resValue 'string', 'application_package', applicationId
+            multiDexEnabled true
         }
 
         prod {
@@ -69,34 +67,48 @@ android {
                     'proguard-rules.pro'
         }
     }
+
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'armeabi', 'armeabi-v7a', 'arm64-v8a', 'mips', 'x86', 'x86_64'
+
+            universalApk true
+        }
+    }
 }
 
 ext {
-    smackVersion = '4.1.6'
-    leakCanaryVersion = '1.4-beta2'
-    supportVersion = '23.3.0'
+    smackVersion = '4.2.0-rc2-SNAPSHOT'
+    supportVersion = '25.1.0'
 }
 
 dependencies {
-    compile "com.android.support:design:$supportVersion"
-    compile "com.android.support:appcompat-v7:$supportVersion"
-    compile "com.android.support:support-v13:$supportVersion"
-    compile 'de.hdodenhof:circleimageview:2.0.0'
-    compile 'com.melnykov:floatingactionbutton:1.3.0'
-    compile 'com.github.bumptech.glide:glide:3.7.0'
-    compile 'com.google.zxing:android-integration:3.2.1'
-    compile 'com.soundcloud.android:android-crop:1.0.1@aar'
-    compile 'org.greenrobot:eventbus:3.0.0'
-    compile 'com.squareup.okhttp3:okhttp:3.2.0'
+    compile project('MemorizingTrustManager')
+    compile project('emojicon')
 
     compile "org.igniterealtime.smack:smack-android-extensions:$smackVersion"
     compile "org.igniterealtime.smack:smack-experimental:$smackVersion"
     compile "org.igniterealtime.smack:smack-tcp:$smackVersion"
-    compile project('otr4j')
-    compile project('MemorizingTrustManager')
-    compile project('emojicon')
 
-    debugCompile "com.squareup.leakcanary:leakcanary-android:$leakCanaryVersion"
-    releaseCompile "com.squareup.leakcanary:leakcanary-android-no-op:$leakCanaryVersion"
-    testCompile "com.squareup.leakcanary:leakcanary-android-no-op:$leakCanaryVersion"
+    compile "com.android.support:design:$supportVersion"
+    compile "com.android.support:support-v13:$supportVersion"
+
+    compile 'org.jitsi:org.otr4j:0.22'
+    compile 'com.google.zxing:android-integration:3.3.0'
+
+    compile 'com.github.bumptech.glide:glide:3.7.0'
+    compile 'com.squareup.okhttp3:okhttp:3.5.0'
+    compile 'org.greenrobot:eventbus:3.0.0'
+    compile 'com.jakewharton:butterknife:8.4.0'
+    apt 'com.jakewharton:butterknife-compiler:8.4.0'
+
+    compile 'com.soundcloud.android:android-crop:1.0.1@aar'
+    compile 'de.hdodenhof:circleimageview:2.1.0'
+    compile 'com.melnykov:floatingactionbutton:1.3.0'
+}
+
+configurations {
+    all*.exclude group: 'xpp3', module: 'xpp3'
 }

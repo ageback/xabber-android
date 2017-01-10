@@ -14,18 +14,20 @@
  */
 package com.xabber.android.data.message.phrase;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-
 import android.database.Cursor;
 import android.net.Uri;
 
 import com.xabber.android.data.Application;
 import com.xabber.android.data.OnLoadListener;
 import com.xabber.android.data.database.sqlite.PhraseTable;
+import com.xabber.android.data.entity.AccountJid;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.message.chat.ChatManager;
 import com.xabber.android.data.roster.RosterManager;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
 /**
  * Manage custom notification based on message.
@@ -90,11 +92,11 @@ public class PhraseManager implements OnLoadListener {
      * @return Sound associated with first matched phrase. Chat specific setting
      * if no one matches .
      */
-    public Uri getSound(String account, String user, String text) {
+    public Uri getSound(AccountJid account, UserJid user, String text) {
         Collection<String> groups = RosterManager.getInstance().getGroups(
                 account, user);
         for (Phrase phrase : phrases)
-            if (phrase.matches(text, user, groups)) {
+            if (phrase.matches(text, user.toString(), groups)) {
                 Uri value = phrase.getSound();
                 if (ChatManager.EMPTY_SOUND.equals(value))
                     return null;

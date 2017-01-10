@@ -14,14 +14,28 @@
  */
 package com.xabber.android.data.connection;
 
-import com.xabber.android.R;
-import com.xabber.android.data.Application;
-import com.xabber.android.data.LogManager;
-import com.xabber.android.data.account.AccountItem;
-import com.xabber.android.data.account.AccountProtocol;
+import android.support.annotation.NonNull;
+import android.widget.Toast;
 
-import org.jivesoftware.smack.AbstractXMPPConnection;
-import org.jivesoftware.smack.XMPPConnection;
+import com.xabber.android.data.Application;
+import com.xabber.android.data.log.LogManager;
+import com.xabber.android.data.account.AccountManager;
+import com.xabber.android.data.connection.listeners.OnPacketListener;
+import com.xabber.android.data.entity.AccountJid;
+import com.xabber.android.data.roster.AccountRosterListener;
+
+import org.jivesoftware.smack.*;
+import org.jivesoftware.smack.packet.Stanza;
+import org.jivesoftware.smack.parsing.ExceptionLoggingCallback;
+import org.jivesoftware.smack.roster.Roster;
+import org.jivesoftware.smack.sm.predicates.ForEveryStanza;
+import org.jivesoftware.smack.tcp.XMPPTCPConnection;
+import org.jivesoftware.smackx.ping.PingFailedListener;
+import org.jivesoftware.smackx.ping.PingManager;
+import org.jxmpp.jid.DomainBareJid;
+import org.jxmpp.jid.EntityFullJid;
+import org.jxmpp.jid.parts.Localpart;
+import org.jxmpp.jid.parts.Resourcepart;
 
 /**
  * Abstract connection.
@@ -30,15 +44,25 @@ import org.jivesoftware.smack.XMPPConnection;
  */
 public abstract class ConnectionItem {
 
+    private static final String LOG_TAG = ConnectionItem.class.getSimpleName();
+
+    @NonNull
+    private final AccountJid account;
+
     /**
      * Connection options.
      */
+    @NonNull
     private final ConnectionSettings connectionSettings;
+
+    @NonNull
+    private final com.xabber.android.data.connection.ConnectionListener connectionListener;
 
     /**
      * XMPP connection.
      */
-    private ConnectionThread connectionThread;
+    @NonNull
+    private XMPPTCPConnection connection;
 
     /**
      * Connection was requested by user.
@@ -60,20 +84,47 @@ public abstract class ConnectionItem {
      */
     private boolean registerNewAccount;
 
-    public ConnectionItem(AccountProtocol protocol, boolean custom,
-                          String host, int port, String serverName, String userName,
-                          String resource, boolean storePassword, String password,
+    @NonNull
+    private final AccountRosterListener rosterListener;
+    private Toast toast;
+
+    private ConnectionThread connectionThread;
+
+    public ConnectionItem(boolean custom,
+                          String host, int port, DomainBareJid serverName, Localpart userName,
+                          Resourcepart resource, boolean storePassword, String password,
                           boolean saslEnabled, TLSMode tlsMode, boolean compression,
                           ProxyType proxyType, String proxyHost, int proxyPort,
                           String proxyUser, String proxyPassword) {
-        connectionSettings = new ConnectionSettings(protocol, userName,
+        this.account = AccountJid.from(userName, serverName, resource);
+        rosterListener = new AccountRosterListener(getAccount());
+        connectionListener = new com.xabber.android.data.connection.ConnectionListener(this);
+
+        connectionSettings = new ConnectionSettings(userName,
                 serverName, resource, custom, host, port, password,
                 saslEnabled, tlsMode, compression, proxyType, proxyHost,
                 proxyPort, proxyUser, proxyPassword);
+        createConnection();
+
         isConnectionRequestedByUser = false;
         disconnectionRequested = false;
-        connectionThread = null;
-        state = ConnectionState.offline;
+        updateState(ConnectionState.offline);
+    }
+
+    private void createConnection() {
+        showDebugToast("createConnection...");
+
+        connection = ConnectionBuilder.build(connectionSettings);
+        connectionThread = new ConnectionThread(connection, this);
+
+        addConnectionListeners();
+        configureConnection();
+    }
+
+
+    @NonNull
+    public AccountJid getAccount() {
+        return account;
     }
 
     /**
@@ -87,21 +138,18 @@ public abstract class ConnectionItem {
      * Report if this connection is to register a new account on XMPP server.
      */
     public boolean isRegisterAccount() {
-        return(registerNewAccount);
+        return registerNewAccount;
     }
 
-    /**
-     * Gets current connection thread.
-     *
-     * @return <code>null</code> if thread doesn't exists.
-     */
-    public ConnectionThread getConnectionThread() {
-        return connectionThread;
+    @NonNull
+    public XMPPTCPConnection getConnection() {
+        return connection;
     }
 
     /**
      * @return connection options.
      */
+    @NonNull
     public ConnectionSettings getConnectionSettings() {
         return connectionSettings;
     }
@@ -115,104 +163,58 @@ public abstract class ConnectionItem {
      *
      * @return <code>null</code> if connection is not established.
      */
-    public String getRealJid() {
-        ConnectionThread connectionThread = getConnectionThread();
-        if (connectionThread == null) {
-            return null;
-        }
-        XMPPConnection xmppConnection = connectionThread.getXMPPConnection();
-        if (xmppConnection == null) {
-            return null;
-        }
-        String user = xmppConnection.getUser();
-        if (user == null) {
-            return null;
-        }
-        return user;
+    public EntityFullJid getRealJid() {
+        return connection.getUser();
     }
 
     /**
      * @param userRequest action was requested by user.
      * @return Whether connection is available.
      */
-    protected boolean isConnectionAvailable(boolean userRequest) {
-        return true;
+    protected abstract boolean isConnectionAvailable(boolean userRequest);
+
+    public void connect() {
+        updateState(ConnectionState.connecting);
+        if (connectionThread == null) {
+            connectionThread = new ConnectionThread(connection, this);
+        };
+
+        connectionThread.start();
     }
 
-    /**
-     * Connect or disconnect from server depending on internal flags.
-     *
-     * @param userRequest action was requested by user.
-     * @return Whether state has been changed.
-     */
-    public boolean updateConnection(boolean userRequest) {
-        boolean available = isConnectionAvailable(userRequest);
-        if (NetworkManager.getInstance().getState() != NetworkState.available
-                || !available || disconnectionRequested) {
-            ConnectionState target = available ? ConnectionState.waiting : ConnectionState.offline;
-            if (state == ConnectionState.connected || state == ConnectionState.authentication
-                    || state == ConnectionState.connecting) {
-                if (userRequest) {
-                    isConnectionRequestedByUser = false;
-                }
-                if (connectionThread != null) {
-                    disconnect(connectionThread);
-                    // Force remove managed connection thread.
-                    onClose(connectionThread);
-                    connectionThread = null;
-                }
-            } else if (state == target) {
-                return false;
-            }
-            state = target;
-            return true;
-        } else {
-            if (state == ConnectionState.offline || state == ConnectionState.waiting) {
-                if (userRequest) {
-                    isConnectionRequestedByUser = true;
-                }
-                state = ConnectionState.connecting;
-                connectionThread = new ConnectionThread((AccountItem) this);
+    private void configureConnection() {
+        // enable Stream Management support. SMACK will only enable SM if supported by the server,
+        // so no additional checks are required.
+        connection.setUseStreamManagement(true);
+        connection.setUseStreamManagementResumption(false);
 
-                connectionThread.start(registerNewAccount);
+        // by default Smack disconnects in case of parsing errors
+        connection.setParsingExceptionCallback(new ExceptionLoggingCallback());
 
-                return true;
-            } else {
-                return false;
-            }
-        }
     }
 
-    /**
-     * Disconnect and connect using new connection.
-     */
-    public void forceReconnect() {
-        if (!getState().isConnectable()) {
-            return;
-        }
-        disconnectionRequested = true;
-        boolean request = isConnectionRequestedByUser;
-        isConnectionRequestedByUser = false;
-        updateConnection(false);
-        isConnectionRequestedByUser = request;
-        disconnectionRequested = false;
-        updateConnection(false);
+    private void addConnectionListeners() {
+        final Roster roster = Roster.getInstanceFor(connection);
+        roster.addRosterListener(rosterListener);
+        roster.addRosterLoadedListener(rosterListener);
+        roster.setSubscriptionMode(Roster.SubscriptionMode.manual);
+        roster.setRosterLoadedAtLogin(true);
+
+        connection.addAsyncStanzaListener(everyStanzaListener, ForEveryStanza.INSTANCE);
+        connection.addConnectionListener(connectionListener);
+
+        PingManager.getInstanceFor(connection).registerPingFailedListener(pingFailedListener);
     }
+
 
     /**
      * Starts disconnection in another thread.
      */
-    protected void disconnect(final ConnectionThread connectionThread) {
-        Thread thread = new Thread("Disconnection thread for " + this) {
+    protected static void disconnect(final AbstractXMPPConnection xmppConnection) {
+        Thread thread = new Thread("Disconnection thread for " + xmppConnection) {
             @Override
             public void run() {
-                AbstractXMPPConnection xmppConnection = connectionThread.getXMPPConnection();
-                if (xmppConnection != null)
-                    try {
-                        xmppConnection.disconnect();
-                    } catch (RuntimeException e) {
-                        // connectionClose() in smack can fail.
-                    }
+                xmppConnection.disconnect();
             }
 
         };
@@ -221,102 +223,129 @@ public abstract class ConnectionItem {
         thread.start();
     }
 
-    /**
-     * @param connectionThread
-     * @return Whether thread is managed by connection.
-     */
-    boolean isManaged(ConnectionThread connectionThread) {
-        return connectionThread == this.connectionThread;
-    }
+    public abstract void onAuthFailed();
 
     /**
      * Update password.
-     *
-     * @param password
      */
     protected void onPasswordChanged(String password) {
         connectionSettings.setPassword(password);
     }
 
-    /**
-     * SRV record has been resolved.
-     */
-    protected void onSRVResolved(ConnectionThread connectionThread) {
-    }
-
-    /**
-     * Invalid certificate has been received.
-     */
-    protected void onInvalidCertificate() {
-    }
-
-    /**
-     * Connection has been established.
-     */
-    public void onConnected(ConnectionThread connectionThread) {
-        if (isRegisterAccount()) {
-            state = ConnectionState.registration;
-        } else if (isManaged(connectionThread)) {
-            state = ConnectionState.authentication;
-        }
-    }
-
-    /**
-     * New account has been registered on XMPP server.
-     */
-    protected void onAccountRegistered(ConnectionThread connectionThread) {
-        registerNewAccount = false;
-        if (isManaged(connectionThread)) {
-            state = ConnectionState.authentication;
-        }
-    }
-
-    /**
-     * Authorization failed.
-     */
-    public void onAuthFailed() {
-    }
-
-    /**
-     * Authorization passed.
-     */
-    public void onAuthorized(ConnectionThread connectionThread) {
-        if (isManaged(connectionThread)) {
-            state = ConnectionState.connected;
-        }
-    }
-
-    /**
-     * Called when disconnect should occur.
-     *
-     * @param connectionThread
-     * @return <code>true</code> if connection thread was managed.
-     */
-    private boolean onDisconnect(ConnectionThread connectionThread) {
-        XMPPConnection xmppConnection = connectionThread.getXMPPConnection();
-        boolean acceptable = isManaged(connectionThread);
-        if (xmppConnection == null) {
-            LogManager.i(this, "onClose " + acceptable);
-        } else {
-            LogManager.i(this, "onClose " + xmppConnection.hashCode() + " - "
-                            + xmppConnection.getConnectionCounter() + ", " + acceptable);
-        }
-
-        ConnectionManager.getInstance().onDisconnect(connectionThread);
-        return acceptable;
-    }
-
-    /**
-     * Called when connection was closed for some reason.
-     */
-    public void onClose(ConnectionThread connectionThread) {
-        if (onDisconnect(connectionThread)) {
-            state = ConnectionState.waiting;
-            this.connectionThread = null;
-            if (isConnectionRequestedByUser) {
-                Application.getInstance().onError(R.string.CONNECTION_FAILED);
+    public void disconnect() {
+        Thread thread = new Thread("Disconnection thread for " + connection) {
+            @Override
+            public void run() {
+                connection.disconnect();
             }
-            isConnectionRequestedByUser = false;
+
+        };
+        thread.setPriority(Thread.MIN_PRIORITY);
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    public void recreateConnection() {
+        Thread thread = new Thread("Disconnection thread for " + connection) {
+            @Override
+            public void run() {
+                connection.disconnect();
+
+                Application.getInstance().runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        createNewConnection();
+                    }
+                });
+
+            }
+
+        };
+        thread.setPriority(Thread.MIN_PRIORITY);
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    void createNewConnection() {
+        showDebugToast("createNewConnection...");
+
+        PingManager.getInstanceFor(connection).unregisterPingFailedListener(pingFailedListener);
+
+        connection.removeConnectionListener(connectionListener);
+        connection.removeAsyncStanzaListener(everyStanzaListener);
+        final Roster roster = Roster.getInstanceFor(connection);
+        roster.removeRosterLoadedListener(rosterListener);
+        roster.removeRosterListener(rosterListener);
+
+        createConnection();
+        ReconnectionManager.getInstance().resetReconnectionInfo(account);
+    }
+
+    void updateState(ConnectionState newState) {
+        ConnectionState prevState = this.state;
+
+        if (connection.isAuthenticated()) {
+            this.state = ConnectionState.connected;
+        } else if (connection.isConnected()) {
+            if (newState == ConnectionState.authentication || newState == ConnectionState.registration) {
+                this.state = newState;
+            }
+        } else {
+            switch (newState) {
+                case offline:
+                case waiting:
+                case connecting:
+                    this.state = newState;
+                    break;
+            }
+        }
+
+        if (prevState != state) {
+            AccountManager.getInstance().onAccountChanged(getAccount());
         }
     }
+
+
+    private StanzaListener everyStanzaListener = new StanzaListener() {
+        @Override
+        public void processStanza(final Stanza stanza) throws SmackException.NotConnectedException {
+            Application.getInstance().runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    for (OnPacketListener listener : Application.getInstance().getManagers(OnPacketListener.class)) {
+                        listener.onStanza(ConnectionItem.this, stanza);
+                    }
+                }
+            });
+        }
+    };
+
+    private PingFailedListener pingFailedListener = new PingFailedListener() {
+        @Override
+        public void pingFailed() {
+            showDebugToast("ping failed");
+            LogManager.i(this, "pingFailed for " + getAccount());
+            updateState(ConnectionState.offline);
+            disconnect();
+        }
+    };
+
+    void showDebugToast(final String message) {
+        showDebugToast(message, Toast.LENGTH_LONG);
+    }
+
+    void showDebugToast(final String message, final int duration) {
+        Application.getInstance().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (toast != null) {
+                    toast.cancel();
+                }
+                toast = Toast.makeText(Application.getInstance(), message, Toast.LENGTH_LONG);
+                toast.show();
+            }
+        });
+    }
+
+
 }

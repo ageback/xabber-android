@@ -22,15 +22,14 @@ import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 
 import com.xabber.android.R;
+import com.xabber.android.data.Application;
 import com.xabber.android.data.account.AccountItem;
-import com.xabber.android.data.account.AccountProtocol;
 import com.xabber.android.data.account.ArchiveMode;
 import com.xabber.android.data.account.StatusMode;
-import com.xabber.android.data.Application;
-import com.xabber.android.data.database.DatabaseManager;
 import com.xabber.android.data.connection.ConnectionSettings;
 import com.xabber.android.data.connection.ProxyType;
 import com.xabber.android.data.connection.TLSMode;
+import com.xabber.android.data.database.DatabaseManager;
 
 import java.security.KeyFactory;
 import java.security.KeyPair;
@@ -79,10 +78,6 @@ public class AccountTable extends AbstractTable {
 
     public static long getId(Cursor cursor) {
         return cursor.getLong(cursor.getColumnIndex(Fields._ID));
-    }
-
-    public static AccountProtocol getProtocol(Cursor cursor) {
-        return AccountProtocol.valueOf(cursor.getString(cursor.getColumnIndex(Fields.PROTOCOL)));
     }
 
     public static String getHost(Cursor cursor) {
@@ -411,12 +406,11 @@ public class AccountTable extends AbstractTable {
         ConnectionSettings connectionSettings = accountItem.getConnectionSettings();
 
         ContentValues values = new ContentValues();
-        values.put(Fields.PROTOCOL, connectionSettings.getProtocol().name());
         values.put(Fields.CUSTOM, connectionSettings.isCustomHostAndPort() ? 1 : 0);
         values.put(Fields.HOST, connectionSettings.getHost());
         values.put(Fields.PORT, connectionSettings.getPort());
-        values.put(Fields.SERVER_NAME, connectionSettings.getServerName());
-        values.put(Fields.USER_NAME, connectionSettings.getUserName());
+        values.put(Fields.SERVER_NAME, connectionSettings.getServerName().getDomain().toString());
+        values.put(Fields.USER_NAME, connectionSettings.getUserName().toString());
 
         String password = connectionSettings.getPassword();
         if (!accountItem.isStorePassword()) {
@@ -424,7 +418,7 @@ public class AccountTable extends AbstractTable {
         }
         values.put(Fields.PASSWORD, password);
 
-        values.put(Fields.RESOURCE, connectionSettings.getResource());
+        values.put(Fields.RESOURCE, connectionSettings.getResource().toString());
         values.put(Fields.COLOR_INDEX, accountItem.getColorIndex());
         values.put(Fields.PRIORITY, accountItem.getPriority());
         values.put(Fields.STATUS_MODE, accountItem.getRawStatusMode().ordinal());
@@ -472,7 +466,6 @@ public class AccountTable extends AbstractTable {
     /**
      * Delete record from database.
      *
-     * @param accountItem
      * @return <b>True</b> if record was removed.
      */
     public void remove(String account, long id) {

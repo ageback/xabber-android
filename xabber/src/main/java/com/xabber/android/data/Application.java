@@ -17,9 +17,12 @@ package com.xabber.android.data;
 import android.app.Activity;
 import android.content.res.TypedArray;
 import android.os.Handler;
+import android.support.annotation.NonNull;
 
-import com.squareup.leakcanary.LeakCanary;
+import com.frogermcs.androiddevmetrics.AndroidDevMetrics;
+import com.xabber.android.BuildConfig;
 import com.xabber.android.R;
+import com.xabber.android.data.log.LogManager;
 import com.xabber.android.service.XabberService;
 
 import org.jivesoftware.smack.provider.ProviderFileLoader;
@@ -81,14 +84,17 @@ public class Application extends android.app.Application {
      * Whether {@link #onServiceDestroy()} has been called.
      */
     private boolean closed;
+
     private final Runnable timerRunnable = new Runnable() {
 
         @Override
         public void run() {
-            for (OnTimerListener listener : getManagers(OnTimerListener.class))
+            for (OnTimerListener listener : getManagers(OnTimerListener.class)) {
                 listener.onTimer();
-            if (!closing)
+            }
+            if (!closing) {
                 startTimer();
+            }
         }
 
     };
@@ -111,7 +117,7 @@ public class Application extends android.app.Application {
         handler = new Handler();
         backgroundExecutor = Executors.newSingleThreadExecutor(new ThreadFactory() {
             @Override
-            public Thread newThread(Runnable runnable) {
+            public Thread newThread(@NonNull Runnable runnable) {
                 Thread thread = new Thread(runnable, "Background executor service");
                 thread.setPriority(Thread.MIN_PRIORITY);
                 thread.setDaemon(true);
@@ -187,8 +193,6 @@ public class Application extends android.app.Application {
 
     /**
      * Starts data loading in background if not started yet.
-     *
-     * @return
      */
     public void onServiceStarted() {
         if (serviceStarted) {
@@ -239,7 +243,9 @@ public class Application extends android.app.Application {
     public void onCreate() {
         super.onCreate();
 
-        LeakCanary.install(this);
+        if (BuildConfig.DEBUG) {
+            AndroidDevMetrics.initWith(this);
+        }
 
         Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
 
@@ -262,6 +268,8 @@ public class Application extends android.app.Application {
             }
         }
         tableClasses.recycle();
+
+        LogManager.i(this, "onCreate finished...");
     }
 
     @Override

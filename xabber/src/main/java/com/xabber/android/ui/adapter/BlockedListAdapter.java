@@ -11,6 +11,8 @@ import android.widget.TextView;
 
 import com.xabber.android.R;
 import com.xabber.android.data.SettingsManager;
+import com.xabber.android.data.entity.AccountJid;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.blocking.BlockingManager;
 import com.xabber.android.data.extension.blocking.PrivateMucChatBlockingManager;
 import com.xabber.android.data.roster.AbstractContact;
@@ -25,13 +27,13 @@ import java.util.Set;
 
 public class BlockedListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> implements UpdatableAdapter {
 
-    private String account;
-    private List<String> blockedContacts;
+    private AccountJid account;
+    private List<UserJid> blockedContacts;
     private OnBlockedContactClickListener listener;
 
-    private Set<String> checkedContacts;
+    private Set<UserJid> checkedContacts;
 
-    public BlockedListAdapter(String account) {
+    public BlockedListAdapter(AccountJid account) {
         this.account = account;
         blockedContacts = new ArrayList<>();
         checkedContacts = new HashSet<>();
@@ -40,13 +42,13 @@ public class BlockedListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     @Override
     public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
         return new BlockListItemViewHolder(LayoutInflater.from(parent.getContext())
-                .inflate(R.layout.block_list_item, parent, false));
+                .inflate(R.layout.item_block, parent, false));
     }
 
     @Override
     public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
         final BlockListItemViewHolder viewHolder = (BlockListItemViewHolder) holder;
-        final String contact = blockedContacts.get(position);
+        final UserJid contact = blockedContacts.get(position);
 
         final AbstractContact rosterContact = RosterManager.getInstance().getBestContact(account, contact);
 
@@ -94,19 +96,19 @@ public class BlockedListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     @Override
     public void onChange() {
         blockedContacts.clear();
-        final Collection<String> blockedContacts = BlockingManager.getInstance().getBlockedContacts(account);
+        final Collection<UserJid> blockedContacts = BlockingManager.getInstance().getBlockedContacts(account);
         if (blockedContacts != null) {
             this.blockedContacts.addAll(blockedContacts);
         }
 
-        final Collection<String> blockedMucContacts = PrivateMucChatBlockingManager.getInstance().getBlockedContacts(account);
+        final Collection<UserJid> blockedMucContacts = PrivateMucChatBlockingManager.getInstance().getBlockedContacts(account);
         if (blockedMucContacts != null) {
             this.blockedContacts.addAll(blockedMucContacts);
         }
 
-        final Iterator<String> iterator = checkedContacts.iterator();
+        final Iterator<UserJid> iterator = checkedContacts.iterator();
         while (iterator.hasNext()) {
-            final String next = iterator.next();
+            final UserJid next = iterator.next();
             if (!this.blockedContacts.contains(next)) {
                 iterator.remove();
             }
@@ -138,11 +140,11 @@ public class BlockedListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         }
     }
 
-    public ArrayList<String> getCheckedContacts() {
+    public ArrayList<UserJid> getCheckedContacts() {
         return new ArrayList<>(checkedContacts);
     }
 
-    public void setCheckedContacts(List<String> checkedContacts) {
+    public void setCheckedContacts(List<UserJid> checkedContacts) {
         this.checkedContacts.clear();
         this.checkedContacts.addAll(checkedContacts);
     }

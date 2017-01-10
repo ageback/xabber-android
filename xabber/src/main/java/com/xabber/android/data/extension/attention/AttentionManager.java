@@ -26,9 +26,11 @@ import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.connection.ConnectionItem;
 import com.xabber.android.data.connection.ConnectionManager;
-import com.xabber.android.data.connection.ConnectionThread;
+import com.xabber.android.data.connection.StanzaSender;
 import com.xabber.android.data.connection.listeners.OnPacketListener;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.BaseEntity;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.capability.CapabilitiesManager;
 import com.xabber.android.data.extension.capability.ClientInfo;
 import com.xabber.android.data.message.AbstractChat;
@@ -38,7 +40,6 @@ import com.xabber.android.data.message.RegularChat;
 import com.xabber.android.data.notification.EntityNotificationProvider;
 import com.xabber.android.data.notification.NotificationManager;
 import com.xabber.android.data.roster.RosterManager;
-import com.xabber.xmpp.address.Jid;
 
 import org.jivesoftware.smack.ConnectionCreationListener;
 import org.jivesoftware.smack.XMPPConnection;
@@ -49,6 +50,8 @@ import org.jivesoftware.smack.packet.Presence;
 import org.jivesoftware.smack.packet.Stanza;
 import org.jivesoftware.smackx.attention.packet.AttentionExtension;
 import org.jivesoftware.smackx.disco.ServiceDiscoveryManager;
+import org.jxmpp.jid.Jid;
+import org.jxmpp.jid.parts.Resourcepart;
 
 /**
  * XEP-0224: Attention.
@@ -101,32 +104,29 @@ public class AttentionManager implements OnPacketListener, OnLoadListener {
 
     public void onSettingsChanged() {
         synchronized (enabledLock) {
-            for (String account : AccountManager.getInstance().getAccounts()) {
-                ConnectionThread connectionThread = AccountManager
-                        .getInstance().getAccount(account)
-                        .getConnectionThread();
-                if (connectionThread == null)
+            for (AccountJid account : AccountManager.getInstance().getEnabledAccounts()) {
+                AccountItem accountItem = AccountManager.getInstance().getAccount(account);
+                if (accountItem == null) {
                     continue;
-                XMPPConnection xmppConnection = connectionThread
-                        .getXMPPConnection();
-                if (xmppConnection == null)
+                }
+                ServiceDiscoveryManager manager = ServiceDiscoveryManager.getInstanceFor(accountItem.getConnection());
+                if (manager == null) {
                     continue;
-                ServiceDiscoveryManager manager = ServiceDiscoveryManager
-                        .getInstanceFor(xmppConnection);
-                if (manager == null)
-                    continue;
+                }
                 boolean contains = false;
                 for (String feature : manager.getFeatures()) {
                     if (AttentionExtension.NAMESPACE.equals(feature)) {
                         contains = true;
                     }
                 }
-                if (SettingsManager.chatsAttention() == contains)
+                if (SettingsManager.chatsAttention() == contains) {
                     continue;
-                if (SettingsManager.chatsAttention())
+                }
+                if (SettingsManager.chatsAttention()) {
                     manager.addFeature(AttentionExtension.NAMESPACE);
-                else
+                } else {
                     manager.removeFeature(AttentionExtension.NAMESPACE);
+                }
             }
             AccountManager.getInstance().resendPresence();
         }
@@ -148,35 +148,41 @@ public class AttentionManager implements OnPacketListener, OnLoadListener {
     }
 
     @Override
-    public void onPacket(ConnectionItem connection, String bareAddress, Stanza packet) {
-        if (!(connection instanceof AccountItem))
+    public void onStanza(ConnectionItem connection, Stanza stanza) {
+        if (!(stanza instanceof Message)) {
             return;
-        if (!(packet instanceof Message))
+        }
+        if (!SettingsManager.chatsAttention()) {
             return;
-        if (!SettingsManager.chatsAttention())
+        }
+        final AccountJid account = ((AccountItem) connection).getAccount();
+
+        UserJid from;
+        try {
+            from = UserJid.from(stanza.getFrom());
+        } catch (UserJid.UserJidCreateException e) {
+            e.printStackTrace();
             return;
-        final String account = ((AccountItem) connection).getAccount();
-        if (bareAddress == null)
-            return;
-        for (ExtensionElement packetExtension : packet.getExtensions()) {
+        }
+
+        for (ExtensionElement packetExtension : stanza.getExtensions()) {
             if (packetExtension instanceof AttentionExtension) {
-                MessageManager.getInstance().openChat(account, bareAddress);
+                MessageManager.getInstance().openChat(account, from);
                 MessageManager.getInstance()
-                        .getOrCreateChat(account, bareAddress)
+                        .getOrCreateChat(account, from)
                         .newAction(null, null, ChatAction.attention_requested);
-                attentionRequestProvider.add(new AttentionRequest(account,
-                        bareAddress), true);
+                attentionRequestProvider.add(new AttentionRequest(account, from), true);
             }
         }
     }
 
-    public void sendAttention(String account, String user) throws NetworkException {
+    public void sendAttention(AccountJid account, UserJid user) throws NetworkException {
         AbstractChat chat = MessageManager.getInstance().getOrCreateChat(account, user);
         if (!(chat instanceof RegularChat)) {
             throw new NetworkException(R.string.ENTRY_IS_NOT_FOUND);
         }
-        String to = chat.getTo();
-        if (Jid.getResource(to) == null || "".equals(Jid.getResource(to))) {
+        Jid to = chat.getTo();
+        if (to.getResourceOrNull() == null || to.getResourceOrNull().equals(Resourcepart.EMPTY)) {
             final Presence presence = RosterManager.getInstance().getPresence(account, user);
             if (presence == null) {
                 to = null;
@@ -188,22 +194,27 @@ public class AttentionManager implements OnPacketListener, OnLoadListener {
         if (to == null) {
             throw new NetworkException(R.string.ENTRY_IS_NOT_AVAILABLE);
         }
-
-        ClientInfo clientInfo = CapabilitiesManager.getInstance().getClientInfo(account, to);
-        if (clientInfo == null)
+        ClientInfo clientInfo = CapabilitiesManager.getClientInfo(account, to, null);
+        if (clientInfo == null) {
             throw new NetworkException(R.string.ENTRY_IS_NOT_AVAILABLE);
-        if (!clientInfo.getFeatures().contains(AttentionExtension.NAMESPACE))
+        }
+        if (!clientInfo.getFeatures().contains(AttentionExtension.NAMESPACE)) {
             throw new NetworkException(R.string.ATTENTION_IS_NOT_SUPPORTED);
+        }
         Message message = new Message();
         message.setTo(to);
         message.setType(Message.Type.headline);
         message.addExtension(new AttentionExtension());
-        ConnectionManager.getInstance().sendStanza(account, message);
+        StanzaSender.sendStanza(account, message);
         chat.newAction(null, null, ChatAction.attention_called);
     }
 
     public void removeAccountNotifications(BaseEntity chat) {
         attentionRequestProvider.remove(chat.getAccount(), chat.getUser());
+    }
+
+    public void removeAccountNotifications(AccountJid accountJid, UserJid userJid) {
+        attentionRequestProvider.remove(accountJid, userJid);
     }
 
 }

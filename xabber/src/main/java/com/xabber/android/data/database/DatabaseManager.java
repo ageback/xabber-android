@@ -21,7 +21,7 @@ import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
 
 import com.xabber.android.data.Application;
-import com.xabber.android.data.LogManager;
+import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.OnClearListener;
 import com.xabber.android.data.OnLoadListener;
 import com.xabber.android.data.OnMigrationListener;
@@ -30,12 +30,16 @@ import com.xabber.android.data.database.realm.MessageItem;
 import com.xabber.android.data.database.sqlite.AbstractAccountTable;
 import com.xabber.android.data.database.sqlite.DatabaseTable;
 import com.xabber.android.data.database.sqlite.MessageTable;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.mam.SyncInfo;
+
+import org.jxmpp.stringprep.XmppStringprepException;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.Iterator;
 
 import io.realm.DynamicRealm;
@@ -58,7 +62,7 @@ public class DatabaseManager extends SQLiteOpenHelper implements
     private static final String DATABASE_NAME = "xabber.db";
     private static final String REALM_DATABASE_NAME = "xabber.realm";
     private static final int DATABASE_VERSION = 70;
-    private static final int REALM_DATABASE_VERSION = 6;
+    private static final int REALM_DATABASE_VERSION = 8;
 
     private static final SQLiteException DOWNGRAD_EXCEPTION = new SQLiteException(
             "Database file was deleted");
@@ -74,17 +78,23 @@ public class DatabaseManager extends SQLiteOpenHelper implements
     private DatabaseManager() {
         super(Application.getInstance(), DATABASE_NAME, null, DATABASE_VERSION);
         registeredTables = new ArrayList<>();
-        configureRealm();
+        Realm.init(Application.getInstance());
+        RealmConfiguration realmConfiguration = createRealmConfiguration();
+
+        boolean success = Realm.compactRealm(realmConfiguration);
+        System.out.println("Realm compact database file result: " + success);
+
+        Realm.setDefaultConfiguration(realmConfiguration);
     }
 
-    private void configureRealm() {
-        RealmConfiguration config = new RealmConfiguration.Builder(Application.getInstance())
+    private RealmConfiguration createRealmConfiguration() {
+        return new RealmConfiguration.Builder()
                 .name(REALM_DATABASE_NAME)
                 .schemaVersion(REALM_DATABASE_VERSION)
                 .migration(new RealmMigration() {
                     @Override
-                    public void migrate(DynamicRealm realm, long oldVersion, long newVersion) {
-                        RealmSchema schema = realm.getSchema();
+                    public void migrate(DynamicRealm realm1, long oldVersion, long newVersion) {
+                        RealmSchema schema = realm1.getSchema();
 
                         if (oldVersion == 1) {
                             schema.create(SyncInfo.class.getSimpleName())
@@ -140,10 +150,24 @@ public class DatabaseManager extends SQLiteOpenHelper implements
                                     .addField(MessageItem.Fields.ACKNOWLEDGED, boolean.class);
                             oldVersion++;
                         }
+
+                        if (oldVersion == 6) {
+                            schema.create("LogMessage")
+                                    .addField("level", int.class)
+                                    .addField("tag", Date.class)
+                                    .addField("message", String.class)
+                                    .addField("datetime", String.class);
+
+                            oldVersion++;
+                        }
+
+                        if (oldVersion == 7) {
+                            schema.remove("LogMessage");
+                            oldVersion++;
+                        }
                     }
                 })
                 .build();
-        Realm.setDefaultConfiguration(config);
     }
 
     private void copyDataFromSqliteToRealm() {
@@ -151,35 +175,37 @@ public class DatabaseManager extends SQLiteOpenHelper implements
             @Override
             public void run() {
                 Realm realm = Realm.getDefaultInstance();
-                realm.executeTransaction(new Realm.Transaction() {
+                realm.executeTransactionAsync(new Realm.Transaction() {
                     @Override
                     public void execute(Realm realm) {
                         LogManager.i("DatabaseManager", "copying from sqlite to Reaml");
                         long counter = 0;
                         Cursor cursor = MessageTable.getInstance().getAllMessages();
                         while (cursor.moveToNext()) {
-                            MessageItem messageItem = MessageTable.createMessageItem(cursor);
-                            realm.copyToRealm(messageItem);
+                            try {
+                                MessageItem messageItem = MessageTable.createMessageItem(cursor);
+                                realm.copyToRealm(messageItem);
+                            } catch (XmppStringprepException | UserJid.UserJidCreateException e) {
+                                LogManager.exception(this, e);
+                            }
+
                             counter++;
                         }
                         cursor.close();
                         LogManager.i("DatabaseManager", counter + " messages copied to Realm");
                     }
-                }, new Realm.Transaction.Callback() {
-
+                }, new Realm.Transaction.OnSuccess() {
                     @Override
                     public void onSuccess() {
-                        super.onSuccess();
                         LogManager.i("DatabaseManager", "onSuccess. removing messages from sqlite:");
                         int removedMessages = MessageTable.getInstance().removeAllMessages();
                         LogManager.i("DatabaseManager", removedMessages + " messages removed from sqlite");
                     }
-
+                }, new Realm.Transaction.OnError() {
                     @Override
-                    public void onError(Exception e) {
-                        super.onError(e);
-                        LogManager.exception(this, e);
-                        LogManager.i("DatabaseManager", "onError " + e.getMessage());
+                    public void onError(Throwable error) {
+                        LogManager.i("DatabaseManager", "onError " + error.getMessage());
+
                     }
                 });
                 realm.close();
@@ -364,13 +390,13 @@ public class DatabaseManager extends SQLiteOpenHelper implements
         }
 
         Realm realm = Realm.getDefaultInstance();
-        realm.executeTransaction(new Realm.Transaction() {
+        realm.executeTransactionAsync(new Realm.Transaction() {
             @Override
             public void execute(Realm realm) {
-                realm.where(MessageItem.class).equalTo(MessageItem.Fields.ACCOUNT, account).findAll().clear();
-                realm.where(BlockedContactsForAccount.class).equalTo(BlockedContactsForAccount.Fields.ACCOUNT, account).findAll().clear();
+                realm.where(MessageItem.class).equalTo(MessageItem.Fields.ACCOUNT, account).findAll().deleteAllFromRealm();
+                realm.where(BlockedContactsForAccount.class).equalTo(BlockedContactsForAccount.Fields.ACCOUNT, account).findAll().deleteAllFromRealm();
             }
-        }, null);
+        });
         realm.close();
     }
 

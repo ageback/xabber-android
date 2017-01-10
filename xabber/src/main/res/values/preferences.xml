@@ -15,13 +15,12 @@
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <string-array name="managers">
         <item>com.xabber.android.data.SettingsManager</item>
-        <item>com.xabber.android.data.LogManager</item>
+        <item>com.xabber.android.data.log.LogManager</item>
         <item>com.xabber.android.data.database.DatabaseManager</item>
         <item>com.xabber.android.data.extension.avatar.AvatarStorage</item>
         <item>com.xabber.android.data.extension.otr.OTRManager</item>
         <item>com.xabber.android.data.connection.ConnectionManager</item>
         <item>com.xabber.android.data.account.ScreenManager</item>
-        <item>com.xabber.android.data.connection.ReconnectionManager</item>
         <item>com.xabber.android.data.account.AccountManager</item>
         <item>com.xabber.android.data.extension.muc.MUCManager</item>
         <item>com.xabber.android.data.message.MessageManager</item>
@@ -37,6 +36,7 @@
         <item>com.xabber.android.data.extension.capability.CapabilitiesManager</item>
         <item>com.xabber.android.data.extension.cs.ChatStateManager</item>
         <item>com.xabber.android.data.connection.NetworkManager</item>
+        <item>com.xabber.android.data.connection.ReconnectionManager</item>
         <item>com.xabber.android.data.message.ReceiptManager</item>
         <item>com.xabber.android.data.extension.ssn.SSNManager</item>
         <item>com.xabber.android.data.extension.attention.AttentionManager</item>
@@ -57,7 +57,6 @@
         <item>com.xabber.android.data.database.sqlite.SoundTable</item>
         <item>com.xabber.android.data.database.sqlite.VCardTable</item>
         <item>com.xabber.android.data.database.sqlite.AvatarTable</item>
-        <item>com.xabber.android.data.database.sqlite.CapabilitiesTable</item>
         <item>com.xabber.android.data.database.sqlite.StatusTable</item>
         <item>com.xabber.android.data.database.sqlite.OTRTable</item>
         <item>com.xabber.android.data.database.sqlite.VibroTable</item>
@@ -355,6 +354,8 @@
     <string name="debug_connection_errors_key">connection_errors</string>
     <bool name="debug_connection_errors_default">false</bool>
 
+    <string name="debug_log_activity_key">debug_log_activity</string>
+
 <!-- preference_about -->
     <string name="preference_about">@string/about_viewer</string>
     <string name="preference_about_key">preference_about</string>
@@ -373,7 +374,7 @@
     <string name="account_port_key">account_port</string>
     <string name="account_server_key">account_server</string>
     <string name="account_resource_key">account_resource</string>
-    <string name="account_resource_default">@string/client_name</string>
+    <string name="account_resource_default">@string/application_title_short</string>
     <string name="account_priority_key">account_priority</string>
     <string name="account_sasl_key">account_sasl</string>
     <string name="account_tls_mode_key">account_tls_mode</string>

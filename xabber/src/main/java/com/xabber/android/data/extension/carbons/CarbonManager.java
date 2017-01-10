@@ -1,7 +1,7 @@
 package com.xabber.android.data.extension.carbons;
 
 import com.xabber.android.data.Application;
-import com.xabber.android.data.LogManager;
+import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.SettingsManager.SecurityOtrMode;
 import com.xabber.android.data.account.AccountItem;
@@ -9,6 +9,7 @@ import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.connection.ConnectionItem;
 import com.xabber.android.data.connection.listeners.OnAuthorizedListener;
 import com.xabber.android.data.connection.listeners.OnPacketListener;
+import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.extension.otr.OTRManager;
 import com.xabber.android.data.extension.otr.SecurityLevel;
 import com.xabber.android.data.message.AbstractChat;
@@ -66,22 +67,23 @@ public class CarbonManager implements OnAuthorizedListener, OnPacketListener {
     private void updateIsSupported(ConnectionItem connectionItem) {
         org.jivesoftware.smackx.carbons.CarbonManager carbonManager
                 = org.jivesoftware.smackx.carbons.CarbonManager
-                .getInstanceFor(connectionItem.getConnectionThread().getXMPPConnection());
+                .getInstanceFor(connectionItem.getConnection());
 
         try {
             if (carbonManager.isSupportedByServer()) {
                 carbonManager.setCarbonsEnabled(SettingsManager.connectionUseCarbons());
             }
 
-        } catch (SmackException.NoResponseException | XMPPException.XMPPErrorException | SmackException.NotConnectedException e) {
+        } catch (SmackException.NoResponseException | XMPPException.XMPPErrorException
+                | SmackException.NotConnectedException | InterruptedException e) {
             LogManager.exception(this, e);
         }
     }
 
     @Override
-    public void onPacket(ConnectionItem connection, String bareAddress, Stanza packet) {
+    public void onStanza(ConnectionItem connection, Stanza packet) {
 
-        if (!(connection instanceof AccountItem)) {
+        if (!(packet instanceof Message)) {
             return;
         }
 
@@ -93,13 +95,10 @@ public class CarbonManager implements OnAuthorizedListener, OnPacketListener {
             return;
         }
 
-        final String user = packet.getFrom();
-        if (user == null) {
+        if (packet.getFrom() == null) {
             return;
         }
-        if (!(packet instanceof Message)) {
-            return;
-        }
+
 
         final Message message = (Message) packet;
         CarbonExtension carbonExtension = CarbonExtension.from(message);
@@ -111,18 +110,15 @@ public class CarbonManager implements OnAuthorizedListener, OnPacketListener {
         if (carbonExtension.getForwarded() == null) {
             return;
         }
-        Message forwardedMsg = (Message) carbonExtension.getForwarded().getForwardedPacket();
+        Message forwardedMsg = (Message) carbonExtension.getForwarded().getForwardedStanza();
         MessageManager.getInstance().displayForwardedMessage(connection, forwardedMsg, carbonExtension.getDirection());
 
     }
 
     public boolean isCarbonsEnabledForConnection(ConnectionItem connection) {
-        if (!org.jivesoftware.smackx.carbons.CarbonManager
-                .getInstanceFor(connection.getConnectionThread().getXMPPConnection())
-                .getCarbonsEnabled()) {
-            return false;
-        }
-        return true;
+        return org.jivesoftware.smackx.carbons.CarbonManager
+                .getInstanceFor(connection.getConnection())
+                .getCarbonsEnabled();
     }
 
     /**
@@ -133,8 +129,8 @@ public class CarbonManager implements OnAuthorizedListener, OnPacketListener {
         Application.getInstance().runInBackground(new Runnable() {
             @Override
             public void run() {
-                Collection<String> accounts = AccountManager.getInstance().getAccounts();
-                for (String account : accounts) {
+                Collection<AccountJid> accounts = AccountManager.getInstance().getEnabledAccounts();
+                for (AccountJid account : accounts) {
                     updateIsSupported(AccountManager.getInstance().getAccount(account));
                 }
             }

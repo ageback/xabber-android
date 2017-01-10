@@ -3,8 +3,8 @@ package com.xabber.android.ui.preferences;
 import android.os.Bundle;
 
 import com.xabber.android.R;
-import com.xabber.android.data.LogManager;
-import com.xabber.android.ui.activity.PreferenceSummaryHelper;
+import com.xabber.android.data.log.LogManager;
+import com.xabber.android.ui.activity.PreferenceSummaryHelperActivity;
 
 public class DebugSettingsFragment extends android.preference.PreferenceFragment {
     @Override
@@ -13,10 +13,10 @@ public class DebugSettingsFragment extends android.preference.PreferenceFragment
 
         addPreferencesFromResource(R.xml.preference_debug);
 
-        if (!LogManager.isDebugable()) {
+        if (!LogManager.isDebuggable()) {
             getPreferenceScreen().removePreference(getPreferenceScreen().findPreference(getString(R.string.debug_log_key)));
         }
 
-        PreferenceSummaryHelper.updateSummary(getPreferenceScreen());
+        PreferenceSummaryHelperActivity.updateSummary(getPreferenceScreen());
     }
 }

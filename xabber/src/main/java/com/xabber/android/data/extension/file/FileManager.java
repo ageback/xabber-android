@@ -12,17 +12,21 @@ import android.net.Uri;
 import android.os.Environment;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.v4.content.FileProvider;
 import android.webkit.MimeTypeMap;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import com.bumptech.glide.Glide;
+import com.xabber.android.BuildConfig;
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
-import com.xabber.android.data.LogManager;
+import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.database.realm.MessageItem;
+import com.xabber.android.data.entity.AccountJid;
+import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.message.MessageUpdateEvent;
 
 import org.greenrobot.eventbus.EventBus;
@@ -151,7 +155,7 @@ public class FileManager {
                                     first.setFileSize(Long.parseLong(contentLength));
                                 }
                             }
-                        }, null);
+                        });
                         realm.close();
                     }
                 }
@@ -177,14 +181,16 @@ public class FileManager {
         startedDownloads.add(downloadUrl);
 
 
-        final String account = messageItem.getAccount();
-        final String user = messageItem.getUser();
+        final AccountJid account = messageItem.getAccount();
+        final UserJid user = messageItem.getUser();
         final String uniqueId = messageItem.getUniqueId();
         final String filePath = messageItem.getFilePath();
 
         Application.getInstance().runInBackground(new Runnable() {
             @Override
             public void run() {
+                LogManager.i(FileManager.class, "Starting background Downloading file " + downloadUrl);
+
                 OkHttpClient client = new OkHttpClient().newBuilder()
                         .readTimeout(2, TimeUnit.MINUTES)
                         .connectTimeout(2, TimeUnit.MINUTES)
@@ -311,7 +317,8 @@ public class FileManager {
     }
     public static void openFile(Context context, File file) {
         final Intent intent = new Intent(Intent.ACTION_VIEW);
-        intent.setDataAndType(Uri.fromFile(file), getFileMimeType(file));
+        intent.setDataAndType(FileManager.getFileUri(file), getFileMimeType(file));
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
         PackageManager manager = context.getPackageManager();
         List<ResolveInfo> infos = manager.queryIntentActivities(intent, 0);
@@ -587,7 +594,11 @@ public class FileManager {
                 }
             }
         }
-        return Uri.fromFile(rotateImageFile);
+        return FileManager.getFileUri(rotateImageFile);
+    }
+
+    public static Uri getFileUri(File file) {
+        return FileProvider.getUriForFile(Application.getInstance(), BuildConfig.APPLICATION_ID + ".provider", file);
     }
 
     public static File createTempImageFile(String name) throws IOException {

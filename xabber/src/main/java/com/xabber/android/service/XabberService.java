@@ -20,7 +20,7 @@ import android.content.Intent;
 import android.os.IBinder;
 
 import com.xabber.android.data.Application;
-import com.xabber.android.data.LogManager;
+import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.notification.NotificationManager;
 
@@ -46,19 +46,21 @@ public class XabberService extends Service {
     }
 
     public void changeForeground() {
-        if (SettingsManager.eventsPersistent()
-                && Application.getInstance().isInitialized())
+        LogManager.i(this, "changeForeground");
+        if (SettingsManager.eventsPersistent() && Application.getInstance().isInitialized()) {
             startForeground(NotificationManager.PERSISTENT_NOTIFICATION_ID,
-                    NotificationManager.getInstance()
-                            .getPersistentNotification());
-        else
+                    NotificationManager.getInstance().getPersistentNotification());
+        } else {
             stopForeground(true);
+        }
     }
 
     @Override
-    public void onStart(Intent intent, int startId) {
-        super.onStart(intent, startId);
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        int result = super.onStartCommand(intent, flags, startId);
+        LogManager.i(this, "onStartCommand");
         Application.getInstance().onServiceStarted();
+        return result;
     }
 
     @Override
