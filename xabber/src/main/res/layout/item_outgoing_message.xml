@@ -12,12 +12,11 @@
      You should have received a copy of the GNU General Public License,
      along with this program. If not, see http://www.gnu.org/licenses/.
 -->
-<RelativeLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/chat_message_outgoing"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    >
+    android:layout_height="wrap_content">
 
     <LinearLayout
         android:id="@+id/message_balloon"
@@ -44,38 +43,11 @@
         android:gravity="center_vertical"
         >
 
-        <include layout="@layout/chat_viewer_message"
+        <include layout="@layout/item_message"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             />
-
-        <ImageButton
-            android:id="@+id/message_download_button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:src="@drawable/ic_download_grey600_24dp"
-            android:background="@drawable/ripple_background"
-            android:padding="12dp"
-            android:layout_gravity="bottom"
-            />
-
-        <ImageButton
-            android:id="@+id/message_attachment_button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:src="@drawable/ic_attachment_grey600_24dp"
-            android:background="@drawable/ripple_background"
-            android:padding="12dp"
-            android:layout_gravity="bottom"
-            />
-
-        <ProgressBar
-            android:id="@+id/message_download_progress_bar"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:layout_margin="12dp"
-            android:layout_gravity="bottom" />
 
     </LinearLayout>
 
@@ -108,9 +80,10 @@
 
     <ProgressBar
         style="?android:attr/progressBarStyleSmall"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="12dp"
+        android:layout_height="12dp"
         android:id="@+id/message_progress_bar"
+        android:layout_marginRight="4dp"
         android:layout_alignBottom="@+id/message_time"
         android:layout_toLeftOf="@+id/message_status_icon"
         android:layout_toStartOf="@+id/message_status_icon" />
@@ -127,7 +100,7 @@
         android:paddingRight="8dp"
         android:paddingEnd="8dp"
 
-        android:text="231KB"
+        tools:text="231KB"
 
         android:textSize="10sp"
         />

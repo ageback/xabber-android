@@ -18,15 +18,14 @@ import android.text.Spannable;
 import android.text.SpannableString;
 import android.text.TextUtils;
 
-import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.UserJid;
+import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.message.ChatAction;
 
 import org.jxmpp.jid.parts.Resourcepart;
 import org.jxmpp.stringprep.XmppStringprepException;
 
-import java.io.File;
 import java.util.UUID;
 
 import io.realm.RealmObject;
@@ -56,8 +55,10 @@ public class MessageItem extends RealmObject {
         public static final String IS_RECEIVED_FROM_MAM = "isReceivedFromMessageArchive";
         public static final String FORWARDED = "forwarded";
         public static final String FILE_PATH = "filePath";
+        public static final String FILE_URL = "fileUrl";
         public static final String FILE_SIZE = "fileSize";
         public static final String ACKNOWLEDGED = "acknowledged";
+        public static final String IS_IN_PROGRESS = "isInProgress";
 
     }
 
@@ -139,6 +140,14 @@ public class MessageItem extends RealmObject {
      */
     private boolean forwarded;
 
+    /**
+     * If message text contains url to file
+     */
+    private String fileUrl;
+
+    /**
+     * If message "contains" file with local file path
+     */
     private String filePath;
 
     private Long fileSize;
@@ -147,6 +156,11 @@ public class MessageItem extends RealmObject {
      * If message was acknowledged by server (XEP-0198: Stream Management)
      */
     private boolean acknowledged;
+
+    /**
+     * If message is currently in progress (i.e. file is uploading/downloading)
+     */
+    private boolean isInProgress;
 
 
     public MessageItem(String uniqueId) {
@@ -332,22 +346,20 @@ public class MessageItem extends RealmObject {
         this.filePath = filePath;
     }
 
+    public String getFileUrl() {
+        return fileUrl;
+    }
+
+    public void setFileUrl(String fileUrl) {
+        this.fileUrl = fileUrl;
+    }
+
     public Long getFileSize() {
         return fileSize;
     }
 
     public void setFileSize(Long fileSize) {
         this.fileSize = fileSize;
-    }
-
-    public static String getDisplayText(MessageItem messageItem) {
-        String filePath = messageItem.getFilePath();
-
-        if (filePath != null) {
-            return new File(filePath).getName();
-        } else {
-        return messageItem.getText();
-        }
     }
 
     public static ChatAction getChatAction(MessageItem messageItem) {
@@ -368,5 +380,13 @@ public class MessageItem extends RealmObject {
 
     public void setAcknowledged(boolean acknowledged) {
         this.acknowledged = acknowledged;
+    }
+
+    public boolean isInProgress() {
+        return isInProgress;
+    }
+
+    public void setInProgress(boolean inProgress) {
+        isInProgress = inProgress;
     }
 }

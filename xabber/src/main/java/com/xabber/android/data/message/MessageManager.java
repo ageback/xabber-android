@@ -37,8 +37,6 @@ import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.BaseEntity;
 import com.xabber.android.data.entity.NestedMap;
 import com.xabber.android.data.entity.UserJid;
-import com.xabber.android.data.extension.blocking.BlockingManager;
-import com.xabber.android.data.extension.blocking.PrivateMucChatBlockingManager;
 import com.xabber.android.data.extension.muc.MUCManager;
 import com.xabber.android.data.extension.muc.RoomChat;
 import com.xabber.android.data.log.LogManager;
@@ -240,7 +238,7 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
         return chat.newFileMessage(file);
     }
 
-    public void updateFileMessage(AccountJid account, UserJid user, final String messageId, final String text) {
+    public void updateFileMessage(AccountJid account, UserJid user, final String messageId, final String url) {
         final AbstractChat chat = getChat(account, user);
         if (chat == null) {
             return;
@@ -256,8 +254,9 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
                         .findFirst();
 
                 if (messageItem != null) {
-                    messageItem.setText(text);
+                    messageItem.setText(url);
                     messageItem.setSent(false);
+                    messageItem.setInProgress(false);
                 }
             }
         });
@@ -278,6 +277,7 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
 
                 if (messageItem != null) {
                     messageItem.setError(true);
+                    messageItem.setInProgress(false);
                 }
             }
         });
@@ -497,9 +497,7 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
         if (chat != null && stanza instanceof Message) {
             if (chat.isPrivateMucChat() && !chat.isPrivateMucChatAccepted()) {
                 if (mucPrivateChatRequestProvider.get(chat.getAccount(), chat.getUser()) == null) {
-                    if (!PrivateMucChatBlockingManager.getInstance().getBlockedContacts(account).contains(chat.getUser())) {
-                        mucPrivateChatRequestProvider.add(new MucPrivateChatNotification(account, user), true);
-                    }
+                    mucPrivateChatRequestProvider.add(new MucPrivateChatNotification(account, user), true);
                 }
             }
 
@@ -519,9 +517,7 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
                 } catch (UserJid.UserJidCreateException e) {
                     LogManager.exception(this, e);
                 }
-                if (!PrivateMucChatBlockingManager.getInstance().getBlockedContacts(account).contains(user)) {
-                    mucPrivateChatRequestProvider.add(new MucPrivateChatNotification(account, user), true);
-                }
+                mucPrivateChatRequestProvider.add(new MucPrivateChatNotification(account, user), true);
                 return;
             }
 

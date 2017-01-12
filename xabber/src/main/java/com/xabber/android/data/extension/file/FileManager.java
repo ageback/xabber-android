@@ -13,23 +13,17 @@ import android.os.Environment;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.content.FileProvider;
+import android.view.ViewGroup;
 import android.webkit.MimeTypeMap;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import com.bumptech.glide.Glide;
 import com.xabber.android.BuildConfig;
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
-import com.xabber.android.data.log.LogManager;
-import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.database.realm.MessageItem;
-import com.xabber.android.data.entity.AccountJid;
-import com.xabber.android.data.entity.UserJid;
-import com.xabber.android.data.message.MessageUpdateEvent;
-
-import org.greenrobot.eventbus.EventBus;
+import com.xabber.android.data.log.LogManager;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -43,9 +37,6 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.TimeUnit;
 
 import io.realm.Realm;
 import okhttp3.Call;
@@ -58,62 +49,34 @@ public class FileManager {
 
     public static final String LOG_TAG = FileManager.class.getSimpleName();
 
-    public static final String[] VALID_IMAGE_EXTENSIONS = {"webp", "jpeg", "jpg", "png", "jpe", "gif"};
-    public static final String[] VALID_CRYPTO_EXTENSIONS = {"pgp", "gpg", "otr"};
+    private static final String[] VALID_IMAGE_EXTENSIONS = {"webp", "jpeg", "jpg", "png", "jpe", "gif"};
 
     private static final String CACHE_DIRECTORY = Environment.getExternalStorageDirectory().getAbsolutePath()
             + "/"  +  Application.getInstance().getString(R.string.application_title_short) + "/Cache/";
 
 
-    private Set<String> startedDownloads;
-
     private final static FileManager instance;
+
+    static int maxImageSize;
+    static int minImageSize;
+
 
     static {
         instance = new FileManager();
         Application.getInstance().addManager(instance);
+
+        Resources resources = Application.getInstance().getResources();
+        maxImageSize = resources.getDimensionPixelSize(R.dimen.max_chat_image_size);
+        minImageSize = resources.getDimensionPixelSize(R.dimen.min_chat_image_size);
     }
 
     public static FileManager getInstance() {
         return instance;
     }
 
-    public FileManager() {
-        this.startedDownloads = new ConcurrentSkipListSet<>();
-    }
-
     public static void processFileMessage (final MessageItem messageItem, final boolean download) {
         if (!treatAsDownloadable(messageItem.getText())) {
             return;
-        }
-
-        final URL url;
-        try {
-            url = new URL(messageItem.getText());
-        } catch (MalformedURLException e) {
-            LogManager.exception(LOG_TAG, e);
-            return;
-        }
-
-        final File file;
-        if (messageItem.getFilePath() == null) {
-            file = new File(getCachePath(url));
-            messageItem.setFilePath(file.getPath());
-        } else {
-            file = new File(messageItem.getFilePath());
-        }
-
-        if (!file.exists()) {
-            Application.getInstance().runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    if (download && SettingsManager.connectionLoadImages() && FileManager.fileIsImage(file)) {
-                        FileManager.getInstance().downloadFile(messageItem, null);
-                    } else {
-                        getFileUrlSize(messageItem);
-                    }
-                }
-            });
         }
     }
 
@@ -163,145 +126,10 @@ public class FileManager {
         });
     }
 
-
-    public interface ProgressListener {
-        void onProgress(long bytesWritten, long totalSize);
-        void onFinish(long totalSize);
-        void onError();
+    public static boolean fileIsImage(String path) {
+        return extensionIsImage(extractRelevantExtension(path));
     }
 
-
-    public void downloadFile(final MessageItem messageItem, @Nullable final ProgressListener progressListener) {
-        final String downloadUrl = messageItem.getText();
-        if (startedDownloads.contains(downloadUrl)) {
-            LogManager.i(FileManager.class, "Downloading of file " + downloadUrl + " already started");
-            return;
-        }
-        LogManager.i(FileManager.class, "Downloading file " + downloadUrl);
-        startedDownloads.add(downloadUrl);
-
-
-        final AccountJid account = messageItem.getAccount();
-        final UserJid user = messageItem.getUser();
-        final String uniqueId = messageItem.getUniqueId();
-        final String filePath = messageItem.getFilePath();
-
-        Application.getInstance().runInBackground(new Runnable() {
-            @Override
-            public void run() {
-                LogManager.i(FileManager.class, "Starting background Downloading file " + downloadUrl);
-
-                OkHttpClient client = new OkHttpClient().newBuilder()
-                        .readTimeout(2, TimeUnit.MINUTES)
-                        .connectTimeout(2, TimeUnit.MINUTES)
-                        .writeTimeout(2, TimeUnit.MINUTES)
-                        .build();
-
-
-                Request request = new Request.Builder()
-                        .get()
-                        .url(downloadUrl)
-                        .build();
-
-
-                Call call = client.newCall(request);
-
-                boolean success = false;
-                try {
-                    success = downloadFile(call, progressListener, filePath);
-                } catch (IOException e) {
-                    LogManager.exception(this, e);
-                }
-
-                startedDownloads.remove(downloadUrl);
-                EventBus.getDefault().post(new MessageUpdateEvent(account, user, uniqueId));
-
-                if (progressListener != null && !success) {
-                    Application.getInstance().runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            progressListener.onError();
-                        }
-                    });
-                }
-            }
-        });
-    }
-
-    public boolean downloadFile(Call call, @Nullable final ProgressListener progressListener, String filePath) throws IOException {
-        boolean success = false;
-
-        Response response = call.execute();
-
-        if (response.isSuccessful()) {
-
-            byte[] buff = new byte[1024 * 4];
-            long downloaded = 0;
-            final long target = response.body().contentLength();
-            File file = new File(filePath);
-            new File(file.getParent()).mkdirs();
-            OutputStream output = new FileOutputStream(file);
-            InputStream inputStream = response.body().byteStream();
-            int bytesRead;
-            try {
-                while ((bytesRead = inputStream.read(buff)) != -1) {
-                    output.write(buff, 0, bytesRead);
-                    downloaded += bytesRead;
-
-                    final long finalDownloaded = downloaded;
-                    if (progressListener != null) {
-                         Application.getInstance().runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                progressListener.onProgress(finalDownloaded, target);
-                            }
-                        });
-                    }
-                }
-                output.flush();
-            } finally {
-                inputStream.close();
-                output.close();
-                if (downloaded == target) {
-                    success = true;
-                } else {
-                    file.delete();
-                }
-            }
-        }
-
-        return success;
-    }
-
-    private static void saveFile(final byte[] responseBody, final File file, final ProgressListener progressListener) {
-        LogManager.i(FileManager.class, "Saving file " + file.getPath());
-
-        Application.getInstance().runInBackground(new Runnable() {
-            @Override
-            public void run() {
-                new File(file.getParent()).mkdirs();
-                try {
-                    BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(file));
-                    bos.write(responseBody);
-                    bos.flush();
-                    bos.close();
-                } catch (IOException e) {
-                    LogManager.exception(this, e);
-                    file.delete();
-                }
-
-                Application.getInstance().runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (progressListener != null) {
-                            progressListener.onFinish(responseBody.length);
-                        }
-                    }
-                });
-
-            }
-        });
-    }
 
     public static boolean fileIsImage(File file) {
         return extensionIsImage(extractRelevantExtension(file.getPath()));
@@ -337,20 +165,19 @@ public class FileManager {
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.toLowerCase());
     }
 
-    public static void loadImageFromFile(File file, ImageView imageView) {
+    public static void loadImageFromFile(String path, ImageView imageView) {
         BitmapFactory.Options options = new BitmapFactory.Options();
         options.inJustDecodeBounds = true;
 
         // Returns null, sizes are in the options variable
-        BitmapFactory.decodeFile(file.getAbsolutePath(), options);
-        final int height = options.outHeight;
-        final int width = options.outWidth;
+        BitmapFactory.decodeFile(path, options);
 
-        ImageScaler imageScaler = new ImageScaler(imageView.getContext(), height, width).invoke();
-        imageView.setLayoutParams(new LinearLayout.LayoutParams(imageScaler.getScaledWidth(), imageScaler.getScaledHeight()));
-        Glide.with(Application.getInstance().getApplicationContext())
-                .load(file).crossFade()
-                .override(imageScaler.getScaledWidth(), imageScaler.getScaledHeight())
+        ViewGroup.LayoutParams layoutParams = imageView.getLayoutParams();
+        scaleImage(layoutParams, options.outHeight, options.outWidth);
+
+        imageView.setLayoutParams(layoutParams);
+        Glide.with(imageView.getContext())
+                .load(path)
                 .into(imageView);
     }
 
@@ -365,10 +192,6 @@ public class FileManager {
             }
             String extension = extractRelevantExtension(url);
             if (extension == null) {
-                return false;
-            }
-
-            if (Arrays.asList(WebExtensions.WEB_EXTENSIONS).contains(extension)) {
                 return false;
             }
 
@@ -404,74 +227,49 @@ public class FileManager {
         int dotPosition = filename.lastIndexOf(".");
 
         if (dotPosition != -1) {
-            String extension = filename.substring(dotPosition + 1).toLowerCase();
-            // we want the real file extension, not the crypto one
-            if (Arrays.asList(VALID_CRYPTO_EXTENSIONS).contains(extension)) {
-                return extractRelevantExtension(path.substring(0,dotPosition));
-            } else {
-                return extension;
-            }
+            return filename.substring(dotPosition + 1).toLowerCase();
         }
         return null;
     }
 
-    private static class ImageScaler {
-        private Context context;
-        private int height;
-        private int width;
-        private int scaledWidth;
-        private int scaledHeight;
 
-        public ImageScaler(Context context, int height, int width) {
-            this.context = context;
-            this.height = height;
-            this.width = width;
-        }
+    private static void scaleImage(ViewGroup.LayoutParams layoutParams, int height, int width) {
+        int scaledWidth;
+        int scaledHeight;
 
-        public int getScaledWidth() {
-            return scaledWidth;
-        }
-
-        public int getScaledHeight() {
-            return scaledHeight;
-        }
-
-        public ImageScaler invoke() {
-            Resources resources = context.getResources();
-            final int maxImageSize = resources.getDimensionPixelSize(R.dimen.max_chat_image_size);
-            final int minImageSize = resources.getDimensionPixelSize(R.dimen.min_chat_image_size);
-
-            if (width <= height) {
-                if (height > maxImageSize) {
-                    scaledWidth = (int) (width / ((double) height / maxImageSize));
+        if (width <= height) {
+            if (height > maxImageSize) {
+                scaledWidth = (int) (width / ((double) height / maxImageSize));
+                scaledHeight = maxImageSize;
+            } else if (width < minImageSize) {
+                scaledWidth = minImageSize;
+                scaledHeight = (int) (height / ((double) width / minImageSize));
+                if (scaledHeight > maxImageSize) {
                     scaledHeight = maxImageSize;
-                } else if (width < minImageSize) {
-                    scaledWidth = minImageSize;
-                    scaledHeight = (int) (height / ((double) width / minImageSize));
-                    if (scaledHeight > maxImageSize) {
-                        scaledHeight = maxImageSize;
-                    }
-                } else {
-                    scaledWidth = width;
-                    scaledHeight = height;
                 }
             } else {
-                if (width > maxImageSize) {
-                    scaledWidth = maxImageSize;
-                    scaledHeight = (int) (height / ((double) width / maxImageSize));
-                } else if (height < minImageSize) {
-                    scaledWidth = (int) (width / ((double) height / minImageSize));
-                    if (scaledWidth > maxImageSize) {
-                        scaledWidth = maxImageSize;
-                    }
-                    scaledHeight = minImageSize;
-                } else {
-                    scaledWidth = width;
-                    scaledHeight = height;
-                }
+                scaledWidth = width;
+                scaledHeight = height;
             }
-            return this;
+        } else {
+            if (width > maxImageSize) {
+                scaledWidth = maxImageSize;
+                scaledHeight = (int) (height / ((double) width / maxImageSize));
+            } else if (height < minImageSize) {
+                scaledWidth = (int) (width / ((double) height / minImageSize));
+                if (scaledWidth > maxImageSize) {
+                    scaledWidth = maxImageSize;
+                }
+                scaledHeight = minImageSize;
+            } else {
+                scaledWidth = width;
+                scaledHeight = height;
+            }
         }
+
+        layoutParams.width = scaledWidth;
+        layoutParams.height = scaledHeight;
+
     }
 
     public static void saveFileToDownloads(File srcFile) throws IOException {
@@ -487,11 +285,6 @@ public class FileManager {
                 String.format(Application.getInstance().getString(R.string.received_by),
                         Application.getInstance().getString(R.string.application_title_short)),
                 true, mimeTypeFromExtension, dstFile.getPath(), dstFile.length(), true);
-    }
-
-    public static void saveFileToCache(File srcFile, URL url) throws IOException {
-        LogManager.i(FileManager.class, "Saving file to cache");
-        copyFile(srcFile, getCachePath(url));
     }
 
     public static File copyFile(File srcFile, String dstPath) throws IOException {
