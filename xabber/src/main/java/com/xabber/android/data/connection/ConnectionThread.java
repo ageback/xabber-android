@@ -17,15 +17,22 @@ package com.xabber.android.data.connection;
 import android.support.annotation.NonNull;
 
 import com.xabber.android.data.Application;
+import com.xabber.android.data.log.AndroidLoggingHandler;
 import com.xabber.android.data.log.LogManager;
 
+import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.SmackException;
 import org.jivesoftware.smack.XMPPException;
 import org.jivesoftware.smack.sasl.SASLErrorException;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
+import org.jivesoftware.smack.util.DNSUtil;
 import org.jivesoftware.smackx.iqregister.AccountManager;
 
 import java.io.IOException;
+import java.util.logging.Level;
+
+import de.measite.minidns.AbstractDNSClient;
+import de.measite.minidns.DNSClient;
 
 /**
  * Provides connection workflow.
@@ -73,6 +80,16 @@ class ConnectionThread {
     }
 
     private void connectAndLogin() {
+        AndroidLoggingHandler.reset(new AndroidLoggingHandler());
+        java.util.logging.Logger.getLogger(XMPPTCPConnection.class.getName()).setLevel(Level.FINEST);
+        java.util.logging.Logger.getLogger(AbstractDNSClient.class.getName()).setLevel(Level.FINEST);
+        java.util.logging.Logger.getLogger(AbstractXMPPConnection.class.getName()).setLevel(Level.FINEST);
+        java.util.logging.Logger.getLogger(DNSUtil.class.getName()).setLevel(Level.FINEST);
+
+        // TODO: temp solution until MiniDnsClient and Smack will be updated
+        DNSClient.removeDNSServerLookupMechanism(de.measite.minidns.dnsserverlookup.AndroidUsingExec.INSTANCE);
+        DNSClient.addDnsServerLookupMechanism(AndroidUsingExec.INSTANCE);
+
         try {
             LogManager.i(this, "Trying to connect and login...");
             connection.connect().login();
@@ -89,6 +106,9 @@ class ConnectionThread {
         } catch (XMPPException | SmackException | IOException | InterruptedException e) {
             LogManager.exception(this, e);
         }
+
+        LogManager.i(this, "Connection thread finished - reset reconnection info");
+        ReconnectionManager.getInstance().resetReconnectionInfo(connectionItem.getAccount());
     }
 
     private boolean createAccount() {
