@@ -25,7 +25,6 @@ import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.connection.ConnectionItem;
-import com.xabber.android.data.connection.ConnectionManager;
 import com.xabber.android.data.connection.StanzaSender;
 import com.xabber.android.data.connection.listeners.OnPacketListener;
 import com.xabber.android.data.entity.AccountJid;
@@ -62,12 +61,9 @@ public class AttentionManager implements OnPacketListener, OnLoadListener {
 
     private final static Object enabledLock;
 
-    private final static AttentionManager instance;
+    private static AttentionManager instance;
 
     static {
-        instance = new AttentionManager();
-        Application.getInstance().addManager(instance);
-
         enabledLock = new Object();
         XMPPConnectionRegistry.addConnectionCreationListener(new ConnectionCreationListener() {
             @Override
@@ -95,11 +91,15 @@ public class AttentionManager implements OnPacketListener, OnLoadListener {
 
     };
 
-    public AttentionManager() {
+    public static AttentionManager getInstance() {
+        if (instance == null) {
+            instance = new AttentionManager();
+        }
+
+        return instance;
     }
 
-    public static AttentionManager getInstance() {
-        return instance;
+    private AttentionManager() {
     }
 
     public void onSettingsChanged() {
@@ -194,7 +194,7 @@ public class AttentionManager implements OnPacketListener, OnLoadListener {
         if (to == null) {
             throw new NetworkException(R.string.ENTRY_IS_NOT_AVAILABLE);
         }
-        ClientInfo clientInfo = CapabilitiesManager.getClientInfo(account, to, null);
+        ClientInfo clientInfo = CapabilitiesManager.getInstance().getClientInfo(account, to);
         if (clientInfo == null) {
             throw new NetworkException(R.string.ENTRY_IS_NOT_AVAILABLE);
         }

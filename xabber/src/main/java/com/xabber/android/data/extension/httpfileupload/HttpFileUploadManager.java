@@ -40,20 +40,22 @@ import okhttp3.Response;
 
 public class HttpFileUploadManager implements OnAuthorizedListener {
 
-    private final static HttpFileUploadManager instance;
+    private static HttpFileUploadManager instance;
 
     private static final MediaType CONTENT_TYPE = MediaType.parse("application/octet-stream");
 
-    static {
-        instance = new HttpFileUploadManager();
-        Application.getInstance().addManager(instance);
-    }
+    private Map<AccountJid, Jid> uploadServers = new ConcurrentHashMap<>();
 
     public static HttpFileUploadManager getInstance() {
+        if (instance == null) {
+            instance = new HttpFileUploadManager();
+        }
+
         return instance;
     }
 
-    private Map<AccountJid, Jid> uploadServers = new ConcurrentHashMap<>();
+    private HttpFileUploadManager() {
+    }
 
     public boolean isFileUploadSupported(AccountJid account) {
         return uploadServers.containsKey(account);
@@ -151,7 +153,7 @@ public class HttpFileUploadManager implements OnAuthorizedListener {
 
     @Override
     public void onAuthorized(final ConnectionItem connectionItem) {
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 try {

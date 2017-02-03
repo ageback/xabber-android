@@ -29,23 +29,22 @@ import java.io.IOException;
  *
  * @author alexander.ivanov
  */
-class AvatarStorage implements OnLoadListener, OnClearListener {
+public class AvatarStorage implements OnLoadListener, OnClearListener {
 
     private final File folder;
 
     private static AvatarStorage instance;
 
-    static {
-        instance = new AvatarStorage(Application.getInstance());
-        Application.getInstance().addManager(instance);
-    }
-
     public static AvatarStorage getInstance() {
+        if (instance == null) {
+            instance = new AvatarStorage();
+        }
+
         return instance;
     }
 
-    private AvatarStorage(Application application) {
-        folder = new File(application.getFilesDir(), "avatars");
+    private AvatarStorage() {
+        folder = new File(Application.getInstance().getFilesDir(), "avatars");
     }
 
     @Override

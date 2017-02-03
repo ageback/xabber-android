@@ -35,20 +35,18 @@ import java.util.Collection;
  * @author Georg Lukas, Semyon Baranov
  */
 public class CarbonManager implements OnAuthorizedListener, OnPacketListener {
-    private final static CarbonManager instance;
+    private static CarbonManager instance;
 
-    static {
-        instance = new CarbonManager();
-        Application.getInstance().addManager(instance);
+    public static CarbonManager getInstance() {
+        if (instance == null) {
+            instance = new CarbonManager();
+        }
+
+        return instance;
     }
 
     private CarbonManager() {
     }
-
-    public static CarbonManager getInstance() {
-        return instance;
-    }
-
 
     @Override
     public void onAuthorized(final ConnectionItem connection) {
@@ -126,7 +124,7 @@ public class CarbonManager implements OnAuthorizedListener, OnPacketListener {
      * when this setting has been changed
      */
     public void onUseCarbonsSettingsChanged() {
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 Collection<AccountJid> accounts = AccountManager.getInstance().getEnabledAccounts();

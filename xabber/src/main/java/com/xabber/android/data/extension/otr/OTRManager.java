@@ -84,7 +84,7 @@ import java.util.concurrent.ThreadFactory;
 public class OTRManager implements OtrEngineHost, OtrEngineListener,
         OnLoadListener, OnAccountAddedListener, OnAccountRemovedListener, OnCloseListener {
 
-    private final static OTRManager instance;
+    private static OTRManager instance;
     private static Map<SecurityOtrMode, OtrPolicy> POLICIES;
 
     static {
@@ -93,11 +93,6 @@ public class OTRManager implements OtrEngineHost, OtrEngineListener,
         POLICIES.put(SecurityOtrMode.manual, new OtrPolicyImpl(OtrPolicy.OTRL_POLICY_MANUAL & ~OtrPolicy.ALLOW_V1));
         POLICIES.put(SecurityOtrMode.auto, new OtrPolicyImpl(OtrPolicy.OPPORTUNISTIC & ~OtrPolicy.ALLOW_V1));
         POLICIES.put(SecurityOtrMode.required, new OtrPolicyImpl(OtrPolicy.OTRL_POLICY_ALWAYS & ~OtrPolicy.ALLOW_V1));
-    }
-
-    static {
-        instance = new OTRManager();
-        Application.getInstance().addManager(instance);
     }
 
     private final EntityNotificationProvider<SMRequest> smRequestProvider;
@@ -123,6 +118,14 @@ public class OTRManager implements OtrEngineHost, OtrEngineListener,
      */
     private final ExecutorService keyPairGenerator;
 
+    public static OTRManager getInstance() {
+        if (instance == null) {
+            instance = new OTRManager();
+        }
+
+        return instance;
+    }
+
     private OTRManager() {
         smRequestProvider = new EntityNotificationProvider<>(R.drawable.ic_stat_help);
         smProgressProvider = new EntityNotificationProvider<>(R.drawable.ic_stat_play_circle_fill);
@@ -140,10 +143,6 @@ public class OTRManager implements OtrEngineHost, OtrEngineListener,
                         return thread;
                     }
                 });
-    }
-
-    public static OTRManager getInstance() {
-        return instance;
     }
 
     @Override
@@ -665,7 +664,7 @@ public class OTRManager implements OtrEngineHost, OtrEngineListener,
      */
     private void requestToWrite(final String account, final String user,
                                 final String fingerprint, final boolean verified) {
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 OTRTable.getInstance().write(account, user, fingerprint, verified);

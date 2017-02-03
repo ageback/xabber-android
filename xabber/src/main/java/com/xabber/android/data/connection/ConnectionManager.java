@@ -14,12 +14,11 @@
  */
 package com.xabber.android.data.connection;
 
-import com.xabber.android.data.Application;
-import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.OnCloseListener;
 import com.xabber.android.data.OnInitializedListener;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.entity.AccountJid;
+import com.xabber.android.data.log.LogManager;
 
 import org.jivesoftware.smack.SmackConfiguration;
 
@@ -41,22 +40,20 @@ public class ConnectionManager implements OnInitializedListener, OnCloseListener
 
     private final static int PING_INTERVAL_SECONDS = 60;
 
-    private final static ConnectionManager instance;
+    private static ConnectionManager instance;
 
-    static {
-        instance = new ConnectionManager();
-        Application.getInstance().addManager(instance);
+    public static ConnectionManager getInstance() {
+        if (instance == null) {
+            instance = new ConnectionManager();
+        }
 
-        SmackConfiguration.setDefaultPacketReplyTimeout(PACKET_REPLY_TIMEOUT);
+        return instance;
     }
 
     private ConnectionManager() {
         LogManager.i(LOG_TAG, "ConnectionManager");
         org.jivesoftware.smackx.ping.PingManager.setDefaultPingInterval(PING_INTERVAL_SECONDS);
-    }
-
-    public static ConnectionManager getInstance() {
-        return instance;
+        SmackConfiguration.setDefaultReplyTimeout(PACKET_REPLY_TIMEOUT);
     }
 
     @Override
@@ -77,7 +74,6 @@ public class ConnectionManager implements OnInitializedListener, OnCloseListener
         LogManager.i(LOG_TAG, "connectAll");
         AccountManager accountManager = AccountManager.getInstance();
         for (AccountJid account : accountManager.getEnabledAccounts()) {
-            LogManager.i(LOG_TAG, "request connect all!");
             ReconnectionManager.getInstance().requestReconnect(account);
         }
     }

@@ -44,10 +44,10 @@ import org.jxmpp.jid.parts.Resourcepart;
  */
 public abstract class ConnectionItem {
 
-    private static final String LOG_TAG = ConnectionItem.class.getSimpleName();
-
     @NonNull
     private final AccountJid account;
+
+    private final String logTag;
 
     /**
      * Connection options.
@@ -62,27 +62,12 @@ public abstract class ConnectionItem {
      * XMPP connection.
      */
     @NonNull
-    private XMPPTCPConnection connection;
-
-    /**
-     * Connection was requested by user.
-     */
-    private boolean isConnectionRequestedByUser;
+    XMPPTCPConnection connection;
 
     /**
      * Current state.
      */
     private ConnectionState state;
-
-    /**
-     * Whether force reconnection is in progress.
-     */
-    private boolean disconnectionRequested;
-
-    /**
-     * Need to register account on XMPP server.
-     */
-    private boolean registerNewAccount;
 
     @NonNull
     private final AccountRosterListener rosterListener;
@@ -97,6 +82,7 @@ public abstract class ConnectionItem {
                           ProxyType proxyType, String proxyHost, int proxyPort,
                           String proxyUser, String proxyPassword) {
         this.account = AccountJid.from(userName, serverName, resource);
+        this.logTag = getClass().getSimpleName() + ": " + account;
         rosterListener = new AccountRosterListener(getAccount());
         connectionListener = new com.xabber.android.data.connection.ConnectionListener(this);
 
@@ -104,41 +90,27 @@ public abstract class ConnectionItem {
                 serverName, resource, custom, host, port, password,
                 saslEnabled, tlsMode, compression, proxyType, proxyHost,
                 proxyPort, proxyUser, proxyPassword);
-        createConnection();
+        connection = createConnection();
 
-        isConnectionRequestedByUser = false;
-        disconnectionRequested = false;
         updateState(ConnectionState.offline);
     }
 
-    private void createConnection() {
-        showDebugToast("createConnection...");
-
+    private XMPPTCPConnection createConnection() {
         connection = ConnectionBuilder.build(connectionSettings);
+        LogManager.i(logTag, "Connection created");
+
         connectionThread = new ConnectionThread(connection, this);
 
         addConnectionListeners();
         configureConnection();
+
+        return connection;
     }
 
 
     @NonNull
     public AccountJid getAccount() {
         return account;
-    }
-
-    /**
-     * Register new account on server.
-     */
-    public void registerAccount() {
-        registerNewAccount = true;
-    }
-
-    /**
-     * Report if this connection is to register a new account on XMPP server.
-     */
-    public boolean isRegisterAccount() {
-        return registerNewAccount;
     }
 
     @NonNull
@@ -167,19 +139,15 @@ public abstract class ConnectionItem {
         return connection.getUser();
     }
 
-    /**
-     * @param userRequest action was requested by user.
-     * @return Whether connection is available.
-     */
-    protected abstract boolean isConnectionAvailable(boolean userRequest);
+    public boolean connect() {
+        LogManager.i(logTag, "connect");
 
-    public void connect() {
         updateState(ConnectionState.connecting);
         if (connectionThread == null) {
             connectionThread = new ConnectionThread(connection, this);
         };
 
-        connectionThread.start();
+        return connectionThread.start();
     }
 
     private void configureConnection() {
@@ -206,25 +174,6 @@ public abstract class ConnectionItem {
         PingManager.getInstanceFor(connection).registerPingFailedListener(pingFailedListener);
     }
 
-
-    /**
-     * Starts disconnection in another thread.
-     */
-    protected static void disconnect(final AbstractXMPPConnection xmppConnection) {
-        Thread thread = new Thread("Disconnection thread for " + xmppConnection) {
-            @Override
-            public void run() {
-                xmppConnection.disconnect();
-            }
-
-        };
-        thread.setPriority(Thread.MIN_PRIORITY);
-        thread.setDaemon(true);
-        thread.start();
-    }
-
-    public abstract void onAuthFailed();
-
     /**
      * Update password.
      */
@@ -233,6 +182,8 @@ public abstract class ConnectionItem {
     }
 
     public void disconnect() {
+        LogManager.i(logTag, "disconnect");
+
         Thread thread = new Thread("Disconnection thread for " + connection) {
             @Override
             public void run() {
@@ -246,6 +197,8 @@ public abstract class ConnectionItem {
     }
 
     public void recreateConnection() {
+        LogManager.i(logTag, "recreateConnection");
+
         Thread thread = new Thread("Disconnection thread for " + connection) {
             @Override
             public void run() {
@@ -266,7 +219,10 @@ public abstract class ConnectionItem {
         thread.start();
     }
 
+    @SuppressWarnings("WeakerAccess")
     void createNewConnection() {
+        LogManager.i(logTag, "createNewConnection");
+
         showDebugToast("createNewConnection...");
 
         PingManager.getInstanceFor(connection).unregisterPingFailedListener(pingFailedListener);
@@ -282,6 +238,8 @@ public abstract class ConnectionItem {
     }
 
     void updateState(ConnectionState newState) {
+        LogManager.i(logTag, "updateState " + newState);
+
         ConnectionState prevState = this.state;
 
         if (connection.isAuthenticated()) {
@@ -331,21 +289,11 @@ public abstract class ConnectionItem {
     };
 
     void showDebugToast(final String message) {
-        showDebugToast(message, Toast.LENGTH_LONG);
+        if (toast != null) {
+            toast.cancel();
+        }
+        toast = Toast.makeText(Application.getInstance(), message, Toast.LENGTH_LONG);
+        toast.show();
     }
-
-    void showDebugToast(final String message, final int duration) {
-        Application.getInstance().runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                if (toast != null) {
-                    toast.cancel();
-                }
-                toast = Toast.makeText(Application.getInstance(), message, Toast.LENGTH_LONG);
-                toast.show();
-            }
-        });
-    }
-
 
 }

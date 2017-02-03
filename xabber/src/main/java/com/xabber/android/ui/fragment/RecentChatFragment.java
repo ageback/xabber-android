@@ -21,7 +21,6 @@ import com.xabber.android.data.message.AbstractChat;
 import com.xabber.android.data.message.MessageManager;
 import com.xabber.android.data.roster.AbstractContact;
 import com.xabber.android.data.roster.RosterManager;
-import com.xabber.android.ui.activity.ChatActivity;
 import com.xabber.android.ui.adapter.ChatComparator;
 import com.xabber.android.ui.adapter.contactlist.ChatListAdapter;
 import com.xabber.android.ui.color.ColorManager;
@@ -33,7 +32,7 @@ import java.util.List;
 
 public class RecentChatFragment extends Fragment implements ChatListAdapter.Listener {
 
-    private ChatListAdapter adapter;
+    ChatListAdapter adapter;
     @Nullable
     private Listener listener;
 
@@ -101,7 +100,8 @@ public class RecentChatFragment extends Fragment implements ChatListAdapter.List
     }
 
     public void updateChats() {
-        Thread thread = new Thread("Recent chats") {
+
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 Collection<AbstractChat> chats = MessageManager.getInstance().getChats();
@@ -133,10 +133,7 @@ public class RecentChatFragment extends Fragment implements ChatListAdapter.List
                     }
                 });
             }
-        };
-        thread.setDaemon(true);
-        thread.setPriority(Thread.MIN_PRIORITY);
-        thread.start();
+        });
     }
 
     @Override

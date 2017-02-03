@@ -81,14 +81,9 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
         OnAccountRemovedListener, OnAccountDisabledListener, OnRosterReceivedListener,
         OnAccountArchiveModeChangedListener, OnStatusChangeListener {
 
-    private final static MessageManager instance;
+    private static MessageManager instance;
 
     private final EntityNotificationProvider<MucPrivateChatNotification> mucPrivateChatRequestProvider;
-
-    static {
-        instance = new MessageManager();
-        Application.getInstance().addManager(instance);
-    }
 
     /**
      * Registered chats for bareAddresses in accounts.
@@ -101,6 +96,14 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
      */
     private AbstractChat visibleChat;
 
+    public static MessageManager getInstance() {
+        if (instance == null) {
+            instance = new MessageManager();
+        }
+
+        return instance;
+    }
+
     private MessageManager() {
         chats = new NestedMap<>();
 
@@ -108,11 +111,6 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
                 (R.drawable.ic_stat_muc_private_chat_request_white_24dp);
         mucPrivateChatRequestProvider.setCanClearNotifications(false);
     }
-
-    public static MessageManager getInstance() {
-        return instance;
-    }
-
 
     @Override
     public void onLoad() {
@@ -191,7 +189,6 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
         if (getChat(chat.getAccount(), chat.getUser()) != null) {
             throw new IllegalStateException();
         }
-        LogManager.i(this, "addChat " + chat.getUser());
         chats.put(chat.getAccount().toString(), chat.getUser().toString(), chat);
     }
 

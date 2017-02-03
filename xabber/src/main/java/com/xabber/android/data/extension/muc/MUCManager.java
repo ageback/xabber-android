@@ -68,23 +68,22 @@ import java.util.Collections;
  */
 public class MUCManager implements OnLoadListener, OnPacketListener {
 
-    private final static MUCManager instance;
-
-    static {
-        instance = new MUCManager();
-        Application.getInstance().addManager(instance);
-    }
+    private static MUCManager instance;
 
     private final EntityNotificationProvider<RoomInvite> inviteProvider;
     private final EntityNotificationProvider<RoomAuthorizationError> authorizationErrorProvider;
 
+    public static MUCManager getInstance() {
+        if (instance == null) {
+            instance = new MUCManager();
+        }
+
+        return instance;
+    }
+
     private MUCManager() {
         inviteProvider = new EntityNotificationProvider<>(R.drawable.ic_stat_add_circle);
         authorizationErrorProvider = new EntityNotificationProvider<>(R.drawable.ic_stat_error);
-    }
-
-    public static MUCManager getInstance() {
-        return instance;
     }
 
     @Override
@@ -243,7 +242,7 @@ public class MUCManager implements OnLoadListener, OnPacketListener {
         } catch (UserJid.UserJidCreateException e) {
             LogManager.exception(this, e);
         }
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 RoomTable.getInstance().remove(account.toString(), room.toString());
@@ -289,7 +288,7 @@ public class MUCManager implements OnLoadListener, OnPacketListener {
 
     private void requestToWriteRoom(final AccountJid account, final EntityBareJid room,
                                     final Resourcepart nickname, final String password, final boolean join) {
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 RoomTable.getInstance().write(account.toString(), room.toString(), nickname.toString(),
@@ -320,11 +319,9 @@ public class MUCManager implements OnLoadListener, OnPacketListener {
      * @param requested Whether user request to join the room.
      */
     public void joinRoom(final AccountJid account, final EntityBareJid room, boolean requested) {
-        final XMPPConnection xmppConnection;
         final RoomChat roomChat;
         final Resourcepart nickname;
         final String password;
-        final Thread thread;
         roomChat = getRoomChat(account, room);
         if (roomChat == null) {
             Application.getInstance().onError(R.string.ENTRY_IS_NOT_FOUND);
@@ -356,7 +353,7 @@ public class MUCManager implements OnLoadListener, OnPacketListener {
         roomChat.setState(RoomState.joining);
         roomChat.setMultiUserChat(multiUserChat);
         roomChat.setRequested(requested);
-        thread = new Thread("Join to room " + room + " from " + account) {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 try {
@@ -394,13 +391,13 @@ public class MUCManager implements OnLoadListener, OnPacketListener {
 
                             XMPPError xmppError = e.getXMPPError();
 
-                                if (xmppError != null && xmppError.getCondition() == XMPPError.Condition.conflict) {
-                                    Application.getInstance().onError(R.string.NICK_ALREADY_USED);
-                                } else if (xmppError != null && xmppError.getCondition() == XMPPError.Condition.not_authorized) {
-                                    Application.getInstance().onError(R.string.AUTHENTICATION_FAILED);
-                                } else {
-                                    Application.getInstance().onError(R.string.NOT_CONNECTED);
-                                }
+                            if (xmppError != null && xmppError.getCondition() == XMPPError.Condition.conflict) {
+                                Application.getInstance().onError(R.string.NICK_ALREADY_USED);
+                            } else if (xmppError != null && xmppError.getCondition() == XMPPError.Condition.not_authorized) {
+                                Application.getInstance().onError(R.string.AUTHENTICATION_FAILED);
+                            } else {
+                                Application.getInstance().onError(R.string.NOT_CONNECTED);
+                            }
                             try {
                                 RosterManager.onContactChanged(account, UserJid.from(room));
                             } catch (UserJid.UserJidCreateException e) {
@@ -409,7 +406,6 @@ public class MUCManager implements OnLoadListener, OnPacketListener {
                         }
                     });
                     return;
-                } catch (IllegalStateException e) {
                 } catch (Exception e) {
                     LogManager.exception(this, e);
                 }
@@ -429,9 +425,7 @@ public class MUCManager implements OnLoadListener, OnPacketListener {
                     }
                 });
             }
-        };
-        thread.setDaemon(true);
-        thread.start();
+        });
     }
 
     public void leaveRoom(AccountJid account, EntityBareJid room) {
@@ -446,7 +440,7 @@ public class MUCManager implements OnLoadListener, OnPacketListener {
         roomChat.newAction(roomChat.getNickname(), null, ChatAction.leave);
         requestToWriteRoom(account, room, roomChat.getNickname(), roomChat.getPassword(), false);
         if (multiUserChat != null) {
-            Thread thread = new Thread("Leave to room " + room + " from " + account) {
+            Application.getInstance().runInBackgroundUserRequest(new Runnable() {
                 @Override
                 public void run() {
                     try {
@@ -455,9 +449,7 @@ public class MUCManager implements OnLoadListener, OnPacketListener {
                         LogManager.exception(this, e);
                     }
                 }
-            };
-            thread.setDaemon(true);
-            thread.start();
+            });
         }
         try {
             RosterManager.onContactChanged(account, UserJid.from(room));
@@ -564,7 +556,7 @@ public class MUCManager implements OnLoadListener, OnPacketListener {
             return;
         }
 
-        final Thread thread = new Thread("Get hosted rooms on server " + serviceName + " for account " + account) {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 Collection<HostedRoom> hostedRooms = null;
@@ -585,9 +577,7 @@ public class MUCManager implements OnLoadListener, OnPacketListener {
                     }
                 });
             }
-        };
-        thread.start();
-
+        });
     }
 
     public interface RoomInfoListener {
@@ -606,7 +596,7 @@ public class MUCManager implements OnLoadListener, OnPacketListener {
             return;
         }
 
-        final Thread thread = new Thread("Get room " + roomJid + " info for account " + account) {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 RoomInfo roomInfo = null;
@@ -626,7 +616,6 @@ public class MUCManager implements OnLoadListener, OnPacketListener {
                     }
                 });
             }
-        };
-        thread.start();
+        });
     }
 }

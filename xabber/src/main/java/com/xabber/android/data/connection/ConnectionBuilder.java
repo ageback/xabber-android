@@ -1,11 +1,12 @@
 package com.xabber.android.data.connection;
 
 import android.support.annotation.NonNull;
-import android.text.TextUtils;
+import android.support.annotation.Nullable;
+import android.util.Patterns;
 
 import com.xabber.android.data.Application;
-import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.SettingsManager;
+import com.xabber.android.data.log.LogManager;
 
 import org.jivesoftware.smack.SASLAuthentication;
 import org.jivesoftware.smack.proxy.ProxyInfo;
@@ -14,6 +15,8 @@ import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
 import org.jivesoftware.smack.util.TLSUtils;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Map;
@@ -23,7 +26,7 @@ import javax.net.ssl.X509TrustManager;
 
 import de.duenndns.ssl.MemorizingTrustManager;
 
-public class ConnectionBuilder {
+class ConnectionBuilder {
     private static final String LOG_TAG = ConnectionBuilder.class.getSimpleName();
 
     public static @NonNull XMPPTCPConnection build(@NonNull final ConnectionSettings connectionSettings) {
@@ -32,10 +35,12 @@ public class ConnectionBuilder {
         builder.setXmppDomain(connectionSettings.getServerName());
 
         if (connectionSettings.isCustomHostAndPort()) {
-            builder.setHost(connectionSettings.getHost());
+            setCustomHost(connectionSettings, builder);
+
             builder.setPort(connectionSettings.getPort());
         }
 
+        builder.setDebuggerEnabled(true);
         builder.setSecurityMode(connectionSettings.getTlsMode().getSecurityMode());
         builder.setCompressionEnabled(connectionSettings.useCompression());
         builder.setSendPresence(false);
@@ -54,8 +59,6 @@ public class ConnectionBuilder {
                         mtm.wrapHostnameVerifier(new org.apache.http.conn.ssl.StrictHostnameVerifier()));
             } else {
                 TLSUtils.acceptAllCertificates(builder);
-                // since Smack 4.2.0-beta3
-                // TLSUtils.disableHostnameVerificationForTlsCertificicates(builder);
             }
         } catch (NoSuchAlgorithmException | KeyManagementException e) {
             LogManager.exception(LOG_TAG, e);
@@ -66,6 +69,36 @@ public class ConnectionBuilder {
 
         LogManager.i(LOG_TAG, "new XMPPTCPConnection " + connectionSettings.getServerName());
         return new XMPPTCPConnection(builder.build());
+    }
+
+    private static void setCustomHost(@NonNull ConnectionSettings connectionSettings, XMPPTCPConnectionConfiguration.Builder builder) {
+        String host = connectionSettings.getHost();
+        InetAddress ipAddressOrNull = getIpAddressOrNull(host);
+
+        LogManager.i(LOG_TAG, "setCustomHost. host: " + host + " ip address: " + ipAddressOrNull);
+
+        if (ipAddressOrNull != null) {
+            LogManager.i(LOG_TAG, "Using custom IP address " + ipAddressOrNull);
+            builder.setHostAddress(ipAddressOrNull);
+        } else {
+            LogManager.i(LOG_TAG, "Using custom host " + host);
+            builder.setHost(host);
+        }
+    }
+
+    @Nullable
+    private static InetAddress getIpAddressOrNull(String host) {
+        InetAddress ipAddress = null;
+
+        if (Patterns.IP_ADDRESS.matcher(host).matches()) {
+            try {
+                ipAddress = InetAddress.getByName(host);
+            } catch (UnknownHostException e) {
+                LogManager.exception(LOG_TAG, e);
+            }
+        }
+
+        return ipAddress;
     }
 
     private static ProxyInfo getProxyInfo(ConnectionSettings connectionSettings) {

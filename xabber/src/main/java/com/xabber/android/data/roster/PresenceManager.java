@@ -18,6 +18,7 @@ import android.support.annotation.Nullable;
 
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
+import com.xabber.android.data.extension.capability.CapabilitiesManager;
 import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.NetworkException;
 import com.xabber.android.data.OnLoadListener;
@@ -56,12 +57,7 @@ import java.util.Set;
 public class PresenceManager implements OnLoadListener, OnAccountDisabledListener,
         OnPacketListener, OnAuthorizedListener {
 
-    private final static PresenceManager instance;
-
-    static {
-        instance = new PresenceManager();
-        Application.getInstance().addManager(instance);
-    }
+    private static PresenceManager instance;
 
     private final EntityNotificationProvider<SubscriptionRequest> subscriptionRequestProvider;
     /**
@@ -70,13 +66,17 @@ public class PresenceManager implements OnLoadListener, OnAccountDisabledListene
      */
     private final HashMap<AccountJid, Set<UserJid>> requestedSubscriptions;
 
+    public static PresenceManager getInstance() {
+        if (instance == null) {
+            instance = new PresenceManager();
+        }
+
+        return instance;
+    }
+
     private PresenceManager() {
         subscriptionRequestProvider = new EntityNotificationProvider<>(R.drawable.ic_stat_add_circle);
         requestedSubscriptions = new HashMap<>();
-    }
-
-    public static PresenceManager getInstance() {
-        return instance;
     }
 
     @Override
@@ -204,12 +204,16 @@ public class PresenceManager implements OnLoadListener, OnAccountDisabledListene
             return;
         }
 
+        if (presence.isAvailable()) {
+            CapabilitiesManager.getInstance().updateClientInfo(account, presence);
+        }
+
         for (OnStatusChangeListener listener : Application.getInstance().getManagers(OnStatusChangeListener.class)) {
                 listener.onStatusChanged(account, from,
                         StatusMode.createStatusMode(presence), presence.getStatus());
         }
 
-        RosterContact rosterContact = RosterManager.getInstance().getRosterContact(account, from);
+        RosterContact rosterContact = RosterManager.getInstance().getRosterContact(account, from.getBareJid());
         if (rosterContact != null) {
             ArrayList<RosterContact> rosterContacts = new ArrayList<>();
             rosterContacts.add(rosterContact);

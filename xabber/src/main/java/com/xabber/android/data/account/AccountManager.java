@@ -16,6 +16,7 @@ package com.xabber.android.data.account;
 
 import android.database.Cursor;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.text.TextUtils;
 
 import com.xabber.android.R;
@@ -78,12 +79,7 @@ import java.util.Map;
  */
 public class AccountManager implements OnLoadListener, OnWipeListener {
 
-    private final static AccountManager instance;
-
-    static {
-        instance = new AccountManager();
-        Application.getInstance().addManager(instance);
-    }
+    private static AccountManager instance;
 
     /**
      * List of saved statuses.
@@ -109,7 +105,14 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
      */
     private boolean xa;
 
-    @SuppressWarnings("ResourceType")
+    public static AccountManager getInstance() {
+        if (instance == null) {
+            instance = new AccountManager();
+        }
+
+        return instance;
+    }
+
     private AccountManager() {
         this.application = Application.getInstance();
         accountItems = new HashMap<>();
@@ -120,10 +123,6 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
 
         away = false;
         xa = false;
-    }
-
-    public static AccountManager getInstance() {
-        return instance;
     }
 
     @Override
@@ -253,6 +252,7 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
      * @param account full jid.
      * @return Specified account or <code>null</code> if account doesn't exists.
      */
+    @Nullable
     public AccountItem getAccount(AccountJid account) {
         return accountItems.get(account);
     }
@@ -261,7 +261,7 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
      * Save account item to database.
      */
     void requestToWriteAccount(final AccountItem accountItem) {
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 accountItem.setId(AccountTable.getInstance().write(accountItem.getId(), accountItem));
@@ -287,9 +287,6 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
                 saslEnabled, tlsMode, compression, proxyType, proxyHost, proxyPort, proxyUser,
                 proxyPassword, syncable, keyPair, lastSync, archiveMode);
 
-        if (registerNewAccount) {
-            accountItem.registerAccount();
-        }
         requestToWriteAccount(accountItem);
         addAccount(accountItem);
         ReconnectionManager.getInstance().requestReconnect(accountItem.getAccount());
@@ -398,7 +395,7 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
             }
             onAccountDisabled(accountItem);
         }
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 AccountTable.getInstance().remove(account.toString(), accountItem.getId());
@@ -529,23 +526,13 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
 
     public void setEnabled(AccountJid account, boolean enabled) {
         AccountItem accountItem = AccountManager.getInstance().getAccount(account);
+        if (accountItem == null) {
+            return;
+        }
 
         accountItem.setEnabled(enabled);
         accountItem.connect();
         requestToWriteAccount(accountItem);
-
-        if (enabled) {
-            onAccountEnabled(accountItem);
-            if (accountItem.getRawStatusMode().isOnline()) {
-                onAccountOnline(accountItem);
-            }
-        } else {
-            if (accountItem.getRawStatusMode().isOnline()) {
-                onAccountOffline(accountItem);
-            }
-            onAccountDisabled(accountItem);
-        }
-
     }
 
     public ArchiveMode getArchiveMode(AccountJid account) {
@@ -790,16 +777,7 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
      * Sets status for account.
      */
     private void setStatus(AccountItem accountItem, StatusMode statusMode, String statusText) {
-        boolean changed = accountItem.isEnabled()
-                && accountItem.getRawStatusMode().isOnline() != statusMode.isOnline();
         accountItem.setStatus(statusMode, statusText);
-        if (changed && statusMode.isOnline()) {
-            onAccountOnline(accountItem);
-        }
-        accountItem.disconnect();
-        if (changed && !statusMode.isOnline()) {
-            onAccountOffline(accountItem);
-        }
         requestToWriteAccount(accountItem);
     }
 
@@ -835,7 +813,7 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
             return;
         }
         savedStatuses.add(savedStatus);
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 StatusTable.getInstance().write(statusMode, statusText);
@@ -850,7 +828,7 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
         if (!savedStatuses.remove(savedStatus)) {
             return;
         }
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 StatusTable.getInstance().remove(savedStatus.getStatusMode(),
@@ -864,7 +842,7 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
      */
     public void clearSavedStatuses() {
         savedStatuses.clear();
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 StatusTable.getInstance().clear();

@@ -43,8 +43,9 @@ class ConnectionThread {
 
     @NonNull
     private final XMPPTCPConnection connection;
+    @SuppressWarnings("WeakerAccess")
     @NonNull
-    private final ConnectionItem connectionItem;
+    final ConnectionItem connectionItem;
     private Thread thread;
 
     ConnectionThread(@NonNull XMPPTCPConnection connection, @NonNull ConnectionItem connectionItem) {
@@ -65,7 +66,11 @@ class ConnectionThread {
         thread.setDaemon(true);
     }
 
-    void start() {
+    /**
+     *
+     * @return true if connection thread started, false if already running - nothing changed
+     */
+    boolean start() {
         if (thread.getState() == Thread.State.TERMINATED) {
             LogManager.i(this, "Connection thread is finished, creating new one...");
             createNewThread();
@@ -74,12 +79,15 @@ class ConnectionThread {
         if (thread.getState() == Thread.State.NEW) {
             LogManager.i(this, "Connection thread is new, starting...");
             thread.start();
+            return true;
         } else {
             LogManager.i(this, "Connection thread is running already");
+            return false;
         }
     }
 
-    private void connectAndLogin() {
+    @SuppressWarnings("WeakerAccess")
+    void connectAndLogin() {
         AndroidLoggingHandler.reset(new AndroidLoggingHandler());
         java.util.logging.Logger.getLogger(XMPPTCPConnection.class.getName()).setLevel(Level.FINEST);
         java.util.logging.Logger.getLogger(AbstractDNSClient.class.getName()).setLevel(Level.FINEST);
@@ -92,7 +100,17 @@ class ConnectionThread {
 
         try {
             LogManager.i(this, "Trying to connect and login...");
-            connection.connect().login();
+            if (!connection.isConnected()) {
+                connection.connect();
+            } else {
+                LogManager.i(this, "Already connected");
+            }
+
+            if (!connection.isAuthenticated()) {
+                connection.login();
+            } else {
+                LogManager.i(this, "Already authenticated");
+            }
         } catch (SASLErrorException e)  {
             LogManager.exception(this, e);
             LogManager.i(this, "Error. " + e.getMessage() + " Exception class: " + e.getClass().getSimpleName());
@@ -107,8 +125,7 @@ class ConnectionThread {
             LogManager.exception(this, e);
         }
 
-        LogManager.i(this, "Connection thread finished - reset reconnection info");
-        ReconnectionManager.getInstance().resetReconnectionInfo(connectionItem.getAccount());
+        LogManager.i(this, "Connection thread finished");
     }
 
     private boolean createAccount() {
@@ -127,5 +144,10 @@ class ConnectionThread {
         }
 
         return success;
+    }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName() + ": " + connectionItem.getAccount();
     }
 }

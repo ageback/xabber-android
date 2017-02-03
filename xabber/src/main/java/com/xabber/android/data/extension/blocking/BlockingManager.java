@@ -1,17 +1,17 @@
 package com.xabber.android.data.extension.blocking;
 
 import com.xabber.android.data.Application;
-import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.connection.ConnectionItem;
 import com.xabber.android.data.connection.listeners.OnAuthorizedListener;
 import com.xabber.android.data.connection.listeners.OnPacketListener;
 import com.xabber.android.data.entity.AccountJid;
-import com.xabber.android.data.entity.BaseEntity;
 import com.xabber.android.data.entity.UserJid;
+import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.message.MessageManager;
 import com.xabber.android.data.notification.NotificationManager;
 import com.xabber.android.data.roster.OnContactChangedListener;
+import com.xabber.android.data.roster.RosterContact;
 import com.xabber.xmpp.blocking.Block;
 import com.xabber.xmpp.blocking.BlockList;
 import com.xabber.xmpp.blocking.Unblock;
@@ -37,17 +37,17 @@ import java.util.concurrent.ConcurrentHashMap;
 public class BlockingManager implements OnAuthorizedListener, OnPacketListener {
 
 
-    private final static BlockingManager instance;
+    private static BlockingManager instance;
 
     private Map<AccountJid, Boolean> supportForAccounts;
-    private Map<AccountJid, List<UserJid>> blockListsForAccounts;
-
-    static {
-        instance = new BlockingManager();
-        Application.getInstance().addManager(instance);
-    }
+    @SuppressWarnings("WeakerAccess")
+    Map<AccountJid, List<UserJid>> blockListsForAccounts;
 
     public static BlockingManager getInstance() {
+        if (instance == null) {
+            instance = new BlockingManager();
+        }
+
         return instance;
     }
 
@@ -56,7 +56,8 @@ public class BlockingManager implements OnAuthorizedListener, OnPacketListener {
         blockListsForAccounts = new ConcurrentHashMap<>();
     }
 
-    private void discoverSupport(AccountJid account, XMPPConnection xmppConnection)
+    @SuppressWarnings("WeakerAccess")
+    void discoverSupport(AccountJid account, XMPPConnection xmppConnection)
             throws XMPPException.XMPPErrorException, SmackException.NotConnectedException,
             InterruptedException, SmackException.NoResponseException {
         ServiceDiscoveryManager discoManager = ServiceDiscoveryManager.getInstanceFor(xmppConnection);
@@ -93,7 +94,8 @@ public class BlockingManager implements OnAuthorizedListener, OnPacketListener {
         return blockListsForAccounts.get(account);
     }
 
-    private void requestBlockList(final AccountJid account) {
+    @SuppressWarnings("WeakerAccess")
+    void requestBlockList(final AccountJid account) {
         if (!isSupported(account)) {
             return;
         }
@@ -133,7 +135,7 @@ public class BlockingManager implements OnAuthorizedListener, OnPacketListener {
 
                                 for (OnContactChangedListener onContactChangedListener
                                         : Application.getInstance().getUIListeners(OnContactChangedListener.class)) {
-                                    onContactChangedListener.onContactsChanged(new ArrayList<BaseEntity>());
+                                    onContactChangedListener.onContactsChanged(new ArrayList<RosterContact>());
                                 }
                             }
                         });
@@ -321,7 +323,7 @@ public class BlockingManager implements OnAuthorizedListener, OnPacketListener {
     public void onAuthorized(final ConnectionItem connection) {
         final AccountJid account = connection.getAccount();
 
-        new Thread("Thread to check " + connection.getRealJid() + " for blocking command support") {
+        Application.getInstance().runInBackground(new Runnable() {
             @Override
             public void run() {
                 try {
@@ -332,6 +334,6 @@ public class BlockingManager implements OnAuthorizedListener, OnPacketListener {
                     LogManager.exception(this, e);
                 }
             }
-        }.start();
+        });
     }
 }

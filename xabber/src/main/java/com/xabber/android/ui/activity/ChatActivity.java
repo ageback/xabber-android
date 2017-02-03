@@ -43,6 +43,7 @@ import com.xabber.android.data.message.NewMessageEvent;
 import com.xabber.android.data.message.chat.ChatManager;
 import com.xabber.android.data.notification.NotificationManager;
 import com.xabber.android.data.roster.OnContactChangedListener;
+import com.xabber.android.data.roster.RosterContact;
 import com.xabber.android.ui.adapter.ChatViewerAdapter;
 import com.xabber.android.ui.color.ColorManager;
 import com.xabber.android.ui.color.StatusBarPainter;
@@ -55,7 +56,6 @@ import org.greenrobot.eventbus.ThreadMode;
 import org.jxmpp.stringprep.XmppStringprepException;
 
 import java.util.Collection;
-import java.util.List;
 
 
 /**
@@ -115,8 +115,14 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
         if (value != null)
             return value;
         // Backward compatibility.
+
+        String stringExtra = intent.getStringExtra("com.xabber.android.data.account");
+        if (stringExtra == null) {
+            return null;
+        }
+
         try {
-            return AccountJid.from(intent.getStringExtra("com.xabber.android.data.account"));
+            return AccountJid.from(stringExtra);
         } catch (XmppStringprepException e) {
             LogManager.exception(LOG_TAG, e);
             return null;
@@ -129,8 +135,14 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
         if (value != null)
             return value;
         // Backward compatibility.
+
+        String stringExtra = intent.getStringExtra("com.xabber.android.data.user");
+        if (stringExtra == null) {
+            return null;
+        }
+
         try {
-            return UserJid.from(intent.getStringExtra("com.xabber.android.data.user"));
+            return UserJid.from(stringExtra);
         } catch (UserJid.UserJidCreateException e) {
             LogManager.exception(LOG_TAG, e);
             return null;
@@ -359,7 +371,7 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
     }
 
     @Override
-    public void onContactsChanged(Collection<BaseEntity> entities) {
+    public void onContactsChanged(Collection<RosterContact> entities) {
         updateChat();
         updateRecentChats();
     }

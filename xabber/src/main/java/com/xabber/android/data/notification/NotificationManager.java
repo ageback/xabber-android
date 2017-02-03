@@ -73,12 +73,7 @@ public class NotificationManager implements OnInitializedListener, OnAccountChan
     private static final int BASE_NOTIFICATION_PROVIDER_ID = 0x10;
 
     private static final long VIBRATION_DURATION = 500;
-    private final static NotificationManager instance;
-
-    static {
-        instance = new NotificationManager();
-        Application.getInstance().addManager(instance);
-    }
+    private static NotificationManager instance;
 
     private final Application application;
     private final android.app.NotificationManager notificationManager;
@@ -106,6 +101,14 @@ public class NotificationManager implements OnInitializedListener, OnAccountChan
     private NotificationCompat.Builder persistentNotificationBuilder;
     private MessageNotificationCreator messageNotificationCreator;
     private int persistentNotificationColor;
+
+    public static NotificationManager getInstance() {
+        if (instance == null) {
+            instance = new NotificationManager();
+        }
+
+        return instance;
+    }
 
     private NotificationManager() {
         this.application = Application.getInstance();
@@ -151,10 +154,6 @@ public class NotificationManager implements OnInitializedListener, OnAccountChan
         messageNotificationCreator = new MessageNotificationCreator();
 
         persistentNotificationColor = application.getResources().getColor(R.color.persistent_notification_color);
-    }
-
-    public static NotificationManager getInstance() {
-        return instance;
     }
 
     public static void addEffects(NotificationCompat.Builder notificationBuilder, MessageItem messageItem) {
@@ -496,7 +495,7 @@ public class NotificationManager implements OnInitializedListener, OnAccountChan
         final int count = messageNotification.getCount();
 
         if (AccountManager.getInstance().getArchiveMode(account) != ArchiveMode.dontStore) {
-            Application.getInstance().runInBackground(new Runnable() {
+            Application.getInstance().runInBackgroundUserRequest(new Runnable() {
                 @Override
                 public void run() {
                     NotificationTable.getInstance().write(account.toString(), user.toString(), text, timestamp, count);
@@ -527,7 +526,7 @@ public class NotificationManager implements OnInitializedListener, OnAccountChan
         if (messageNotification == null)
             return;
         messageNotifications.remove(messageNotification);
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 NotificationTable.getInstance().remove(account.toString(), user.toString());
@@ -544,7 +543,7 @@ public class NotificationManager implements OnInitializedListener, OnAccountChan
             if (provider.canClearNotifications())
                 provider.clearNotifications();
         messageNotifications.clear();
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 NotificationTable.getInstance().clear();
@@ -558,7 +557,7 @@ public class NotificationManager implements OnInitializedListener, OnAccountChan
         final AccountJid account = accountItem.getAccount();
         if (AccountManager.getInstance().getArchiveMode(account) != ArchiveMode.dontStore)
             return;
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 NotificationTable.getInstance().removeAccount(account.toString());

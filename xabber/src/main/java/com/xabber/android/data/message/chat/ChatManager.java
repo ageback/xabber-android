@@ -52,12 +52,7 @@ public class ChatManager implements OnLoadListener, OnAccountRemovedListener {
             .parse("com.xabber.android.data.message.ChatManager.EMPTY_SOUND");
 
     private static final Object PRIVATE_CHAT = new Object();
-    private final static ChatManager instance;
-
-    static {
-        instance = new ChatManager();
-        Application.getInstance().addManager(instance);
-    }
+    private static ChatManager instance;
 
     /**
      * Stored input for user in account.
@@ -94,6 +89,14 @@ public class ChatManager implements OnLoadListener, OnAccountRemovedListener {
      */
     private final NestedMap<Parcelable> scrollStates;
 
+    public static ChatManager getInstance() {
+        if (instance == null) {
+            instance = new ChatManager();
+        }
+
+        return instance;
+    }
+
     private ChatManager() {
         chatInputs = new NestedMap<>();
         privateChats = new NestedMap<>();
@@ -103,10 +106,6 @@ public class ChatManager implements OnLoadListener, OnAccountRemovedListener {
         notifyVisible = new NestedMap<>();
         suppress100 = new NestedMap<>();
         scrollStates = new NestedMap<>();
-    }
-
-    public static ChatManager getInstance() {
-        return instance;
     }
 
     @Override
@@ -261,7 +260,7 @@ public class ChatManager implements OnLoadListener, OnAccountRemovedListener {
         } else {
             privateChats.put(account.toString(), user.toString(), PRIVATE_CHAT);
         }
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 if (save) {
@@ -347,7 +346,7 @@ public class ChatManager implements OnLoadListener, OnAccountRemovedListener {
 
     public void setNotifyVisible(final AccountJid account, final UserJid user, final boolean value) {
         notifyVisible.put(account.toString(), user.toString(), value);
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 NotifyVisibleTable.getInstance().write(account.toString(), user.toString(), value);
@@ -384,7 +383,7 @@ public class ChatManager implements OnLoadListener, OnAccountRemovedListener {
 
     public void setShowText(final AccountJid account, final UserJid user, final ShowMessageTextInNotification value) {
         showText.put(account.toString(), user.toString(), value);
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 ShowTextTable.getInstance().write(account.toString(), user.toString(), value);
@@ -408,7 +407,7 @@ public class ChatManager implements OnLoadListener, OnAccountRemovedListener {
 
     public void setMakeVibro(final AccountJid account, final UserJid user, final boolean value) {
         makeVibro.put(account.toString(), user.toString(), value);
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 VibroTable.getInstance().write(account.toString(), user.toString(), value);
@@ -435,7 +434,7 @@ public class ChatManager implements OnLoadListener, OnAccountRemovedListener {
 
     public void setSound(final AccountJid account, final UserJid user, final Uri value) {
         sounds.put(account.toString(), user.toString(), value == null ? EMPTY_SOUND : value);
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 SoundTable.getInstance().write(account.toString(), user.toString(),
@@ -459,7 +458,7 @@ public class ChatManager implements OnLoadListener, OnAccountRemovedListener {
     public void setSuppress100(final AccountJid account, final UserJid user,
                              final boolean value) {
         suppress100.put(account.toString(), user.toString(), value);
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 Suppress100Table.getInstance().write(account.toString(), user.toString(), value);

@@ -16,6 +16,7 @@ package com.xabber.android.data.message;
 
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.text.TextUtils;
 
 import com.xabber.android.data.Application;
 import com.xabber.android.data.NetworkException;
@@ -29,7 +30,6 @@ import com.xabber.android.data.extension.carbons.CarbonManager;
 import com.xabber.android.data.extension.cs.ChatStateManager;
 import com.xabber.android.data.extension.file.FileManager;
 import com.xabber.android.data.extension.mam.SyncInfo;
-import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.message.chat.ChatManager;
 import com.xabber.android.data.notification.NotificationManager;
 
@@ -172,10 +172,11 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
         }
 
         if (messageItems == null) {
-            LogManager.i(this, "getMessages new messages query");
             messageItems = realm.where(MessageItem.class)
                     .equalTo(MessageItem.Fields.ACCOUNT, getAccountString())
                     .equalTo(MessageItem.Fields.USER, getUserString())
+                    .isNotNull(MessageItem.Fields.TEXT)
+                    .isNotEmpty(MessageItem.Fields.TEXT)
                     .findAllSortedAsync(MessageItem.Fields.TIMESTAMP, Sort.ASCENDING);
             messageItems.addChangeListener(this);
         }
@@ -396,17 +397,19 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
     private void updateLastMessage() {
         if (messagesWithNotEmptyText == null) {
             if (messageItems.isValid() && messageItems.isLoaded() && !messageItems.isEmpty()) {
-                LogManager.i(this, "getLastMessage quert last message");
                 messagesWithNotEmptyText = messageItems.where()
-                        .not().isEmpty(MessageItem.Fields.TEXT)
+                        .isNotNull(MessageItem.Fields.TEXT)
+                        .isNotEmpty(MessageItem.Fields.TEXT)
                         .findAllSortedAsync(MessageItem.Fields.TIMESTAMP, Sort.ASCENDING);
                 messagesWithNotEmptyText.addChangeListener(this);
             }
         } else {
             if (messagesWithNotEmptyText.isValid() && messagesWithNotEmptyText.isLoaded() &&
                     !messagesWithNotEmptyText.isEmpty()) {
-                synchronized (this) {
-                    lastNotEmptyTextMessage = realm.copyFromRealm(messagesWithNotEmptyText.last());
+                if (!TextUtils.isEmpty(messagesWithNotEmptyText.last().getText())) {
+                    synchronized (this) {
+                        lastNotEmptyTextMessage = realm.copyFromRealm(messagesWithNotEmptyText.last());
+                    }
                 }
             }
         }

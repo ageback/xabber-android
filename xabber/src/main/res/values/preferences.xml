@@ -13,57 +13,6 @@
      along with this program. If not, see http://www.gnu.org/licenses/.
 -->
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
-    <string-array name="managers">
-        <item>com.xabber.android.data.SettingsManager</item>
-        <item>com.xabber.android.data.log.LogManager</item>
-        <item>com.xabber.android.data.database.DatabaseManager</item>
-        <item>com.xabber.android.data.extension.avatar.AvatarStorage</item>
-        <item>com.xabber.android.data.extension.otr.OTRManager</item>
-        <item>com.xabber.android.data.connection.ConnectionManager</item>
-        <item>com.xabber.android.data.account.ScreenManager</item>
-        <item>com.xabber.android.data.account.AccountManager</item>
-        <item>com.xabber.android.data.extension.muc.MUCManager</item>
-        <item>com.xabber.android.data.message.MessageManager</item>
-        <item>com.xabber.android.data.message.chat.ChatManager</item>
-        <item>com.xabber.android.data.extension.vcard.VCardManager</item>
-        <item>com.xabber.android.data.extension.avatar.AvatarManager</item>
-        <item>com.xabber.android.data.roster.PresenceManager</item>
-        <item>com.xabber.android.data.roster.RosterManager</item>
-        <item>com.xabber.android.data.roster.GroupManager</item>
-        <item>com.xabber.android.data.message.phrase.PhraseManager</item>
-        <item>com.xabber.android.data.notification.NotificationManager</item>
-        <item>com.xabber.android.data.ActivityManager</item>
-        <item>com.xabber.android.data.extension.capability.CapabilitiesManager</item>
-        <item>com.xabber.android.data.extension.cs.ChatStateManager</item>
-        <item>com.xabber.android.data.connection.NetworkManager</item>
-        <item>com.xabber.android.data.connection.ReconnectionManager</item>
-        <item>com.xabber.android.data.message.ReceiptManager</item>
-        <item>com.xabber.android.data.extension.ssn.SSNManager</item>
-        <item>com.xabber.android.data.extension.attention.AttentionManager</item>
-        <item>com.xabber.android.data.extension.carbons.CarbonManager</item>
-        <item>com.xabber.android.data.extension.httpfileupload.HttpFileUploadManager</item>
-        <item>com.xabber.android.data.extension.blocking.BlockingManager</item>
-        <item>com.xabber.android.data.extension.mam.MamManager</item>
-    </string-array>
-
-    <string-array name="tables">
-        <item>com.xabber.android.data.database.sqlite.AccountTable</item>
-        <item>com.xabber.android.data.database.sqlite.RoomTable</item>
-        <item>com.xabber.android.data.database.sqlite.MessageTable</item>
-        <item>com.xabber.android.data.database.sqlite.GroupTable</item>
-        <item>com.xabber.android.data.database.sqlite.PrivateChatTable</item>
-        <item>com.xabber.android.data.database.sqlite.NotifyVisibleTable</item>
-        <item>com.xabber.android.data.database.sqlite.ShowTextTable</item>
-        <item>com.xabber.android.data.database.sqlite.SoundTable</item>
-        <item>com.xabber.android.data.database.sqlite.VCardTable</item>
-        <item>com.xabber.android.data.database.sqlite.AvatarTable</item>
-        <item>com.xabber.android.data.database.sqlite.StatusTable</item>
-        <item>com.xabber.android.data.database.sqlite.OTRTable</item>
-        <item>com.xabber.android.data.database.sqlite.VibroTable</item>
-        <item>com.xabber.android.data.database.sqlite.NotificationTable</item>
-        <item>com.xabber.android.data.database.sqlite.Suppress100Table</item>
-        <item>com.xabber.android.data.database.sqlite.PhraseTable</item>
-    </string-array>
 
     <string name="in_never_value">-1</string>
     <string name="in_immediately_value">0</string>
@@ -113,7 +62,7 @@
     <bool name="contacts_show_avatars_default">true</bool>
 
     <string name="contacts_show_offline_key">contacts_show_offline</string>
-    <bool name="contacts_show_offline_default">false</bool>
+    <bool name="contacts_show_offline_default">true</bool>
 
     <string name="contacts_show_groups_key">contacts_show_groups</string>
     <bool name="contacts_show_groups_default">true</bool>

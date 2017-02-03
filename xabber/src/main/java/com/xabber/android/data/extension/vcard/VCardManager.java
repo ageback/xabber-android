@@ -84,17 +84,18 @@ public class VCardManager implements OnLoadListener, OnPacketListener,
      */
     private final ArrayList<AccountJid> accountRequested;
 
-    private final static VCardManager instance;
+    private static VCardManager instance;
 
-    private Set<Jid> vCardRequests = new ConcurrentSkipListSet<>();
-    private Set<AccountJid> vCardSaveRequests = new ConcurrentSkipListSet<>();
-
-    static {
-        instance = new VCardManager();
-        Application.getInstance().addManager(instance);
-    }
+    @SuppressWarnings("WeakerAccess")
+    Set<Jid> vCardRequests = new ConcurrentSkipListSet<>();
+    @SuppressWarnings("WeakerAccess")
+    Set<AccountJid> vCardSaveRequests = new ConcurrentSkipListSet<>();
 
     public static VCardManager getInstance() {
+        if (instance == null) {
+            instance = new VCardManager();
+        }
+
         return instance;
     }
 
@@ -134,7 +135,8 @@ public class VCardManager implements OnLoadListener, OnPacketListener,
         });
     }
 
-    private void onLoaded(Map<Jid, StructuredName> names) {
+    @SuppressWarnings("WeakerAccess")
+    void onLoaded(Map<Jid, StructuredName> names) {
         this.names.putAll(names);
     }
 
@@ -151,9 +153,11 @@ public class VCardManager implements OnLoadListener, OnPacketListener,
 
         Collection<UserJid> blockedContacts = BlockingManager.getInstance().getBlockedContacts(account);
 
+        Collection<RosterContact> accountRosterContacts = RosterManager.getInstance().getAccountRosterContacts(account);
+
         // Request vCards for new contacts.
-        for (RosterContact contact : RosterManager.getInstance().getContacts()) {
-            if (account.equals(contact.getAccount()) && !names.containsKey(contact.getUser().getJid())) {
+        for (RosterContact contact : accountRosterContacts) {
+            if (!names.containsKey(contact.getUser().getJid())) {
                 if (!blockedContacts.contains(contact.getUser())) {
                     request(account, contact.getUser().getJid());
                 }
@@ -166,11 +170,25 @@ public class VCardManager implements OnLoadListener, OnPacketListener,
         accountRequested.remove(accountItem.getAccount());
     }
 
+    public void requestByUser(final AccountJid account, final Jid jid) {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
+            @Override
+            public void run() {
+                getVCard(account, jid);
+            }
+        });
+    }
+
     /**
      * Requests vCard.
      */
-    public void request(AccountJid account, Jid jid) {
-        requestVCard(account, jid);
+    public void request(final AccountJid account, final Jid jid) {
+        Application.getInstance().runInBackground(new Runnable() {
+            @Override
+            public void run() {
+                getVCard(account, jid);
+            }
+        });
     }
 
     /**
@@ -199,7 +217,8 @@ public class VCardManager implements OnLoadListener, OnPacketListener,
         return names.get(jid);
     }
 
-    private void onVCardReceived(final AccountJid account, final Jid bareAddress, final VCard vCard) {
+    @SuppressWarnings("WeakerAccess")
+    void onVCardReceived(final AccountJid account, final Jid bareAddress, final VCard vCard) {
         final StructuredName name;
         if (vCard.getType() == Type.error) {
             onVCardFailed(account, bareAddress);
@@ -224,28 +243,23 @@ public class VCardManager implements OnLoadListener, OnPacketListener,
             name = new StructuredName(vCard.getNickName(), vCard.getField(VCardProperty.FN.name()),
                     vCard.getFirstName(), vCard.getMiddleName(), vCard.getLastName());
 
-            Application.getInstance().runInBackground(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        if (account.getFullJid().asBareJid().equals(bareAddress.asBareJid())) {
-                            PresenceManager.getInstance().resendPresence(account);
-                        }
-                    } catch (NetworkException e) {
-                        LogManager.exception(this, e);
-                    }
+            try {
+                if (account.getFullJid().asBareJid().equals(bareAddress.asBareJid())) {
+                    PresenceManager.getInstance().resendPresence(account);
                 }
-            });
+            } catch (NetworkException e) {
+                LogManager.exception(this, e);
+            }
 
         }
         names.put(bareAddress, name);
-        for (RosterContact rosterContact : RosterManager.getInstance().getContacts()) {
-            if (rosterContact.getUser().equals(bareAddress)) {
-                for (OnRosterChangedListener listener : Application.getInstance()
-                        .getManagers(OnRosterChangedListener.class)) {
-                    listener.onContactStructuredInfoChanged(rosterContact, name);
-                }
-            }
+
+        RosterContact rosterContact = RosterManager.getInstance()
+                .getRosterContact(account, bareAddress.asBareJid());
+
+        for (OnRosterChangedListener listener : Application.getInstance()
+                .getManagers(OnRosterChangedListener.class)) {
+            listener.onContactStructuredInfoChanged(rosterContact, name);
         }
         Application.getInstance().runInBackground(new Runnable() {
             @Override
@@ -264,19 +278,22 @@ public class VCardManager implements OnLoadListener, OnPacketListener,
         }
     }
 
-    private void onVCardFailed(final AccountJid account, final Jid bareAddress) {
+    @SuppressWarnings("WeakerAccess")
+    void onVCardFailed(final AccountJid account, final Jid bareAddress) {
         for (OnVCardListener listener : Application.getInstance().getUIListeners(OnVCardListener.class)) {
             listener.onVCardFailed(account, bareAddress);
         }
     }
 
-    private void onVCardSaveSuccess(AccountJid account) {
+    @SuppressWarnings("WeakerAccess")
+    void onVCardSaveSuccess(AccountJid account) {
         for (OnVCardSaveListener listener : Application.getInstance().getUIListeners(OnVCardSaveListener.class)) {
             listener.onVCardSaveSuccess(account);
         }
     }
 
-    private void onVCardSaveFailed(AccountJid account) {
+    @SuppressWarnings("WeakerAccess")
+    void onVCardSaveFailed(AccountJid account) {
         for (OnVCardSaveListener listener : Application.getInstance().getUIListeners(OnVCardSaveListener.class)) {
             listener.onVCardSaveFailed(account);
         }
@@ -287,7 +304,7 @@ public class VCardManager implements OnLoadListener, OnPacketListener,
         if (!(connection instanceof AccountItem)) {
             return;
         }
-        AccountJid account = ((AccountItem) connection).getAccount();
+        AccountJid account = connection.getAccount();
         if (stanza instanceof Presence && ((Presence) stanza).getType() != Presence.Type.error) {
             Jid from = stanza.getFrom();
 
@@ -310,14 +327,10 @@ public class VCardManager implements OnLoadListener, OnPacketListener,
         }
     }
 
-    private void requestVCard(final AccountJid account, final Jid srcUser) {
-
+    @SuppressWarnings("WeakerAccess")
+    void getVCard(final AccountJid account, final Jid srcUser) {
         final AccountItem accountItem = AccountManager.getInstance().getAccount(account);
         if (accountItem == null) {
-            return;
-        }
-
-        if (!accountItem.getFactualStatusMode().isOnline()) {
             onVCardFailed(account, srcUser);
             return;
         }
@@ -325,70 +338,57 @@ public class VCardManager implements OnLoadListener, OnPacketListener,
         final org.jivesoftware.smackx.vcardtemp.VCardManager vCardManager
                 = org.jivesoftware.smackx.vcardtemp.VCardManager.getInstanceFor(accountItem.getConnection());
 
+        if (!accountItem.getConnection().isAuthenticated()) {
+            onVCardFailed(account, srcUser);
+            return;
+        }
 
-        LogManager.i(this, "request vCard for " + srcUser);
+        VCard vCard = null;
 
-        Application.getInstance().runInBackground(new Runnable() {
+        Collection<UserJid> blockedContacts = BlockingManager.getInstance().getBlockedContacts(account);
+        for (UserJid blockedContact : blockedContacts) {
+            if (blockedContact.getBareJid().equals(srcUser.asBareJid())) {
+                return;
+            }
+        }
+
+        final EntityBareJid entityBareJid = srcUser.asEntityBareJidIfPossible();
+
+        if (entityBareJid != null) {
+            vCardRequests.add(srcUser);
+            try {
+                vCard = vCardManager.loadVCard(entityBareJid);
+            } catch (SmackException.NoResponseException | SmackException.NotConnectedException e) {
+                LogManager.exception(this, e);
+                LogManager.w(this, "Error getting vCard: " + e.getMessage());
+            } catch (XMPPException.XMPPErrorException e ) {
+                LogManager.exception(this, e);
+                LogManager.w(this, "XMPP error getting vCard: " + e.getMessage() + e.getXMPPError());
+
+                if (e.getXMPPError().getCondition() == XMPPError.Condition.item_not_found) {
+                    vCard = new VCard();
+                }
+
+            } catch (ClassCastException e) {
+                LogManager.exception(this, e);
+                // http://stackoverflow.com/questions/31498721/error-loading-vcard-information-using-smack-emptyresultiq-cannot-be-cast-to-or
+                LogManager.w(this, "ClassCastException: " + e.getMessage());
+                vCard = new VCard();
+            } catch (InterruptedException e) {
+                LogManager.exception(this, e);
+            }
+            vCardRequests.remove(srcUser);
+        }
+
+        final VCard finalVCard = vCard;
+        Application.getInstance().runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                if (!accountItem.getConnection().isAuthenticated()) {
-                    return;
+                if (finalVCard == null) {
+                    onVCardFailed(account, srcUser);
+                } else {
+                    onVCardReceived(account, srcUser, finalVCard);
                 }
-
-                VCard vCard = null;
-
-                Collection<UserJid> blockedContacts = BlockingManager.getInstance().getBlockedContacts(account);
-                for (UserJid blockedContact : blockedContacts) {
-                    if (blockedContact.getBareJid().equals(srcUser.asBareJid())) {
-                        return;
-                    }
-                }
-
-                final EntityBareJid entityBareJid = srcUser.asEntityBareJidIfPossible();
-
-                if (entityBareJid != null) {
-                    vCard = getvCard(entityBareJid);
-                }
-
-                final VCard finalVCard = vCard;
-                Application.getInstance().runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (finalVCard == null) {
-                            onVCardFailed(account, srcUser);
-                        } else {
-                            onVCardReceived(account, srcUser, finalVCard);
-                        }
-                    }
-                });
-            }
-
-            VCard getvCard(EntityBareJid entityBareJid) {
-                VCard vCard = null;
-                vCardRequests.add(srcUser);
-                try {
-                    vCard = vCardManager.loadVCard(entityBareJid);
-                } catch (SmackException.NoResponseException | SmackException.NotConnectedException e) {
-                    LogManager.exception(this, e);
-                    LogManager.w(this, "Error getting vCard: " + e.getMessage());
-                } catch (XMPPException.XMPPErrorException e ) {
-                    LogManager.exception(this, e);
-                    LogManager.w(this, "XMPP error getting vCard: " + e.getMessage() + e.getXMPPError());
-
-                    if (e.getXMPPError().getCondition() == XMPPError.Condition.item_not_found) {
-                        vCard = new VCard();
-                    }
-
-                } catch (ClassCastException e) {
-                    LogManager.exception(this, e);
-                    // http://stackoverflow.com/questions/31498721/error-loading-vcard-information-using-smack-emptyresultiq-cannot-be-cast-to-or
-                    LogManager.w(this, "ClassCastException: " + e.getMessage());
-                    vCard = new VCard();
-                } catch (InterruptedException e) {
-                    LogManager.exception(this, e);
-                }
-                vCardRequests.remove(srcUser);
-                return vCard;
             }
         });
     }
@@ -403,7 +403,7 @@ public class VCardManager implements OnLoadListener, OnPacketListener,
         final AbstractXMPPConnection xmppConnection = accountItem.getConnection();
         final org.jivesoftware.smackx.vcardtemp.VCardManager vCardManager = org.jivesoftware.smackx.vcardtemp.VCardManager.getInstanceFor(xmppConnection);
 
-        final Thread thread = new Thread("Save vCard for account " + account) {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
 
@@ -446,10 +446,8 @@ public class VCardManager implements OnLoadListener, OnPacketListener,
                         }
                     }
                 });
-
             }
-        };
-        thread.start();
+        });
     }
 
     public boolean isVCardRequested(Jid user) {

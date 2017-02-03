@@ -45,19 +45,18 @@ import io.realm.Realm;
 import io.realm.RealmResults;
 
 public class MamManager implements OnAuthorizedListener, OnRosterReceivedListener {
-    private final static MamManager instance;
+    private static MamManager instance;
     public static final int SYNC_INTERVAL_MINUTES = 5;
 
     public static int PAGE_SIZE = AbstractChat.PRELOADED_MESSAGES;
 
     private Map<AccountJid, Boolean> supportedByAccount;
 
-    static {
-        instance = new MamManager();
-        Application.getInstance().addManager(instance);
-    }
-
     public static MamManager getInstance() {
+        if (instance == null) {
+            instance = new MamManager();
+        }
+
         return instance;
     }
 
@@ -89,11 +88,11 @@ public class MamManager implements OnAuthorizedListener, OnRosterReceivedListene
         Application.getInstance().runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                Collection<RosterContact> contacts = RosterManager.getInstance().getContacts();
+                Collection<RosterContact> contacts = RosterManager.getInstance()
+                        .getAccountRosterContacts(accountItem.getAccount());
                 for (RosterContact contact : contacts) {
-                    if (contact.getAccount().equals(accountItem.getAccount())) {
-                        requestLastHistory(MessageManager.getInstance().getOrCreateChat(contact.getAccount(), contact.getUser()));
-                    }
+                    requestLastHistory(MessageManager.getInstance()
+                            .getOrCreateChat(contact.getAccount(), contact.getUser()));
                 }
             }
         });
@@ -135,61 +134,80 @@ public class MamManager implements OnAuthorizedListener, OnRosterReceivedListene
         return isSupported;
     }
 
-    public void requestLastHistory(final AbstractChat chat) {
+    public void requestLastHistoryByUser(final AbstractChat chat) {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
+            @Override
+            public void run() {
+                getLastHistory(chat);
+            }
+        });
+    }
+
+    private void requestLastHistory(final AbstractChat chat) {
+        Application.getInstance().runInBackground(new Runnable() {
+            @Override
+            public void run() {
+                getLastHistory(chat);
+            }
+        });
+    }
+
+    private boolean isTimeToRefreshHistory(AbstractChat chat) {
+        return chat.getLastSyncedTime() != null
+                && TimeUnit.MILLISECONDS.toMinutes(System.currentTimeMillis() - chat.getLastSyncedTime().getTime())
+                < SYNC_INTERVAL_MINUTES;
+    }
+
+    @SuppressWarnings("WeakerAccess")
+    void getLastHistory(AbstractChat chat) {
         if (chat == null) {
             return;
         }
 
-        if (chat.getLastSyncedTime() != null
-                && TimeUnit.MILLISECONDS.toMinutes(System.currentTimeMillis() - chat.getLastSyncedTime().getTime()) < SYNC_INTERVAL_MINUTES) {
+        if (isTimeToRefreshHistory(chat)) {
             return;
         }
 
         final AccountItem accountItem = AccountManager.getInstance().getAccount(chat.getAccount());
-        if (accountItem == null || !accountItem.getFactualStatusMode().isOnline()) {
+        if (accountItem == null) {
             return;
         }
 
-        Application.getInstance().runInBackground(new Runnable() {
-            @Override
-            public void run() {
-                XMPPTCPConnection connection = accountItem.getConnection();
-                if (!connection.isAuthenticated()) {
-                    return;
-                }
+        XMPPTCPConnection connection = accountItem.getConnection();
+        if (!connection.isAuthenticated()) {
+            return;
+        }
 
-                if (!checkSupport(accountItem)) {
-                    return;
-                }
+        if (!checkSupport(accountItem)) {
+            return;
+        }
 
-                EventBus.getDefault().post(new LastHistoryLoadStartedEvent(chat));
+        EventBus.getDefault().post(new LastHistoryLoadStartedEvent(chat));
 
-                org.jivesoftware.smackx.mam.MamManager mamManager
-                        = org.jivesoftware.smackx.mam.MamManager.getInstanceFor(connection);
+        org.jivesoftware.smackx.mam.MamManager mamManager
+                = org.jivesoftware.smackx.mam.MamManager.getInstanceFor(connection);
 
-                String lastMessageMamId;
-                int receivedMessagesCount;
-                do {
-                    Realm realm = Realm.getDefaultInstance();
-                    lastMessageMamId = getSyncInfo(realm, chat.getAccount(), chat.getUser()).getLastMessageMamId();
-                    realm.close();
+        String lastMessageMamId;
+        int receivedMessagesCount;
+        do {
+            Realm realm = Realm.getDefaultInstance();
+            lastMessageMamId = getSyncInfo(realm, chat.getAccount(), chat.getUser()).getLastMessageMamId();
+            realm.close();
 
-                    receivedMessagesCount = requestLastHistoryPage(mamManager, chat, lastMessageMamId);
+            receivedMessagesCount = requestLastHistoryPage(mamManager, chat, lastMessageMamId);
 
-                    // if it was NOT the first time, and we got exactly one page,
-                    // it means that there should be more unloaded recent history
-                } while (lastMessageMamId != null && receivedMessagesCount == PAGE_SIZE);
+            // if it was NOT the first time, and we got exactly one page,
+            // it means that there should be more unloaded recent history
+        } while (lastMessageMamId != null && receivedMessagesCount == PAGE_SIZE);
 
-                // if it was first time receiving history, and we got less than a page
-                // it mean that all previous history loaded
-                if (lastMessageMamId == null
-                        && receivedMessagesCount >= 0 && receivedMessagesCount < PAGE_SIZE) {
-                    setRemoteHistoryCompletelyLoaded(chat);
-                }
+        // if it was first time receiving history, and we got less than a page
+        // it mean that all previous history loaded
+        if (lastMessageMamId == null
+                && receivedMessagesCount >= 0 && receivedMessagesCount < PAGE_SIZE) {
+            setRemoteHistoryCompletelyLoaded(chat);
+        }
 
-                EventBus.getDefault().post(new LastHistoryLoadFinishedEvent(chat));
-            }
-        });
+        EventBus.getDefault().post(new LastHistoryLoadFinishedEvent(chat));
     }
 
     public void setRemoteHistoryCompletelyLoaded(AbstractChat chat) {
@@ -205,8 +223,6 @@ public class MamManager implements OnAuthorizedListener, OnRosterReceivedListene
 
     public int requestLastHistoryPage(org.jivesoftware.smackx.mam.MamManager mamManager,
                                       AbstractChat chat, String lastMessageMamId) {
-        LogManager.i(this, "requestLastHistoryPage " + chat.getUser());
-
         final org.jivesoftware.smackx.mam.MamManager.MamQueryResult mamQueryResult;
         try {
             if (lastMessageMamId == null) {
@@ -366,7 +382,7 @@ public class MamManager implements OnAuthorizedListener, OnRosterReceivedListene
             return;
         }
 
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 if (!checkSupport(accountItem)) {

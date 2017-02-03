@@ -41,7 +41,6 @@ public class FileManager {
 
     static {
         instance = new FileManager();
-        Application.getInstance().addManager(instance);
 
         Resources resources = Application.getInstance().getResources();
         maxImageSize = resources.getDimensionPixelSize(R.dimen.max_chat_image_size);
@@ -54,8 +53,6 @@ public class FileManager {
 
     public static void processFileMessage (final MessageItem messageItem) {
         boolean isImage = isImageUrl(messageItem.getText());
-        LogManager.i(LOG_TAG, "processFileMessage is image " + isImage + " " + messageItem.getText());
-
         messageItem.setIsImage(isImage);
     }
 
@@ -90,6 +87,10 @@ public class FileManager {
     }
 
     private static boolean isImageUrl(String text) {
+        if (text == null) {
+            return false;
+        }
+
         if (text.trim().contains(" ")) {
             return false;
         }

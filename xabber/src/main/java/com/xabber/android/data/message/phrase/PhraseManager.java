@@ -41,24 +41,23 @@ public class PhraseManager implements OnLoadListener {
      */
     private final List<Phrase> phrases;
 
-    private final static PhraseManager instance;
-
-    static {
-        instance = new PhraseManager();
-        Application.getInstance().addManager(instance);
-    }
+    private static PhraseManager instance;
 
     public static PhraseManager getInstance() {
+        if (instance == null) {
+            instance = new PhraseManager();
+        }
+
         return instance;
     }
 
     private PhraseManager() {
-        phrases = new ArrayList<Phrase>();
+        phrases = new ArrayList<>();
     }
 
     @Override
     public void onLoad() {
-        final Collection<Phrase> phrases = new ArrayList<Phrase>();
+        final Collection<Phrase> phrases = new ArrayList<>();
         Cursor cursor;
         cursor = PhraseTable.getInstance().list();
         try {
@@ -136,7 +135,7 @@ public class PhraseManager implements OnLoadListener {
     private void writePhrase(final Phrase phrase, final String value,
                              final String user, final String group, final boolean regexp,
                              final Uri sound) {
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 phrase.setId(PhraseTable.getInstance().write(phrase.getId(),

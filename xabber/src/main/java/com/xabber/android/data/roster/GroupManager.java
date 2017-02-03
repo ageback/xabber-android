@@ -57,12 +57,9 @@ public class GroupManager implements OnLoadListener, OnAccountRemovedListener,
      * Account name used to store information that don't belong to any account.
      */
     public static AccountJid NO_ACCOUNT;
-    private final static GroupManager instance;
+    private static GroupManager instance;
 
     static {
-        instance = new GroupManager();
-        Application.getInstance().addManager(instance);
-
         try {
             // TODO: looks ugly, comes from times, when account was string.
             NO_ACCOUNT = AccountJid.from("com.xabber.android@data/NO_ACCOUNT");
@@ -77,12 +74,16 @@ public class GroupManager implements OnLoadListener, OnAccountRemovedListener,
      */
     private final NestedMap<GroupConfiguration> groupConfigurations;
 
-    private GroupManager() {
-        groupConfigurations = new NestedMap<>();
+    public static GroupManager getInstance() {
+        if (instance == null) {
+            instance = new GroupManager();
+        }
+
+        return instance;
     }
 
-    public static GroupManager getInstance() {
-        return instance;
+    private GroupManager() {
+        groupConfigurations = new NestedMap<>();
     }
 
     @Override
@@ -206,7 +207,7 @@ public class GroupManager implements OnLoadListener, OnAccountRemovedListener,
 
     private void requestToWriteGroup(final AccountJid account, final String group,
                                      final boolean expanded, final ShowOfflineMode showOfflineMode) {
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
                 GroupTable.getInstance().write(account.toString(), group, expanded, showOfflineMode);
