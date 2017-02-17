@@ -10,8 +10,8 @@ android {
     defaultConfig {
         minSdkVersion 14
         targetSdkVersion 25
-        versionCode 325
-        versionName '1.0.153'
+        versionCode 327
+        versionName '1.0.155'
     }
 
     lintOptions {
@@ -82,7 +82,7 @@ android {
 }
 
 ext {
-    smackVersion = '4.2.0-rc3-SNAPSHOT'
+    smackVersion = '4.2.0-rc3'
     supportVersion = '25.1.1'
 }
 

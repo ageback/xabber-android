@@ -45,7 +45,7 @@ public class AccountItem extends ConnectionItem {
      * <p/>
      * MUST BE USED FROM BACKGROUND THREAD ONLY!
      */
-    private Long id;
+    private String id;
     private int colorIndex;
 
     /**
@@ -121,7 +121,7 @@ public class AccountItem extends ConnectionItem {
     /**
      * @return ID in database.
      */
-    Long getId() {
+    String getId() {
         return id;
     }
 
@@ -130,7 +130,7 @@ public class AccountItem extends ConnectionItem {
      * <p/>
      * MUST BE MANAGED FROM BACKGROUND THREAD ONLY.
      */
-    void setId(long id) {
+    void setId(String id) {
         this.id = id;
     }
 
