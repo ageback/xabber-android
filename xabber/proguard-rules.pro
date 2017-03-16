@@ -42,3 +42,5 @@
   **[] $VALUES;
   public *;
 }
+
+-dontwarn com.xabber.**
