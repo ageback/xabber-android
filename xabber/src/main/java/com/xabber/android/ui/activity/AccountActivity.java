@@ -23,6 +23,8 @@ import com.xabber.android.data.account.listeners.OnAccountChangedListener;
 import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.blocking.BlockingManager;
+import com.xabber.android.data.extension.blocking.OnBlockedListChangedListener;
+import com.xabber.android.data.extension.mam.MamManager;
 import com.xabber.android.data.intent.AccountIntentBuilder;
 import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.roster.AbstractContact;
@@ -31,12 +33,14 @@ import com.xabber.android.ui.adapter.accountoptions.AccountOption;
 import com.xabber.android.ui.adapter.accountoptions.AccountOptionsAdapter;
 import com.xabber.android.ui.color.BarPainter;
 import com.xabber.android.ui.color.ColorManager;
+import com.xabber.android.ui.dialog.AccountChatHistoryDialog;
 import com.xabber.android.ui.dialog.AccountColorDialog;
 import com.xabber.android.ui.helper.ContactTitleInflater;
 
 import java.util.Collection;
 
-public class AccountActivity extends ManagedActivity implements AccountOptionsAdapter.Listener, OnAccountChangedListener {
+public class AccountActivity extends ManagedActivity implements AccountOptionsAdapter.Listener,
+        OnAccountChangedListener, OnBlockedListChangedListener {
 
     public static final int ACCOUNT_VIEWER_MENU = R.menu.account_viewer;
     private static final String LOG_TAG = AccountActivity.class.getSimpleName();
@@ -136,10 +140,66 @@ public class AccountActivity extends ManagedActivity implements AccountOptionsAd
 
         AccountOption.COLOR.setDescription(ColorManager.getInstance().getAccountPainter().getAccountColorName(account));
 
-        AccountOption.BLOCK_LIST.setDescription(String.valueOf(BlockingManager.getInstance().getBlockedContacts(account).size()));
+        updateBlockListOption();
+
         AccountOption.SERVER_INFO.setDescription(getString(R.string.account_server_info_description));
 
+        updateChatHistoryOption();
+
         accountOptionsAdapter.notifyDataSetChanged();
+    }
+
+    private void updateChatHistoryOption() {
+        Boolean supported = MamManager.getInstance().isSupported(account);
+
+        final String description;
+
+        if (supported == null) {
+            description = getString(R.string.account_chat_history_unknown);
+        } else if (!supported) {
+            description = getString(R.string.account_chat_history_not_supported);
+        } else {
+            description = getString(R.string.account_chat_history_always);
+        }
+
+        LogManager.i(LOG_TAG, "updateChatHistoryOption supported " + supported);
+
+        AccountOption.CHAT_HISTORY.setDescription(description);
+        accountOptionsAdapter.notifyItemChanged(AccountOption.CHAT_HISTORY.ordinal());
+    }
+
+
+    private void onChatHistoryClick() {
+        Boolean supported = MamManager.getInstance().isSupported(account);
+
+        if (supported != null && supported) {
+            AccountChatHistoryDialog.newInstance(account).show(getFragmentManager(),
+                    AccountChatHistoryDialog.class.getSimpleName());
+        }
+    }
+
+
+    private void updateBlockListOption() {
+        BlockingManager blockingManager = BlockingManager.getInstance();
+
+        Boolean supported = blockingManager.isSupported(account);
+
+        String description;
+        if (supported == null) {
+            description  = getString(R.string.blocked_contacts_unknown);
+        } else if (!supported) {
+            description  = getString(R.string.blocked_contacts_not_supported);
+        } else {
+            int size = blockingManager.getBlockedContacts(account).size();
+            if (size == 0) {
+                description = getString(R.string.blocked_contacts_empty);
+            } else {
+                description = getResources().getQuantityString(R.plurals.blocked_contacts_number, size, size);
+            }
+        }
+
+        AccountOption.BLOCK_LIST.setDescription(description);
+        accountOptionsAdapter.notifyItemChanged(AccountOption.BLOCK_LIST.ordinal());
     }
 
     @Override
@@ -150,10 +210,12 @@ public class AccountActivity extends ManagedActivity implements AccountOptionsAd
         updateOptions();
 
         Application.getInstance().addUIListener(OnAccountChangedListener.class, this);
+        Application.getInstance().addUIListener(OnBlockedListChangedListener.class, this);
     }
 
     @Override
     protected void onPause() {
+        Application.getInstance().removeUIListener(OnBlockedListChangedListener.class, this);
         Application.getInstance().removeUIListener(OnAccountChangedListener.class, this);
 
         super.onPause();
@@ -181,7 +243,8 @@ public class AccountActivity extends ManagedActivity implements AccountOptionsAd
                 startActivity(AccountSettingsActivity.createIntent(this, account));
                 break;
             case COLOR:
-                AccountColorDialog.newInstance(account).show(getFragmentManager(), AccountColorDialog.class.getSimpleName());
+                AccountColorDialog.newInstance(account).show(getFragmentManager(),
+                        AccountColorDialog.class.getSimpleName());
                 break;
             case BLOCK_LIST:
                 startActivity(BlockedListActivity.createIntent(this, account));
@@ -190,7 +253,7 @@ public class AccountActivity extends ManagedActivity implements AccountOptionsAd
                 startActivity(ServerInfoActivity.createIntent(this, account));
                 break;
             case CHAT_HISTORY:
-
+                onChatHistoryClick();
                 break;
         }
     }
@@ -202,6 +265,13 @@ public class AccountActivity extends ManagedActivity implements AccountOptionsAd
         if (accounts.contains(account)) {
             updateTitle();
             updateOptions();
+        }
+    }
+
+    @Override
+    public void onBlockedListChanged(AccountJid account) {
+        if (this.account.equals(account)) {
+            updateBlockListOption();
         }
     }
 }

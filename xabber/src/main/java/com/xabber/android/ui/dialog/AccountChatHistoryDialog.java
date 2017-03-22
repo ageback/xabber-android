@@ -12,13 +12,13 @@ import com.xabber.android.R;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.entity.AccountJid;
 
-public class AccountColorDialog extends DialogFragment {
+public class AccountChatHistoryDialog extends DialogFragment {
     private static final String ARGUMENT_ACCOUNT = AccountColorDialog.class.getName();
 
     AccountJid accountJid;
 
     public static DialogFragment newInstance(AccountJid account) {
-        AccountColorDialog fragment = new AccountColorDialog();
+        AccountChatHistoryDialog fragment = new AccountChatHistoryDialog();
 
         Bundle arguments = new Bundle();
         arguments.putParcelable(ARGUMENT_ACCOUNT, account);
@@ -26,28 +26,28 @@ public class AccountColorDialog extends DialogFragment {
         return fragment;
     }
 
-    @Override public void onCreate(@Nullable Bundle savedInstanceState) {
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         Bundle args = getArguments();
         accountJid = args.getParcelable(ARGUMENT_ACCOUNT);
     }
 
-    @Override public Dialog onCreateDialog(Bundle savedInstanceState) {
+    @Override
+    public Dialog onCreateDialog(Bundle savedInstanceState) {
         AlertDialog.Builder dialog = new AlertDialog.Builder(getActivity());
-        dialog.setTitle(getString(R.string.account_color));
+        dialog.setTitle(getString(R.string.account_chat_history));
         dialog.setPositiveButton(null, null);
         dialog.setNegativeButton(android.R.string.cancel, null);
-        int colorIndex = AccountManager.getInstance().getColorLevel(accountJid);
 
-        dialog.setSingleChoiceItems(R.array.account_color_names, colorIndex, selectItemListener);
+        dialog.setSingleChoiceItems(R.array.account_chat_history, 0, selectItemListener);
         return dialog.create();
     }
 
     DialogInterface.OnClickListener selectItemListener = new DialogInterface.OnClickListener() {
 
         @Override public void onClick(DialogInterface dialog, int which) {
-            AccountManager.getInstance().setColor(accountJid, which);
             AccountManager.getInstance().onAccountChanged(accountJid);
             dialog.dismiss();
         }
