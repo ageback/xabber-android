@@ -2,6 +2,7 @@ package com.xabber.android.ui.fragment;
 
 import android.app.Activity;
 import android.app.Fragment;
+import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.text.TextUtils;
@@ -58,6 +59,9 @@ public class ContactVcardViewerFragment extends Fragment implements OnContactCha
     public static final String ARGUMENT_USER = "com.xabber.android.ui.fragment.ContactVcardViewerFragment.ARGUMENT_USER";
     private static final String SAVED_VCARD = "com.xabber.android.ui.fragment.ContactVcardViewerFragment.SAVED_VCARD";
     private static final String SAVED_VCARD_ERROR = "com.xabber.android.ui.fragment.ContactVcardViewerFragment.SAVED_VCARD_ERROR";
+    private static final String LOG_TAG = ContactVcardViewerFragment.class.getSimpleName();
+    public static final int REQUEST_CODE_EDIT_VCARD = 1;
+
     AccountJid account;
     UserJid user;
     private LinearLayout xmppItems;
@@ -153,8 +157,10 @@ public class ContactVcardViewerFragment extends Fragment implements OnContactCha
             @Override
             public void onClick(View v) {
                 if (vCard != null) {
-                    startActivity(AccountInfoEditorActivity
-                            .createIntent(getActivity(), account, vCard.getChildElementXML().toString()));
+                    Intent intent = AccountInfoEditorActivity.createIntent(getActivity(), account,
+                            vCard.getChildElementXML().toString());
+
+                    startActivityForResult(intent, REQUEST_CODE_EDIT_VCARD);
                 }
             }
         });
@@ -275,18 +281,34 @@ public class ContactVcardViewerFragment extends Fragment implements OnContactCha
 
         xmppItems.removeAllViews();
 
+        List<View> resourcesList = new ArrayList<>();
+
+        fillResourceList(account, bareAddress.getJid(), resourcesList);
+
+        if (!resourcesList.isEmpty()) {
+            addHeader(xmppItems, getString(R.string.contact_info_connected_clients_header));
+        }
+
+        addItemGroup(resourcesList, xmppItems, R.drawable.ic_vcard_jabber_24dp, false);
+
+        addHeader(xmppItems, getString(R.string.contact_info_visiting_card_header));
+
         View jabberIdView = createItemView(xmppItems, getString(R.string.jabber_id),
                 bareAddress.toString(), R.drawable.ic_vcard_xmpp_24dp);
 
         if (jabberIdView != null) {
             xmppItems.addView(jabberIdView);
         }
+    }
 
-        List<View> resourcesList = new ArrayList<>();
+    private void addHeader(LinearLayout rootView, String text) {
+        LayoutInflater inflater = (LayoutInflater) getActivity().getSystemService(Activity.LAYOUT_INFLATER_SERVICE);
+        View contactInfoHeader = inflater.inflate(R.layout.item_contact_info_header, rootView, false);
+        TextView headerView = (TextView) contactInfoHeader.findViewById(R.id.contact_info_header_text_view);
+        headerView.setTextColor(ColorManager.getInstance().getAccountPainter().getAccountSendButtonColor(account));
+        headerView.setText(text);
 
-        fillResourceList(account, bareAddress.getJid(), resourcesList);
-
-        addItemGroup(resourcesList, xmppItems, R.drawable.ic_vcard_jabber_24dp);
+        rootView.addView(contactInfoHeader);
     }
 
     private void fillResourceList(AccountJid account, Jid bareAddress, List<View> resourcesList) {
@@ -370,7 +392,7 @@ public class ContactVcardViewerFragment extends Fragment implements OnContactCha
                 TextView thisDeviceIndicatorTextView
                         = (TextView) resourceView.findViewById(R.id.contact_info_item_secondary_forth_line);
 
-                thisDeviceIndicatorTextView.setTextColor(ColorManager.getInstance().getAccountPainter().getAccountDarkColor(account));
+                thisDeviceIndicatorTextView.setTextColor(ColorManager.getInstance().getAccountPainter().getAccountSendButtonColor(account));
                 thisDeviceIndicatorTextView.setText(R.string.contact_viewer_this_device);
                 thisDeviceIndicatorTextView.setVisibility(View.VISIBLE);
             }
@@ -516,11 +538,19 @@ public class ContactVcardViewerFragment extends Fragment implements OnContactCha
     }
 
     private void addItemGroup(List<View> nameList, LinearLayout itemList, int groupIcon) {
+        addItemGroup(nameList, itemList, groupIcon, true);
+    }
+
+
+    private void addItemGroup(List<View> nameList, LinearLayout itemList, int groupIcon, boolean addSeparator) {
         if (nameList.isEmpty()) {
             return;
         }
 
-        addSeparator(itemList);
+        if (addSeparator) {
+            addSeparator(itemList);
+        }
+
         ((ImageView) nameList.get(0).findViewById(R.id.contact_info_group_icon)).setImageResource(groupIcon);
 
         for (View view : nameList) {
@@ -567,4 +597,13 @@ public class ContactVcardViewerFragment extends Fragment implements OnContactCha
         return vCard;
     }
 
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CODE_EDIT_VCARD
+                && resultCode == Activity.RESULT_OK) {
+            requestVCard();
+        }
+
+    }
 }
