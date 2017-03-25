@@ -31,6 +31,7 @@ import com.xabber.android.data.connection.TLSMode;
 import com.xabber.android.data.database.DatabaseManager;
 import com.xabber.android.data.database.RealmManager;
 import com.xabber.android.data.database.realm.AccountRealm;
+import com.xabber.android.data.entity.AccountJid;
 
 import java.security.KeyFactory;
 import java.security.KeyPair;
@@ -473,6 +474,9 @@ public class AccountTable extends AbstractTable {
         accountRealm.setKeyPair(accountItem.getKeyPair());
         accountRealm.setLastSync(accountItem.getLastSync());
         accountRealm.setArchiveMode(accountItem.getArchiveMode());
+        accountRealm.setClearHistoryOnExit(accountItem.isClearHistoryOnExit());
+        accountRealm.setMamDefaultBehavior(accountItem.getMamDefaultBehaviour());
+        accountRealm.setLoadHistorySettings(accountItem.getLoadHistorySettings());
 
         Realm realm = RealmManager.getInstance().getNewBackgroundRealm();
         realm.beginTransaction();
@@ -490,7 +494,7 @@ public class AccountTable extends AbstractTable {
      *
      * @return <b>True</b> if record was removed.
      */
-    public void remove(String account, String id) {
+    public void remove(AccountJid account, String id) {
         Realm realm = RealmManager.getInstance().getNewBackgroundRealm();
         realm.beginTransaction();
         AccountRealm accountRealm = realm

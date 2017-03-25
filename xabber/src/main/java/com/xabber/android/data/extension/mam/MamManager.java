@@ -32,7 +32,6 @@ import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smackx.delay.packet.DelayInformation;
 import org.jivesoftware.smackx.forward.packet.Forwarded;
-import org.jivesoftware.smackx.mam.element.MamPrefsIQ;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -48,6 +47,7 @@ import io.realm.Realm;
 import io.realm.RealmResults;
 
 public class MamManager implements OnAuthorizedListener, OnRosterReceivedListener {
+    static final String LOG_TAG = MamManager.class.getSimpleName();
     private static MamManager instance;
     public static final int SYNC_INTERVAL_MINUTES = 5;
 
@@ -74,7 +74,8 @@ public class MamManager implements OnAuthorizedListener, OnRosterReceivedListene
         }
         final AccountItem accountItem = (AccountItem) connection;
 
-        Application.getInstance().runInBackground(new Runnable() {
+        Application.getInstance().runInBackgroundUserRequest(
+                new Runnable() {
             @Override
             public void run() {
                 updateIsSupported(accountItem);
@@ -89,6 +90,10 @@ public class MamManager implements OnAuthorizedListener, OnRosterReceivedListene
         Application.getInstance().runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                if (accountItem.getLoadHistorySettings() != LoadHistorySettings.all) {
+                    return;
+                }
+
                 Collection<RosterContact> contacts = RosterManager.getInstance()
                         .getAccountRosterContacts(accountItem.getAccount());
                 for (RosterContact contact : contacts) {
@@ -125,7 +130,8 @@ public class MamManager implements OnAuthorizedListener, OnRosterReceivedListene
             if (isSupported) {
                 org.jivesoftware.smackx.mam.MamManager.MamPrefsResult archivingPreferences = mamManager.retrieveArchivingPreferences();
                 LogManager.i(this, "archivingPreferences default behaviour " + archivingPreferences.mamPrefs.getDefault());
-                org.jivesoftware.smackx.mam.MamManager.MamPrefsResult result = mamManager.updateArchivingPreferences(null, null, MamPrefsIQ.DefaultBehavior.always);
+                org.jivesoftware.smackx.mam.MamManager.MamPrefsResult result
+                        = mamManager.updateArchivingPreferences(null, null, accountItem.getMamDefaultBehaviour());
                 LogManager.i(this, "updateArchivingPreferences result " + result.toString());
             }
 
@@ -140,6 +146,28 @@ public class MamManager implements OnAuthorizedListener, OnRosterReceivedListene
 
         AccountManager.getInstance().onAccountChanged(accountItem.getAccount());
         return isSupported;
+    }
+
+    public void requestUpdatePreferences(final AccountJid accountJid) {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
+            @Override
+            public void run() {
+                AccountItem accountItem = AccountManager.getInstance().getAccount(accountJid);
+                org.jivesoftware.smackx.mam.MamManager mamManager = org.jivesoftware.smackx.mam.MamManager
+                        .getInstanceFor(accountItem.getConnection());
+
+                try {
+                    org.jivesoftware.smackx.mam.MamManager.MamPrefsResult result
+                            = mamManager.updateArchivingPreferences(null, null, accountItem.getMamDefaultBehaviour());
+                    LogManager.i(LOG_TAG, "MAM default behavior updated to " + result.mamPrefs.getDefault());
+                } catch (SmackException.NoResponseException | XMPPException.XMPPErrorException
+                        | InterruptedException | SmackException.NotConnectedException
+                        | SmackException.NotLoggedInException e) {
+                    LogManager.exception(LOG_TAG, e);
+                }
+
+            }
+        });
     }
 
     public void requestLastHistoryByUser(final AbstractChat chat) {
@@ -229,8 +257,8 @@ public class MamManager implements OnAuthorizedListener, OnRosterReceivedListene
         realm.close();
     }
 
-    public int requestLastHistoryPage(org.jivesoftware.smackx.mam.MamManager mamManager,
-                                      AbstractChat chat, String lastMessageMamId) {
+    private int requestLastHistoryPage(org.jivesoftware.smackx.mam.MamManager mamManager,
+                                       AbstractChat chat, String lastMessageMamId) {
         final org.jivesoftware.smackx.mam.MamManager.MamQueryResult mamQueryResult;
         try {
             if (lastMessageMamId == null) {
@@ -258,7 +286,7 @@ public class MamManager implements OnAuthorizedListener, OnRosterReceivedListene
         return receivedMessagesCount;
     }
 
-    public void syncMessages(Realm realm, AbstractChat chat, final Collection<MessageItem> messagesFromServer) {
+    private void syncMessages(Realm realm, AbstractChat chat, final Collection<MessageItem> messagesFromServer) {
 
         if (messagesFromServer == null || messagesFromServer.isEmpty()) {
             return;

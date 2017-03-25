@@ -21,8 +21,12 @@ import android.text.TextUtils;
 
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
+import com.xabber.android.data.OnUnloadListener;
+import com.xabber.android.data.database.MessageDatabaseManager;
 import com.xabber.android.data.database.RealmManager;
 import com.xabber.android.data.database.realm.AccountRealm;
+import com.xabber.android.data.extension.mam.LoadHistorySettings;
+import com.xabber.android.data.extension.mam.MamManager;
 import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.NetworkException;
 import com.xabber.android.data.OnLoadListener;
@@ -51,6 +55,7 @@ import com.xabber.android.data.roster.PresenceManager;
 import com.xabber.android.data.roster.RosterManager;
 
 import org.jivesoftware.smack.util.StringUtils;
+import org.jivesoftware.smackx.mam.element.MamPrefsIQ;
 import org.jxmpp.jid.BareJid;
 import org.jxmpp.jid.DomainBareJid;
 import org.jxmpp.jid.impl.JidCreate;
@@ -82,7 +87,7 @@ import io.realm.RealmResults;
  *
  * @author alexander.ivanov
  */
-public class AccountManager implements OnLoadListener, OnWipeListener {
+public class AccountManager implements OnLoadListener, OnUnloadListener, OnWipeListener {
 
     private static final String LOG_TAG = AccountManager.class.getSimpleName();
 
@@ -193,6 +198,14 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
                     accountRealm.getLastSync(),
                     accountRealm.getArchiveMode());
             accountItem.setId(accountRealm.getId());
+            accountItem.setClearHistoryOnExit(accountRealm.isClearHistoryOnExit());
+            if (accountRealm.getMamDefaultBehavior() != null) {
+                accountItem.setMamDefaultBehaviour(accountRealm.getMamDefaultBehavior());
+            }
+            if (accountRealm.getLoadHistorySettings() != null) {
+                accountItem.setLoadHistorySettings(accountRealm.getLoadHistorySettings());
+            }
+
             accountItems.add(accountItem);
 
         }
@@ -416,7 +429,7 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
         Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
-                AccountTable.getInstance().remove(account.toString(), accountItem.getId());
+                AccountTable.getInstance().remove(account, accountItem.getId());
             }
         });
 
@@ -801,6 +814,32 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
         requestToWriteAccount(accountItem);
     }
 
+    public void setClearHistoryOnExit(AccountJid accountJid, boolean clearHistoryOnExit) {
+        AccountItem accountItem = getAccount(accountJid);
+        accountItem.setClearHistoryOnExit(clearHistoryOnExit);
+        requestToWriteAccount(accountItem);
+    }
+
+    public void setMamDefaultBehaviour(AccountJid accountJid, MamPrefsIQ.DefaultBehavior mamDefaultBehavior) {
+        AccountItem accountItem = getAccount(accountJid);
+
+        if (!accountItem.getMamDefaultBehaviour().equals(mamDefaultBehavior)) {
+            accountItem.setMamDefaultBehaviour(mamDefaultBehavior);
+            requestToWriteAccount(accountItem);
+            MamManager.getInstance().requestUpdatePreferences(accountJid);
+        }
+    }
+
+    public void setLoadHistorySettings(AccountJid accountJid, LoadHistorySettings loadHistorySettings) {
+        AccountItem accountItem = getAccount(accountJid);
+
+        if (!accountItem.getLoadHistorySettings().equals(loadHistorySettings)) {
+            accountItem.setLoadHistorySettings(loadHistorySettings);
+            requestToWriteAccount(accountItem);
+            // TODO request history if needed
+        }
+    }
+
     /**
      * Sets status for account.
      */
@@ -982,4 +1021,18 @@ public class AccountManager implements OnLoadListener, OnWipeListener {
         AccountTable.getInstance().wipe();
     }
 
+    @Override
+    public void onUnload() {
+        removeHistoryOnExit();
+    }
+
+    private void removeHistoryOnExit() {
+        Collection<AccountItem> allAccountItems = AccountManager.getInstance().getAllAccountItems();
+        for (AccountItem accountItem : allAccountItems) {
+            if (accountItem.isClearHistoryOnExit()) {
+                LogManager.i(LOG_TAG, "Removing all history for account " + accountItem.getAccount());
+                MessageDatabaseManager.getInstance().removeAccountMessages(accountItem.getAccount());
+            }
+        }
+    }
 }
