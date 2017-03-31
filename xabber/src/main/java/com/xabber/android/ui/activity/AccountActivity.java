@@ -42,7 +42,6 @@ import java.util.Collection;
 public class AccountActivity extends ManagedActivity implements AccountOptionsAdapter.Listener,
         OnAccountChangedListener, OnBlockedListChangedListener, ContactVcardViewerFragment.Listener {
 
-    public static final int ACCOUNT_VIEWER_MENU = R.menu.account_viewer;
     private static final String LOG_TAG = AccountActivity.class.getSimpleName();
 
     private AccountJid account;
@@ -184,6 +183,12 @@ public class AccountActivity extends ManagedActivity implements AccountOptionsAd
     protected void onResume() {
         super.onResume();
 
+        if (AccountManager.getInstance().getAccount(account) == null) {
+            // in case if account was removed
+            finish();
+            return;
+        }
+
         updateTitle();
         updateOptions();
 
@@ -208,12 +213,6 @@ public class AccountActivity extends ManagedActivity implements AccountOptionsAd
         barPainter.updateWithAccountName(account);
 
         switchCompat.setChecked(accountItem.isEnabled());
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(ACCOUNT_VIEWER_MENU, menu);
-        return true;
     }
 
     @Override

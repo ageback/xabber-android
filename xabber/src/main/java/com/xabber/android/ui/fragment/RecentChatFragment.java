@@ -10,11 +10,13 @@ import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.Toolbar;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
+import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.database.messagerealm.MessageItem;
 import com.xabber.android.data.entity.BaseEntity;
 import com.xabber.android.data.message.AbstractChat;
@@ -30,7 +32,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-public class RecentChatFragment extends Fragment implements ChatListAdapter.Listener {
+public class RecentChatFragment extends Fragment implements ChatListAdapter.Listener, Toolbar.OnMenuItemClickListener {
 
     ChatListAdapter adapter;
     @Nullable
@@ -84,6 +86,8 @@ public class RecentChatFragment extends Fragment implements ChatListAdapter.List
                 NavUtils.navigateUpFromSameTask(getActivity());
             }
         });
+        toolbar.inflateMenu(R.menu.toolbar_recent_chats);
+        toolbar.setOnMenuItemClickListener(this);
 
         toolbar.setBackgroundColor(ColorManager.getInstance().getAccountPainter().getDefaultMainColor());
 
@@ -99,6 +103,16 @@ public class RecentChatFragment extends Fragment implements ChatListAdapter.List
         super.onDetach();
     }
 
+    @Override
+    public boolean onMenuItemClick(MenuItem item) {
+        if (item.getItemId() == R.id.action_close_chats) {
+            MessageManager.closeActiveChats();
+            updateChats();
+        }
+
+        return false;
+    }
+
     public void updateChats() {
 
         Application.getInstance().runInBackgroundUserRequest(new Runnable() {
@@ -112,7 +126,9 @@ public class RecentChatFragment extends Fragment implements ChatListAdapter.List
                     MessageItem lastMessage = abstractChat.getLastMessage();
 
                     if (lastMessage != null && !TextUtils.isEmpty(lastMessage.getText())) {
-                        recentChats.add(abstractChat);
+                        if (AccountManager.getInstance().getAccount(abstractChat.getAccount()).isEnabled()) {
+                            recentChats.add(abstractChat);
+                        }
                     }
                 }
 

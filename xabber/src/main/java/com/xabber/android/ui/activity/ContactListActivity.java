@@ -106,6 +106,7 @@ public class ContactListActivity extends ManagedActivity implements OnAccountCha
     private static final int DIALOG_CLOSE_APPLICATION_ID = 0x57;
 
     private static final String CONTACT_LIST_TAG = "CONTACT_LIST";
+    private static final String LOG_TAG = ContactListActivity.class.getSimpleName();
 
     /**
      * Current action.
@@ -193,7 +194,7 @@ public class ContactListActivity extends ManagedActivity implements OnAccountCha
         drawerToggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.application_title_short, R.string.application_title_short);
         drawerLayout.setDrawerListener(drawerToggle);
 
-        toolbar.inflateMenu(R.menu.contact_list);
+        toolbar.inflateMenu(R.menu.toolbar_contact_list);
         optionsMenu = toolbar.getMenu();
         setUpSearchView(optionsMenu);
         toolbar.setOnMenuItemClickListener(this);
@@ -301,6 +302,13 @@ public class ContactListActivity extends ManagedActivity implements OnAccountCha
     @Override
     protected void onResume() {
         super.onResume();
+
+        if (!AccountManager.getInstance().hasAccounts()) {
+            startActivity(IntroActivity.createIntent(this));
+            finish();
+            return;
+        }
+
         barPainter.setDefaultColor();
         rebuildAccountToggle();
         Application.getInstance().addUIListener(OnAccountChangedListener.class, this);
@@ -455,7 +463,7 @@ public class ContactListActivity extends ManagedActivity implements OnAccountCha
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         super.onCreateOptionsMenu(menu);
-        getMenuInflater().inflate(R.menu.contact_list, menu);
+        getMenuInflater().inflate(R.menu.toolbar_contact_list, menu);
         menu.findItem(R.id.action_search).setVisible(false);
         return true;
     }
@@ -574,11 +582,7 @@ public class ContactListActivity extends ManagedActivity implements OnAccountCha
     }
 
     private void closeAllChats() {
-        for (AbstractChat chat : MessageManager.getInstance().getActiveChats()) {
-            MessageManager.getInstance().closeChat(chat.getAccount(), chat.getUser());
-            NotificationManager.getInstance().
-                    removeMessageNotification(chat.getAccount(), chat.getUser());
-        }
+        MessageManager.closeActiveChats();
         getContactListFragment().getAdapter().onChange();
     }
 

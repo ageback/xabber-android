@@ -1,32 +1,29 @@
 package com.xabber.android.data.extension.carbons;
 
 import com.xabber.android.data.Application;
-import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.SettingsManager.SecurityOtrMode;
-import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.connection.ConnectionItem;
-import com.xabber.android.data.connection.listeners.OnAuthorizedListener;
-import com.xabber.android.data.connection.listeners.OnPacketListener;
 import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.extension.otr.OTRManager;
 import com.xabber.android.data.extension.otr.SecurityLevel;
+import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.message.AbstractChat;
-import com.xabber.android.data.message.MessageManager;
 
 import org.jivesoftware.smack.SmackException;
 import org.jivesoftware.smack.XMPPException;
 import org.jivesoftware.smack.packet.Message;
-import org.jivesoftware.smack.packet.Stanza;
 import org.jivesoftware.smackx.carbons.packet.CarbonExtension;
 
 import java.util.Collection;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 /**
  * Packet extension for XEP-0280: Message Carbons. This class implements
- * the manager for registering {@link Carbon} support, enabling and disabling
+ * the manager for registering Carbon support, enabling and disabling
  * message carbons.
  * <p/>
  * You should call enableCarbons() before sending your first undirected
@@ -34,8 +31,11 @@ import java.util.Collection;
  *
  * @author Georg Lukas, Semyon Baranov
  */
-public class CarbonManager implements OnAuthorizedListener, OnPacketListener {
+public class CarbonManager {
     private static CarbonManager instance;
+
+    @SuppressWarnings("WeakerAccess")
+    Map<AccountJid, CarbonCopyListener> carbonCopyListeners;
 
     public static CarbonManager getInstance() {
         if (instance == null) {
@@ -46,30 +46,30 @@ public class CarbonManager implements OnAuthorizedListener, OnPacketListener {
     }
 
     private CarbonManager() {
+        carbonCopyListeners = new ConcurrentHashMap<>();
     }
 
-    @Override
     public void onAuthorized(final ConnectionItem connection) {
-        if (!(connection instanceof AccountItem)) {
-            return;
-        }
-
-        Application.getInstance().runInBackground(new Runnable() {
-            @Override
-            public void run() {
-                updateIsSupported(connection);
-            }
-        });
+        updateIsSupported(connection);
     }
 
-    private void updateIsSupported(ConnectionItem connectionItem) {
+    @SuppressWarnings("WeakerAccess")
+    void updateIsSupported(final ConnectionItem connectionItem) {
         org.jivesoftware.smackx.carbons.CarbonManager carbonManager
                 = org.jivesoftware.smackx.carbons.CarbonManager
                 .getInstanceFor(connectionItem.getConnection());
 
         try {
             if (carbonManager.isSupportedByServer()) {
+                if (carbonManager.getCarbonsEnabled()) {
+                    // Smack CarbonManager still thinks, that carbons enabled and does not sent IQ
+                    // it drops flag to false when on authorized listener, but it happens after this listener
+                    // so it is problem of unordered authorized listeners
+                    carbonManager.setCarbonsEnabled(false);
+                }
                 carbonManager.setCarbonsEnabled(SettingsManager.connectionUseCarbons());
+
+                addListener(carbonManager, connectionItem.getAccount());
             }
 
         } catch (SmackException.NoResponseException | XMPPException.XMPPErrorException
@@ -78,42 +78,19 @@ public class CarbonManager implements OnAuthorizedListener, OnPacketListener {
         }
     }
 
-    @Override
-    public void onStanza(ConnectionItem connection, Stanza packet) {
-
-        if (!(packet instanceof Message)) {
-            return;
+    // we need to remove old listener not to cause memory leak
+    private void addListener(org.jivesoftware.smackx.carbons.CarbonManager carbonManager, AccountJid account) {
+        CarbonCopyListener carbonCopyListener = carbonCopyListeners.remove(account);
+        if (carbonCopyListener != null) {
+            carbonManager.removeCarbonCopyReceivedListener(carbonCopyListener);
         }
 
-        if (!SettingsManager.connectionUseCarbons()) {
-            return;
-        }
-
-        if (!isCarbonsEnabledForConnection(connection)) {
-            return;
-        }
-
-        if (packet.getFrom() == null) {
-            return;
-        }
-
-
-        final Message message = (Message) packet;
-        CarbonExtension carbonExtension = CarbonExtension.from(message);
-
-        if (carbonExtension == null) {
-            return;
-        }
-
-        if (carbonExtension.getForwarded() == null) {
-            return;
-        }
-        Message forwardedMsg = (Message) carbonExtension.getForwarded().getForwardedStanza();
-        MessageManager.getInstance().displayForwardedMessage(connection, forwardedMsg, carbonExtension.getDirection());
-
+        carbonCopyListener = new CarbonCopyListener(account);
+        carbonCopyListeners.put(account, carbonCopyListener);
+        carbonManager.addCarbonCopyReceivedListener(carbonCopyListener);
     }
 
-    public boolean isCarbonsEnabledForConnection(ConnectionItem connection) {
+    private boolean isCarbonsEnabledForConnection(ConnectionItem connection) {
         return org.jivesoftware.smackx.carbons.CarbonManager
                 .getInstanceFor(connection.getConnection())
                 .getCarbonsEnabled();
