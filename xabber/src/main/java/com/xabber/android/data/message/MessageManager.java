@@ -18,6 +18,7 @@ import android.os.Environment;
 import android.support.annotation.Nullable;
 
 import com.xabber.android.R;
+import com.xabber.android.data.Application;
 import com.xabber.android.data.NetworkException;
 import com.xabber.android.data.OnLoadListener;
 import com.xabber.android.data.SettingsManager;
@@ -364,7 +365,6 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
      * Sets currently visible chat.
      */
     public void setVisibleChat(BaseEntity visibleChat) {
-        final boolean remove = !AccountManager.getInstance().getArchiveMode(visibleChat.getAccount()).saveLocally();
         AbstractChat chat = getChat(visibleChat.getAccount(), visibleChat.getUser());
         if (chat == null) {
             chat = createChat(visibleChat.getAccount(), visibleChat.getUser());
@@ -386,10 +386,6 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
 
                     for (MessageItem messageItem : unreadMessagesList) {
                         messageItem.setRead(true);
-                    }
-
-                    if (remove) {
-                        unreadMessages.deleteAllFromRealm();
                     }
                 }
             });
@@ -437,18 +433,22 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
      *
      */
     public void removeMessage(final String messageItemId) {
-        Realm realm = MessageDatabaseManager.getInstance().getNewBackgroundRealm();
-
-        realm.executeTransaction(new Realm.Transaction() {
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
-            public void execute(Realm realm) {
-                MessageItem first = realm.where(MessageItem.class)
+            public void run() {
+                Realm realm = MessageDatabaseManager.getInstance().getNewBackgroundRealm();
+
+                MessageItem messageItem = realm.where(MessageItem.class)
                         .equalTo(MessageItem.Fields.UNIQUE_ID, messageItemId).findFirst();
-                first.deleteFromRealm();
+                if (messageItem != null) {
+                    realm.beginTransaction();
+                    messageItem.deleteFromRealm();
+                    realm.commitTransaction();
+                }
+
+                realm.close();
             }
         });
-
-        realm.close();
     }
 
 

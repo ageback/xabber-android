@@ -16,17 +16,18 @@ package com.xabber.android.data.connection;
 
 import android.support.annotation.NonNull;
 
-import com.xabber.android.data.Application;
+import com.xabber.android.data.account.AccountAuthErrorEvent;
+import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.log.AndroidLoggingHandler;
 import com.xabber.android.data.log.LogManager;
 
+import org.greenrobot.eventbus.EventBus;
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.SmackException;
 import org.jivesoftware.smack.XMPPException;
 import org.jivesoftware.smack.sasl.SASLErrorException;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.util.DNSUtil;
-import org.jivesoftware.smackx.iqregister.AccountManager;
 
 import java.io.IOException;
 import java.util.logging.Level;
@@ -34,11 +35,6 @@ import java.util.logging.Level;
 import de.measite.minidns.AbstractDNSClient;
 import de.measite.minidns.DNSClient;
 
-/**
- * Provides connection workflow.
- *
- * @author alexander.ivanov
- */
 class ConnectionThread {
 
     @NonNull
@@ -120,36 +116,23 @@ class ConnectionThread {
         } catch (SASLErrorException e)  {
             LogManager.exception(this, e);
             LogManager.i(this, "Error. " + e.getMessage() + " Exception class: " + e.getClass().getSimpleName());
-            Application.getInstance().runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    connectionItem.showDebugToast("Auth error!");
-                    com.xabber.android.data.account.AccountManager.getInstance().setEnabled(connectionItem.getAccount(), false);
-                }
-            });
-        } catch (XMPPException | SmackException | IOException | InterruptedException e) {
+            connectionItem.showDebugToast("Auth error!");
+            com.xabber.android.data.account.AccountManager.getInstance().addAuthenticationError(connectionItem.getAccount());
+            com.xabber.android.data.account.AccountManager.getInstance().setEnabled(connectionItem.getAccount(), false);
+            EventBus.getDefault().postSticky(new AccountAuthErrorEvent(connectionItem.getAccount(), e));
+        } catch (XMPPException | SmackException | IOException e) {
+            LogManager.exception(this, e);
+
+            if (!((AccountItem)connectionItem).isSuccessfulConnectionHappened()) {
+                connectionItem.showDebugToast(e.getMessage());
+                LogManager.i(this, "There was no successful connection, disabling account");
+                com.xabber.android.data.account.AccountManager.getInstance().setEnabled(connectionItem.getAccount(), false);
+            }
+        } catch (InterruptedException e) {
             LogManager.exception(this, e);
         }
 
         LogManager.i(this, "Connection thread finished");
-    }
-
-    private boolean createAccount() {
-        boolean success = false;
-        try {
-            AccountManager.getInstance(connection)
-                    .createAccount(connectionItem.getConnectionSettings().getUserName(),
-                            connectionItem.getConnectionSettings().getPassword());
-            success = true;
-        } catch (SmackException.NoResponseException | SmackException.NotConnectedException | XMPPException.XMPPErrorException | InterruptedException e) {
-            LogManager.exception(this, e);
-        }
-
-        if (success) {
-//            connectionItem.onAccountRegistered();
-        }
-
-        return success;
     }
 
     @Override
