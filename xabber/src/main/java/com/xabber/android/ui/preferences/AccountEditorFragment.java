@@ -42,7 +42,7 @@ public class AccountEditorFragment extends BaseSettingsFragment {
 
         getPreferenceScreen().removePreference(findPreference(getString(R.string.account_sasl_key)));
 
-        AccountManager.getInstance().removeAuthorizationError(listener.getAccount());
+        AccountManager.getInstance().removeAccountError(listener.getAccount());
     }
 
     @Override
