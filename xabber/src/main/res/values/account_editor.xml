@@ -106,4 +106,10 @@
     <string name="account_clear_history_on_exit_title">Clear history on exit</string>
     <string name="account_clear_history_on_exit_summary">Delete all chat messages from device before exiting Xabber.</string>
 
+    <string name="account_bookmarks">Bookmarks</string>
+    <string name="account_bookmarks_summary">List of bookmarks for this account</string>
+
+    <string name="bookmark_jid">Jid: %1$s</string>
+    <string name="bookmark_nick">Nickname: %1$s</string>
+    <string name="bookmark_not_supported">Server not supported bookmarks.</string>
 </resources>
