@@ -1,11 +1,14 @@
 package com.xabber.android.ui.activity;
 
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.Toolbar;
+import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
@@ -34,13 +37,17 @@ import java.util.List;
  * Created by valery.miller on 06.06.17.
  */
 
-public class BookmarksActivity extends ManagedActivity implements Toolbar.OnMenuItemClickListener {
+public class BookmarksActivity extends ManagedActivity implements Toolbar.OnMenuItemClickListener,
+        BookmarkAdapter.OnBookmarkClickListener {
 
     private static final String LOG_TAG = BookmarksActivity.class.getSimpleName();
     private AccountItem accountItem;
     private BookmarkAdapter bookmarksAdapter;
     private View progressBar;
     private TextView tvNotSupport;
+    private int previousSize;
+    private Toolbar toolbar;
+    private BarPainter barPainter;
 
     public static Intent createIntent(Context context, AccountJid account) {
         return new AccountIntentBuilder(context, BookmarksActivity.class).setAccount(account).build();
@@ -70,7 +77,7 @@ public class BookmarksActivity extends ManagedActivity implements Toolbar.OnMenu
             return;
         }
 
-        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar_default);
+        toolbar = (Toolbar) findViewById(R.id.toolbar_default);
         toolbar.setNavigationIcon(R.drawable.ic_arrow_left_white_24dp);
         toolbar.setNavigationOnClickListener(new View.OnClickListener() {
             @Override
@@ -79,25 +86,38 @@ public class BookmarksActivity extends ManagedActivity implements Toolbar.OnMenu
             }
         });
         toolbar.setTitle(R.string.account_bookmarks);
-        //toolbar.inflateMenu(R.menu.toolbar_bookmark_list);
+        toolbar.inflateMenu(R.menu.toolbar_bookmark_list);
         toolbar.setOnMenuItemClickListener(this);
 
-        BarPainter barPainter = new BarPainter(this, toolbar);
+        barPainter = new BarPainter(this, toolbar);
         barPainter.updateWithAccountName(account);
 
         RecyclerView recyclerView = (RecyclerView) findViewById(R.id.server_info_recycler_view);
 
         bookmarksAdapter = new BookmarkAdapter(this);
-
+        bookmarksAdapter.setListener(this);
 
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(bookmarksAdapter);
-
 
         progressBar = findViewById(R.id.server_info_progress_bar);
         tvNotSupport = (TextView) findViewById(R.id.tvNotSupport);
 
         requestBookmarks();
+    }
+
+    @Override
+    public void onBookmarkClick() {
+        updateToolbar();
+        updateMenu();
+    }
+
+    @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        menu.findItem(R.id.action_remove_all).setVisible(bookmarksAdapter.getItemCount() > 0);
+        final boolean checkItemsIsEmpty = bookmarksAdapter.getCheckedItems().isEmpty();
+        menu.findItem(R.id.action_remove_selected).setVisible(!checkItemsIsEmpty);
+        return true;
     }
 
     private void requestBookmarks() {
@@ -107,29 +127,31 @@ public class BookmarksActivity extends ManagedActivity implements Toolbar.OnMenu
         Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
+                boolean support = false;
                 try {
-                    boolean support = BookmarksManager.getInstance().isSupported(accountItem.getAccount());
-                    if (!support) {
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                showNotSupported();
-                            }
-                        });
-                    }
+                   support = BookmarksManager.getInstance().isSupported(accountItem.getAccount());
                 } catch (InterruptedException | SmackException.NoResponseException
                         | XMPPException.XMPPErrorException | SmackException.NotConnectedException e) {
                     LogManager.exception(LOG_TAG, e);
                 }
 
-                final List<BookmarkVO> bookmarks = getBookmarks();
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        progressBar.setVisibility(View.GONE);
-                        bookmarksAdapter.setItems(bookmarks);
-                    }
-                });
+                if (!support) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            showNotSupported();
+                        }
+                    });
+                } else {
+                    final List<BookmarkVO> bookmarks = getBookmarks();
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            progressBar.setVisibility(View.GONE);
+                            bookmarksAdapter.setItems(bookmarks);
+                        }
+                    });
+                }
             }
         });
     }
@@ -167,8 +189,94 @@ public class BookmarksActivity extends ManagedActivity implements Toolbar.OnMenu
         return bookmarksList;
     }
 
+    private void updateMenu() {
+        onPrepareOptionsMenu(toolbar.getMenu());
+    }
+
+    private void updateToolbar() {
+        final ArrayList<BookmarkVO> checkedItems = bookmarksAdapter.getCheckedItems();
+
+        final int currentSize = checkedItems.size();
+
+        if (currentSize == previousSize) {
+            return;
+        }
+
+        if (currentSize == 0) {
+            toolbar.setTitle(getString(R.string.account_bookmarks));
+            barPainter.updateWithAccountName(accountItem.getAccount());
+
+            toolbar.setNavigationOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    finish();
+                }
+            });
+
+        } else {
+            toolbar.setTitle(String.valueOf(currentSize));
+            barPainter.setGrey();
+
+            toolbar.setNavigationOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    bookmarksAdapter.setCheckedItems(new ArrayList<BookmarkVO>());
+                    bookmarksAdapter.notifyDataSetChanged();
+                    updateToolbar();
+                    updateMenu();
+                }
+            });
+        }
+
+        previousSize = currentSize;
+    }
+
     @Override
     public boolean onMenuItemClick(MenuItem item) {
-        return false;
+        switch (item.getItemId()) {
+            case R.id.action_synchronize:
+                requestBookmarks();
+                return true;
+            case R.id.action_remove_all:
+                AlertDialog.Builder builder = new AlertDialog.Builder(this);
+                AlertDialog dialog = builder
+                        .setMessage(String.format(getString(R.string.remove_all_bookmarks_confirm),
+                                AccountManager.getInstance().getVerboseName(accountItem.getAccount())))
+                        .setPositiveButton(R.string.remove_all_bookmarks, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                BookmarksManager.getInstance().removeBookmarks(accountItem.getAccount(),
+                                        bookmarksAdapter.getAllWithoutXabberUrl());
+                                bookmarksAdapter.setCheckedItems(new ArrayList<BookmarkVO>());
+                                requestBookmarks();
+                                updateToolbar();
+                                updateMenu();
+                            }
+                        })
+                        .setNegativeButton(android.R.string.cancel, null).create();
+                dialog.show();
+                return true;
+            case R.id.action_remove_selected:
+                AlertDialog.Builder builder2 = new AlertDialog.Builder(this);
+                AlertDialog dialog2 = builder2
+                        .setMessage(String.format(getString(R.string.remove_selected_bookmarks_confirm),
+                                AccountManager.getInstance().getVerboseName(accountItem.getAccount())))
+                        .setPositiveButton(R.string.remove_selected_bookmarks, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                BookmarksManager.getInstance().removeBookmarks(accountItem.getAccount(),
+                                        bookmarksAdapter.getCheckedItems());
+                                bookmarksAdapter.setCheckedItems(new ArrayList<BookmarkVO>());
+                                requestBookmarks();
+                                updateToolbar();
+                                updateMenu();
+                            }
+                        })
+                        .setNegativeButton(android.R.string.cancel, null).create();
+                dialog2.show();
+                return true;
+            default:
+                return true;
+        }
     }
 }
