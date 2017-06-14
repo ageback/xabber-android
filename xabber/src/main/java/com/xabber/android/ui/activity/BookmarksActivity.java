@@ -103,7 +103,7 @@ public class BookmarksActivity extends ManagedActivity implements Toolbar.OnMenu
         progressBar = findViewById(R.id.server_info_progress_bar);
         tvNotSupport = (TextView) findViewById(R.id.tvNotSupport);
 
-        requestBookmarks();
+        requestBookmarks(false);
     }
 
     @Override
@@ -114,13 +114,14 @@ public class BookmarksActivity extends ManagedActivity implements Toolbar.OnMenu
 
     @Override
     public boolean onPrepareOptionsMenu(Menu menu) {
-        menu.findItem(R.id.action_remove_all).setVisible(bookmarksAdapter.getItemCount() > 0);
         final boolean checkItemsIsEmpty = bookmarksAdapter.getCheckedItems().isEmpty();
+        menu.findItem(R.id.action_remove_all).setVisible(bookmarksAdapter.getItemCount() > 0 && checkItemsIsEmpty);
+        menu.findItem(R.id.action_synchronize).setVisible(checkItemsIsEmpty);
         menu.findItem(R.id.action_remove_selected).setVisible(!checkItemsIsEmpty);
         return true;
     }
 
-    private void requestBookmarks() {
+    private void requestBookmarks(final boolean cleanCache) {
         progressBar.setVisibility(View.VISIBLE);
         tvNotSupport.setVisibility(View.GONE);
 
@@ -143,7 +144,7 @@ public class BookmarksActivity extends ManagedActivity implements Toolbar.OnMenu
                         }
                     });
                 } else {
-                    final List<BookmarkVO> bookmarks = getBookmarks();
+                    final List<BookmarkVO> bookmarks = getBookmarks(cleanCache);
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
@@ -161,8 +162,10 @@ public class BookmarksActivity extends ManagedActivity implements Toolbar.OnMenu
         tvNotSupport.setVisibility(View.VISIBLE);
     }
 
-    private List<BookmarkVO> getBookmarks() {
+    private List<BookmarkVO> getBookmarks(boolean cleanCache) {
         final List<BookmarkVO> bookmarksList = new ArrayList<>();
+
+        if (cleanCache) BookmarksManager.getInstance().cleanCache(accountItem.getAccount());
 
         // urls
         List<BookmarkedURL> bookmarkedURLs =
@@ -205,6 +208,7 @@ public class BookmarksActivity extends ManagedActivity implements Toolbar.OnMenu
 
         if (currentSize == 0) {
             toolbar.setTitle(getString(R.string.account_bookmarks));
+            toolbar.setNavigationIcon(R.drawable.ic_arrow_left_white_24dp);
             barPainter.updateWithAccountName(accountItem.getAccount());
 
             toolbar.setNavigationOnClickListener(new View.OnClickListener() {
@@ -216,6 +220,7 @@ public class BookmarksActivity extends ManagedActivity implements Toolbar.OnMenu
 
         } else {
             toolbar.setTitle(String.valueOf(currentSize));
+            toolbar.setNavigationIcon(R.drawable.ic_clear_white_24dp);
             barPainter.setGrey();
 
             toolbar.setNavigationOnClickListener(new View.OnClickListener() {
@@ -236,7 +241,7 @@ public class BookmarksActivity extends ManagedActivity implements Toolbar.OnMenu
     public boolean onMenuItemClick(MenuItem item) {
         switch (item.getItemId()) {
             case R.id.action_synchronize:
-                requestBookmarks();
+                requestBookmarks(true);
                 return true;
             case R.id.action_remove_all:
                 AlertDialog.Builder builder = new AlertDialog.Builder(this);
@@ -249,7 +254,7 @@ public class BookmarksActivity extends ManagedActivity implements Toolbar.OnMenu
                                 BookmarksManager.getInstance().removeBookmarks(accountItem.getAccount(),
                                         bookmarksAdapter.getAllWithoutXabberUrl());
                                 bookmarksAdapter.setCheckedItems(new ArrayList<BookmarkVO>());
-                                requestBookmarks();
+                                requestBookmarks(false);
                                 updateToolbar();
                                 updateMenu();
                             }
@@ -268,7 +273,7 @@ public class BookmarksActivity extends ManagedActivity implements Toolbar.OnMenu
                                 BookmarksManager.getInstance().removeBookmarks(accountItem.getAccount(),
                                         bookmarksAdapter.getCheckedItems());
                                 bookmarksAdapter.setCheckedItems(new ArrayList<BookmarkVO>());
-                                requestBookmarks();
+                                requestBookmarks(false);
                                 updateToolbar();
                                 updateMenu();
                             }

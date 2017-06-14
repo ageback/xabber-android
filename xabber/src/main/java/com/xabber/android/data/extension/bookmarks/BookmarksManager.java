@@ -177,25 +177,23 @@ public class BookmarksManager {
         }
     }
 
+    public void cleanCache(AccountJid accountJid) {
+        AccountItem accountItem = AccountManager.getInstance().getAccount(accountJid);
+        if (accountItem != null) {
+            BookmarkManager bookmarkManager = BookmarkManager.getBookmarkManager(accountItem.getConnection());
+            bookmarkManager.cleanCache();
+        }
+    }
+
     public void onAuthorized(AccountJid account) {
+        cleanCache(account);
+
         List<BookmarkedConference> conferences = getConferencesFromBookmarks(account);
         if (!conferences.isEmpty()) {
             for (BookmarkedConference conference : conferences) {
                 if (!MUCManager.getInstance().hasRoom(account, conference.getJid())) {
                     createMUC(account, conference);
-                    LogManager.d(this, " Conference " + conference.getName() + "was added to roster from bookmarks");
-                }
-                /*
-                    Fix for strange problem in Smack.
-                    If conference has null-field, then request of bookmark-update will return timeOutException.
-                    To solve: set values for empty field and then update conferences.
-                 */
-                if (conference.getName() == null || conference.getNickname() == null) {
-                    addConferenceToBookmarks(
-                            account,
-                            conference.getJid().getLocalpart().toString(),
-                            conference.getJid(),
-                            getNickname(account, conference.getJid()));
+                    LogManager.d(this, " Conference " + conference.getJid() + "was added to roster from bookmarks");
                 }
             }
         }
@@ -255,10 +253,10 @@ public class BookmarksManager {
             public void run() {
                 MUCManager.getInstance().removeRoom(account, user.getJid().asEntityBareJidIfPossible());
                 MessageManager.getInstance().closeChat(account, user);
-                BookmarksManager.getInstance().removeConferenceFromBookmarks(account, user.getJid().asEntityBareJidIfPossible());
                 NotificationManager.getInstance().removeMessageNotification(account, user);
             }
         });
+        BookmarksManager.getInstance().removeConferenceFromBookmarks(account, user.getJid().asEntityBareJidIfPossible());
     }
 
     private void createMUC(AccountJid account, BookmarkedConference conference) {
