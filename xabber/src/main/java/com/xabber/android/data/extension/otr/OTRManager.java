@@ -20,6 +20,8 @@ import android.support.annotation.Nullable;
 import com.xabber.android.BuildConfig;
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
+import com.xabber.android.data.connection.ConnectionItem;
+import com.xabber.android.data.connection.listeners.OnConnectedListener;
 import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.NetworkException;
 import com.xabber.android.data.OnCloseListener;
@@ -82,7 +84,7 @@ import java.util.concurrent.ThreadFactory;
  * @author alexander.ivanov
  */
 public class OTRManager implements OtrEngineHost, OtrEngineListener,
-        OnLoadListener, OnAccountAddedListener, OnAccountRemovedListener, OnCloseListener {
+        OnLoadListener, OnAccountAddedListener, OnAccountRemovedListener, OnCloseListener, OnConnectedListener {
 
     private static OTRManager instance;
     private static Map<SecurityOtrMode, OtrPolicy> POLICIES;
@@ -187,9 +189,13 @@ public class OTRManager implements OtrEngineHost, OtrEngineListener,
     }
 
     public void refreshSession(AccountJid account, UserJid user) throws NetworkException {
+        refreshSession(account.toString(), user.toString());
+    }
+
+    private void refreshSession(String account, String user) throws NetworkException {
         LogManager.i(this, "Refreshing session for " + user);
         try {
-            getOrCreateSession(account.toString(), user.toString()).refreshSession();
+            getOrCreateSession(account, user).refreshSession();
         } catch (OtrException e) {
             throw new NetworkException(R.string.OTR_ERROR, e);
         }
@@ -258,7 +264,7 @@ public class OTRManager implements OtrEngineHost, OtrEngineListener,
     @Override
     public void unreadableMessageReceived(SessionID sessionID) throws OtrException {
         LogManager.i(this, "unreadableMessageReceived");
-        newAction(sessionID.getAccountID(), sessionID.getUserID(), null, ChatAction.otr_unreadable);
+        newAction(sessionID.getAccountID(), sessionID.getUserID(), " ", ChatAction.otr_unreadable);
     }
 
     /**
@@ -291,7 +297,7 @@ public class OTRManager implements OtrEngineHost, OtrEngineListener,
 
     @Override
     public void smpError(SessionID sessionID, int tlvType, boolean cheated) throws OtrException {
-        newAction(sessionID.getAccountID(), sessionID.getUserID(), null,
+        newAction(sessionID.getAccountID(), sessionID.getUserID(), " ",
                 cheated ? ChatAction.otr_smp_cheated : ChatAction.otr_smp_failed);
         if (cheated) {
             removeSMProgress(sessionID.getAccountID(), sessionID.getUserID());
@@ -306,7 +312,7 @@ public class OTRManager implements OtrEngineHost, OtrEngineListener,
 
     @Override
     public void finishedSessionMessage(SessionID sessionID, String msgText) throws OtrException {
-        newAction(sessionID.getAccountID(), sessionID.getUserID(), null, ChatAction.otr_finished_session);
+        newAction(sessionID.getAccountID(), sessionID.getUserID(), " ", ChatAction.otr_finished_session);
         throw new OtrException(new IllegalStateException(
                         "Prevent from null to be returned. Just process it as regular exception."));
     }
@@ -375,7 +381,7 @@ public class OTRManager implements OtrEngineHost, OtrEngineListener,
                     requestToWrite(sessionID.getAccountID(), sessionID.getUserID(), value, false);
                 }
             }
-            newAction(sessionID.getAccountID(), sessionID.getUserID(), null, isVerified(sessionID.getAccountID(),
+            newAction(sessionID.getAccountID(), sessionID.getUserID(), " ", isVerified(sessionID.getAccountID(),
                     sessionID.getUserID()) ? ChatAction.otr_verified : ChatAction.otr_encryption);
             AbstractChat chat = getChat(sessionID.getAccountID(), sessionID.getUserID());
             if (chat != null) {
@@ -390,12 +396,12 @@ public class OTRManager implements OtrEngineHost, OtrEngineListener,
             } catch (OtrException e) {
                 LogManager.exception(this, e);
             }
-            newAction(sessionID.getAccountID(), sessionID.getUserID(), null, ChatAction.otr_plain);
+            newAction(sessionID.getAccountID(), sessionID.getUserID(), " ", ChatAction.otr_plain);
         } else if (sStatus == SessionStatus.FINISHED) {
             actives.remove(sessionID.getAccountID(), sessionID.getUserID());
             sessions.remove(sessionID.getAccountID(), sessionID.getUserID());
             finished.put(sessionID.getAccountID(), sessionID.getUserID(), true);
-            newAction(sessionID.getAccountID(), sessionID.getUserID(), null, ChatAction.otr_finish);
+            newAction(sessionID.getAccountID(), sessionID.getUserID(), " ", ChatAction.otr_finish);
         } else {
             throw new IllegalStateException();
         }
@@ -491,9 +497,9 @@ public class OTRManager implements OtrEngineHost, OtrEngineListener,
     public void setVerify(AccountJid account, UserJid user, String fingerprint, boolean value) {
         setVerifyWithoutNotification(account.toString(), user.toString(), fingerprint, value);
         if (value) {
-            newAction(account.toString(), user.toString(), null, ChatAction.otr_smp_verified);
+            newAction(account.toString(), user.toString(), " ", ChatAction.otr_smp_verified);
         } else if (actives.get(account.toString(), user.toString()) != null) {
-            newAction(account.toString(), user.toString(), null, ChatAction.otr_encryption);
+            newAction(account.toString(), user.toString(), " ", ChatAction.otr_encryption);
         }
     }
 
@@ -504,7 +510,7 @@ public class OTRManager implements OtrEngineHost, OtrEngineListener,
             return;
         }
         setVerifyWithoutNotification(sessionID.getAccountID(), sessionID.getUserID(), active, value);
-        newAction(sessionID.getAccountID(), sessionID.getUserID(), null,
+        newAction(sessionID.getAccountID(), sessionID.getUserID(), " ",
                 value ? ChatAction.otr_smp_verified : ChatAction.otr_smp_unverified);
         onContactChanged(sessionID);
     }
@@ -514,7 +520,7 @@ public class OTRManager implements OtrEngineHost, OtrEngineListener,
         if (approved) {
             setVerify(sessionID, true);
         } else if (isVerified(sessionID.getAccountID(), sessionID.getUserID())) {
-            newAction(sessionID.getAccountID(), sessionID.getUserID(), null, ChatAction.otr_smp_not_approved);
+            newAction(sessionID.getAccountID(), sessionID.getUserID(), " ", ChatAction.otr_smp_not_approved);
         }
         removeSMProgress(sessionID.getAccountID(), sessionID.getUserID());
     }
@@ -690,9 +696,29 @@ public class OTRManager implements OtrEngineHost, OtrEngineListener,
         }
     }
 
+    private void refreshSessions(AccountJid accountJid) {
+        LogManager.i(this, "refresh all sessions for account " + accountJid);
+        NestedMap<String> entities = new NestedMap<>();
+        entities.addAll(actives);
+        for (Entry<String> entry : entities) {
+            if (entry.getFirst().equals(accountJid.toString())) {
+                try {
+                    refreshSession(entry.getFirst(), entry.getSecond());
+                } catch (NetworkException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
     @Override
     public void onClose() {
         endAllSessions();
+    }
+
+    @Override
+    public void onConnected(ConnectionItem connection) {
+        refreshSessions(connection.getAccount());
     }
 
     public void onSettingsChanged() {
@@ -711,7 +737,7 @@ public class OTRManager implements OtrEngineHost, OtrEngineListener,
     public void messageFromAnotherInstanceReceived(SessionID sessionID) {
         LogManager.i(this, "Message from another instance received on SessionID "
                 + sessionID + ". Restarting OTR session for this user.");
-        newAction(sessionID.getAccountID(), sessionID.getUserID(), null, ChatAction.otr_unreadable);
+        newAction(sessionID.getAccountID(), sessionID.getUserID(), " ", ChatAction.otr_unreadable);
     }
 
     @Override
@@ -720,22 +746,22 @@ public class OTRManager implements OtrEngineHost, OtrEngineListener,
         // since this is not supported, we don't need to do anything
     }
 
-    public void onContactUnAvailable(AccountJid account, UserJid user) {
-        Session session = sessions.get(account.toString(), user.toString());
-
-        if (session == null) {
-            return;
-        }
-
-        if (session.getSessionStatus() == SessionStatus.ENCRYPTED) {
-            try {
-                LogManager.i(this, "onContactUnAvailable. Refresh session for " + user);
-                session.refreshSession();
-            } catch (OtrException e) {
-                LogManager.exception(this, e);
-            }
-        }
-    }
+//    public void onContactUnAvailable(AccountJid account, UserJid user) {
+//        Session session = sessions.get(account.toString(), user.toString());
+//
+//        if (session == null) {
+//            return;
+//        }
+//
+//        if (session.getSessionStatus() == SessionStatus.ENCRYPTED) {
+//            try {
+//                LogManager.i(this, "onContactUnAvailable. Refresh session for " + user);
+//                session.refreshSession();
+//            } catch (OtrException e) {
+//                LogManager.exception(this, e);
+//            }
+//        }
+//    }
 
     public boolean isEncrypted(String text) {
         if (text.length() < 6) return false;
