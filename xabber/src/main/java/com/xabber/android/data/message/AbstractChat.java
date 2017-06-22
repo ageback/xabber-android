@@ -51,6 +51,7 @@ import java.util.UUID;
 
 import io.realm.Realm;
 import io.realm.RealmChangeListener;
+import io.realm.RealmModel;
 import io.realm.RealmResults;
 import io.realm.Sort;
 
@@ -267,7 +268,7 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
             throw new IllegalArgumentException();
         }
         if (text == null) {
-            text = "";
+            text = " ";
         }
         if (action != null) {
             read = true;
@@ -420,7 +421,6 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
 
 
     public void sendMessages() {
-        if (!canSendMessage()) return;
         Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
