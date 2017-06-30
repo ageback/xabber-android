@@ -19,6 +19,7 @@
     <string name="message_quote">Quote</string>
     <string name="message_remove">Remove from history</string>
     <string name="message_repeat">Retry sending</string>
+    <string name="message_otr_show_original">Show message</string>
     <string name="message_open_file">Open</string>
     <string name="message_save_file">Save</string>
     <string name="save_history">Save local history\nStore message history locally</string>
@@ -74,6 +75,7 @@
     <string name="otr_start">Start encryption</string>
     <string name="otr_unencrypted_message">This message has not been encrypted</string>
     <string name="otr_unreadable_message">The encrypted message you sent is unreadable</string>
+    <string name="otr_not_decrypted_message">Message cannot be decrypted</string>
     <string name="otr_verification">OTR verification</string>
     <string name="otr_verify_fingerprint">Verify with fingerprint</string>
     <string name="otr_verify_question">Verify with question</string>
