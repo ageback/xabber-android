@@ -6,11 +6,13 @@ import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v4.app.NavUtils;
+import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.LinearLayoutManager;
 
@@ -30,6 +32,7 @@ import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -95,7 +98,11 @@ import com.xabber.android.ui.widget.CustomMessageMenu;
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
+import org.jivesoftware.smack.packet.Presence;
+import org.jxmpp.jid.Jid;
 import org.jxmpp.jid.impl.JidCreate;
+import org.jxmpp.jid.parts.Resourcepart;
+import org.jxmpp.stringprep.XmppStringprepException;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -143,6 +150,7 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     private RecyclerView realmRecyclerView;
     private ChatMessageAdapter chatMessageAdapter;
     private LinearLayoutManager layoutManager;
+    private SwipeRefreshLayout swipeContainer;
 
     boolean isInputEmpty = true;
     private boolean skipOnTextChanges = false;
@@ -162,6 +170,8 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     private boolean toBeScrolled;
 
     private List<HashMap<String, String>> menuItems = null;
+
+    private int checkedResource; // use only for alert dialog
 
     public static ChatFragment newInstance(AccountJid account, UserJid user) {
         ChatFragment fragment = new ChatFragment();
@@ -283,6 +293,21 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
 
                 if (dy >= 0) {
                     toBeScrolled = false;
+                }
+            }
+        });
+
+        swipeContainer = (SwipeRefreshLayout) view.findViewById(R.id.swipeContainer);
+        swipeContainer.setColorSchemeColors(ColorManager.getInstance().getAccountPainter().getAccountMainColor(account));
+        swipeContainer.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+            @Override
+            public void onRefresh() {
+                swipeContainer.setRefreshing(false);
+                AbstractChat chat = getChat();
+                if (chat != null) {
+                    if (chat.isRemotePreviousHistoryCompletelyLoaded())
+                        Toast.makeText(getActivity(), R.string.toast_no_history, Toast.LENGTH_SHORT).show();
+                    else requestRemoteHistoryLoad();
                 }
             }
         });
@@ -627,6 +652,7 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
             LogManager.i(this, "PreviousHistoryLoadStartedEvent");
             previousHistoryProgressBar.setVisibility(View.VISIBLE);
             isRemoteHistoryRequested = true;
+            swipeContainer.setRefreshing(true);
         }
     }
 
@@ -636,6 +662,7 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
             LogManager.i(this, "PreviousHistoryLoadFinishedEvent");
             isRemoteHistoryRequested = false;
             previousHistoryProgressBar.setVisibility(View.GONE);
+            swipeContainer.setRefreshing(false);
         }
     }
 
@@ -956,7 +983,8 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
             /* security menu */
 
             case R.id.action_start_encryption:
-                startEncryption(account, user);
+                //startEncryption(account, user);
+                showResourceChoiceAlert(account, user);
                 return true;
 
             case R.id.action_restart_encryption:
@@ -1048,6 +1076,10 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     }
 
     private void stopEncryption(AccountJid account, UserJid user) {
+        RegularChat chat = (RegularChat) getChat();
+        if (chat != null)
+            chat.setOTRresource(null);
+
         try {
             OTRManager.getInstance().endSession(account, user);
         } catch (NetworkException e) {
@@ -1056,6 +1088,7 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     }
 
     private void restartEncryption(AccountJid account, UserJid user) {
+        // переустановка ресурса
         try {
             OTRManager.getInstance().refreshSession(account, user);
         } catch (NetworkException e) {
@@ -1068,6 +1101,53 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
             OTRManager.getInstance().startSession(account, user);
         } catch (NetworkException e) {
             Application.getInstance().onError(e);
+        }
+    }
+
+    private void showResourceChoiceAlert(final AccountJid account, final UserJid user) {
+        final List<Presence> allPresences = RosterManager.getInstance().getPresences(account, user.getJid());
+        final ArrayAdapter<String> arrayAdapter = new ArrayAdapter<String>(getActivity(), android.R.layout.select_dialog_singlechoice);
+        for (Presence presence : allPresences) {
+            Jid fromJid = presence.getFrom();
+            Resourcepart resourceOrNull = fromJid.getResourceOrNull();
+            if (resourceOrNull != null)
+                arrayAdapter.add(resourceOrNull.toString());
+        }
+        if (allPresences.size() > 0) {
+            AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
+            builder.setTitle("Select resource to OTR:");
+            builder.setNegativeButton("cancel", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    dialog.dismiss();
+                }
+            });
+            builder.setPositiveButton("ok", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    dialog.dismiss();
+                    try {
+                        RegularChat chat = (RegularChat) getChat();
+                        if (chat != null) {
+                            chat.setOTRresource(Resourcepart.from(arrayAdapter.getItem(checkedResource)));
+                            startEncryption(account, user);
+                        } else {
+                            Toast.makeText(getActivity(), "Session not started: no chat", Toast.LENGTH_SHORT).show();
+                        }
+                    } catch (XmppStringprepException e) {
+                        e.printStackTrace();
+                        Toast.makeText(getActivity(), "Session not started: no resource", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            });
+            builder.setSingleChoiceItems(arrayAdapter, checkedResource, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    checkedResource = which;
+                }
+            }).show();
+        } else {
+            Toast.makeText(getActivity(), "Resources not found", Toast.LENGTH_SHORT).show();
         }
     }
 
