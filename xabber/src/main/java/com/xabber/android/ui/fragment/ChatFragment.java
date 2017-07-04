@@ -32,12 +32,13 @@ import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.PopupWindow;
+import android.widget.RelativeLayout;
 import android.widget.Toast;
 
 import com.xabber.android.R;
@@ -52,6 +53,8 @@ import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.BaseEntity;
 import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.attention.AttentionManager;
+import com.xabber.android.data.extension.capability.CapabilitiesManager;
+import com.xabber.android.data.extension.capability.ClientInfo;
 import com.xabber.android.data.extension.cs.ChatStateManager;
 import com.xabber.android.data.extension.file.FileUtils;
 import com.xabber.android.data.extension.httpfileupload.HttpFileUploadManager;
@@ -65,6 +68,7 @@ import com.xabber.android.data.extension.mam.PreviousHistoryLoadStartedEvent;
 import com.xabber.android.data.extension.muc.MUCManager;
 import com.xabber.android.data.extension.muc.RoomChat;
 import com.xabber.android.data.extension.muc.RoomState;
+import com.xabber.android.data.extension.otr.AuthAskEvent;
 import com.xabber.android.data.extension.otr.OTRManager;
 import com.xabber.android.data.extension.otr.SecurityLevel;
 import com.xabber.android.data.log.LogManager;
@@ -86,6 +90,7 @@ import com.xabber.android.ui.activity.OccupantListActivity;
 import com.xabber.android.ui.activity.QuestionActivity;
 import com.xabber.android.ui.adapter.ChatMessageAdapter;
 import com.xabber.android.ui.adapter.CustomMessageMenuAdapter;
+import com.xabber.android.ui.adapter.ResourceAdapter;
 import com.xabber.android.ui.color.ColorManager;
 import com.xabber.android.ui.dialog.BlockContactDialog;
 import com.xabber.android.ui.dialog.ChatExportDialogFragment;
@@ -107,6 +112,7 @@ import org.jxmpp.stringprep.XmppStringprepException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -146,6 +152,7 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     private ImageButton attachButton;
     private View lastHistoryProgressBar;
     private View previousHistoryProgressBar;
+    private RelativeLayout notifyLayout;
 
     private RecyclerView realmRecyclerView;
     private ChatMessageAdapter chatMessageAdapter;
@@ -172,6 +179,8 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     private List<HashMap<String, String>> menuItems = null;
 
     private int checkedResource; // use only for alert dialog
+
+    private Intent notifyIntent;
 
     public static ChatFragment newInstance(AccountJid account, UserJid user) {
         ChatFragment fragment = new ChatFragment();
@@ -309,6 +318,15 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
                         Toast.makeText(getActivity(), R.string.toast_no_history, Toast.LENGTH_SHORT).show();
                     else requestRemoteHistoryLoad();
                 }
+            }
+        });
+
+        notifyLayout = (RelativeLayout) view.findViewById(R.id.notifyLayout);
+        notifyLayout.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (notifyIntent != null) startActivity(notifyIntent);
+                notifyLayout.setVisibility(View.GONE);
             }
         });
 
@@ -678,6 +696,14 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         }
     }
 
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onEvent(AuthAskEvent event) {
+        if (event.getAccount() == getAccount() && event.getUser() == getUser()) {
+            showNotify(true);
+            notifyIntent = event.getIntent();
+        }
+    }
+
     private void onAttachButtonPressed() {
         if (PermissionsRequester.requestFileReadPermissionIfNeeded(this, PERMISSIONS_REQUEST_ATTACH_FILE)) {
             startFileSelection();
@@ -983,12 +1009,11 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
             /* security menu */
 
             case R.id.action_start_encryption:
-                //startEncryption(account, user);
-                showResourceChoiceAlert(account, user);
+                showResourceChoiceAlert(account, user, false);
                 return true;
 
             case R.id.action_restart_encryption:
-                restartEncryption(account, user);
+                showResourceChoiceAlert(account, user, true);
                 return true;
 
             case R.id.action_stop_encryption:
@@ -1088,7 +1113,6 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     }
 
     private void restartEncryption(AccountJid account, UserJid user) {
-        // переустановка ресурса
         try {
             OTRManager.getInstance().refreshSession(account, user);
         } catch (NetworkException e) {
@@ -1104,50 +1128,82 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         }
     }
 
-    private void showResourceChoiceAlert(final AccountJid account, final UserJid user) {
+    private void showResourceChoiceAlert(final AccountJid account, final UserJid user, final boolean restartSession) {
         final List<Presence> allPresences = RosterManager.getInstance().getPresences(account, user.getJid());
-        final ArrayAdapter<String> arrayAdapter = new ArrayAdapter<String>(getActivity(), android.R.layout.select_dialog_singlechoice);
+
+        final List<Map<String, String>> items = new ArrayList<>();
         for (Presence presence : allPresences) {
             Jid fromJid = presence.getFrom();
+            ClientInfo clientInfo = CapabilitiesManager.getInstance().getCachedClientInfo(fromJid);
+
+            String client = "";
+            if (clientInfo == null) {
+                CapabilitiesManager.getInstance().requestClientInfoByUser(account, fromJid);
+            } else if (clientInfo == ClientInfo.INVALID_CLIENT_INFO) {
+                client = getString(R.string.unknown);
+            } else {
+                String name = clientInfo.getName();
+                if (name != null) {
+                    client = name;
+                }
+
+                String type = clientInfo.getType();
+                if (type != null) {
+                    if (client.isEmpty()) {
+                        client = type;
+                    } else {
+                        client = client + "/" + type;
+                    }
+                }
+            }
+
+            Map<String, String> map = new HashMap<>();
+            if (!client.isEmpty()) {
+                map.put(ResourceAdapter.KEY_CLIENT, client);
+            }
+
             Resourcepart resourceOrNull = fromJid.getResourceOrNull();
-            if (resourceOrNull != null)
-                arrayAdapter.add(resourceOrNull.toString());
+            if (resourceOrNull != null) {
+                map.put(ResourceAdapter.KEY_RESOURCE, resourceOrNull.toString());
+                items.add(map);
+            }
         }
-        if (allPresences.size() > 0) {
+        final ResourceAdapter adapter = new ResourceAdapter(getActivity(), items);
+        adapter.setCheckedItem(checkedResource);
+
+        if (items.size() > 0) {
             AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
-            builder.setTitle("Select resource to OTR:");
-            builder.setNegativeButton("cancel", new DialogInterface.OnClickListener() {
+            builder.setTitle(R.string.otr_select_resource);
+            builder.setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialog, int which) {
                     dialog.dismiss();
+                    checkedResource = adapter.getCheckedItem();
                 }
             });
-            builder.setPositiveButton("ok", new DialogInterface.OnClickListener() {
+            builder.setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialog, int which) {
                     dialog.dismiss();
+                    checkedResource = adapter.getCheckedItem();
                     try {
                         RegularChat chat = (RegularChat) getChat();
                         if (chat != null) {
-                            chat.setOTRresource(Resourcepart.from(arrayAdapter.getItem(checkedResource)));
-                            startEncryption(account, user);
+                            chat.setOTRresource(Resourcepart.from(items.get(checkedResource).get(ResourceAdapter.KEY_RESOURCE)));
+                            if (restartSession) restartEncryption(account, user);
+                            else startEncryption(account, user);
                         } else {
-                            Toast.makeText(getActivity(), "Session not started: no chat", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(getActivity(), R.string.otr_select_toast_no_chat, Toast.LENGTH_SHORT).show();
                         }
                     } catch (XmppStringprepException e) {
                         e.printStackTrace();
-                        Toast.makeText(getActivity(), "Session not started: no resource", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getActivity(), R.string.otr_select_toast_no_resource, Toast.LENGTH_SHORT).show();
                     }
                 }
             });
-            builder.setSingleChoiceItems(arrayAdapter, checkedResource, new DialogInterface.OnClickListener() {
-                @Override
-                public void onClick(DialogInterface dialog, int which) {
-                    checkedResource = which;
-                }
-            }).show();
+            builder.setSingleChoiceItems(adapter, checkedResource, null).show();
         } else {
-            Toast.makeText(getActivity(), "Resources not found", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getActivity(), R.string.otr_select_toast_resources_not_found, Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -1399,5 +1455,10 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         void registerChatFragment(ChatFragment chatFragment);
 
         void unregisterChatFragment();
+    }
+
+    public void showNotify(boolean show) {
+        if (show) notifyLayout.setVisibility(View.VISIBLE);
+        else notifyLayout.setVisibility(View.INVISIBLE);
     }
 }
