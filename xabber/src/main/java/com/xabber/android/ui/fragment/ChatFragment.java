@@ -35,10 +35,10 @@ import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.PopupWindow;
 import android.widget.RelativeLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.xabber.android.R;
@@ -152,7 +152,10 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     private ImageButton attachButton;
     private View lastHistoryProgressBar;
     private View previousHistoryProgressBar;
+
     private RelativeLayout notifyLayout;
+    private TextView tvNotifyTitle;
+    private TextView tvNotifyAction;
 
     private RecyclerView realmRecyclerView;
     private ChatMessageAdapter chatMessageAdapter;
@@ -321,6 +324,8 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
             }
         });
 
+        tvNotifyTitle = (TextView) view.findViewById(R.id.tvNotifyTitle);
+        tvNotifyAction = (TextView) view.findViewById(R.id.tvNotifyAction);
         notifyLayout = (RelativeLayout) view.findViewById(R.id.notifyLayout);
         notifyLayout.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -382,6 +387,8 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         updateContact();
         restoreInputState();
         restoreScrollState();
+
+        showHideNotifyIfNeed();
     }
 
     @Override
@@ -699,8 +706,7 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void onEvent(AuthAskEvent event) {
         if (event.getAccount() == getAccount() && event.getUser() == getUser()) {
-            showNotify(true);
-            notifyIntent = event.getIntent();
+            showHideNotifyIfNeed();
         }
     }
 
@@ -1101,10 +1107,6 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     }
 
     private void stopEncryption(AccountJid account, UserJid user) {
-        RegularChat chat = (RegularChat) getChat();
-        if (chat != null)
-            chat.setOTRresource(null);
-
         try {
             OTRManager.getInstance().endSession(account, user);
         } catch (NetworkException e) {
@@ -1457,8 +1459,20 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         void unregisterChatFragment();
     }
 
-    public void showNotify(boolean show) {
-        if (show) notifyLayout.setVisibility(View.VISIBLE);
-        else notifyLayout.setVisibility(View.INVISIBLE);
+    public void showHideNotifyIfNeed() {
+        AbstractChat chat = getChat();
+        if (chat != null && chat instanceof RegularChat) {
+            notifyIntent = ((RegularChat)chat).getIntent();
+            if (notifyIntent != null) {
+                if (notifyIntent.getBooleanExtra(QuestionActivity.EXTRA_FIELD_CANCEL, false)) {
+                    tvNotifyTitle.setText(R.string.otr_verification_progress_title);
+                    tvNotifyAction.setText(R.string.otr_verification_notify_button_cancel);
+                } else {
+                    tvNotifyTitle.setText(R.string.otr_verification_notify_title);
+                    tvNotifyAction.setText(R.string.otr_verification_notify_button);
+                }
+                notifyLayout.setVisibility(View.VISIBLE);
+            } else notifyLayout.setVisibility(View.GONE);
+        }
     }
 }
