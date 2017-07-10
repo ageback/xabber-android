@@ -166,7 +166,7 @@ public class MamManager implements OnRosterReceivedListener {
         Application.getInstance().runInBackgroundUserRequest(new Runnable() {
             @Override
             public void run() {
-                getLastHistory(chat);
+                getLastHistory(chat, false);
             }
         });
     }
@@ -175,7 +175,7 @@ public class MamManager implements OnRosterReceivedListener {
         Application.getInstance().runInBackground(new Runnable() {
             @Override
             public void run() {
-                getLastHistory(chat);
+                getLastHistory(chat, true);
             }
         });
     }
@@ -187,13 +187,15 @@ public class MamManager implements OnRosterReceivedListener {
     }
 
     @SuppressWarnings("WeakerAccess")
-    void getLastHistory(AbstractChat chat) {
+    void getLastHistory(AbstractChat chat, boolean ignoreTime) {
         if (chat == null) {
             return;
         }
 
-        if (isTimeToRefreshHistory(chat)) {
-            return;
+        if (!ignoreTime) {
+            if (isTimeToRefreshHistory(chat)) {
+                return;
+            }
         }
 
         final AccountItem accountItem = AccountManager.getInstance().getAccount(chat.getAccount());
@@ -502,17 +504,16 @@ public class MamManager implements OnRosterReceivedListener {
             boolean encrypted = false;
             if (otrMessage != null) {
                 if (otrMessage.messageType != net.java.otr4j.io.messages.AbstractMessage.MESSAGE_PLAINTEXT) {
-                    // decrypting messages from archive temporarily disabled
-//                    encrypted = true;
-//                    try {
-//                        body = OTRManager.getInstance().transformReceivingIfSessionExist(chat.getAccount(), chat.getUser(), body);
-//                        if (OTRManager.getInstance().isEncrypted(body)) {
-//                            continue;
-//                        }
-//                    } catch (Exception e) {
-//                        continue;
-//                    }
-                    continue;
+                    encrypted = true;
+                    try {
+                        // this transforming just decrypt message if have keys. No action as injectMessage or something else
+                        body = OTRManager.getInstance().transformReceivingIfSessionExist(chat.getAccount(), chat.getUser(), body);
+                        if (OTRManager.getInstance().isEncrypted(body)) {
+                            continue;
+                        }
+                    } catch (Exception e) {
+                        continue;
+                    }
                 }
                 else body = ((PlainTextMessage) otrMessage).cleanText;
             }
