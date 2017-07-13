@@ -38,7 +38,9 @@ import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.BaseEntity;
 import com.xabber.android.data.entity.NestedMap;
 import com.xabber.android.data.entity.UserJid;
+import com.xabber.android.data.extension.captcha.Captcha;
 import com.xabber.android.data.extension.captcha.CaptchaManager;
+import com.xabber.android.data.extension.carbons.CarbonManager;
 import com.xabber.android.data.extension.muc.MUCManager;
 import com.xabber.android.data.extension.muc.RoomChat;
 import com.xabber.android.data.log.LogManager;
@@ -518,26 +520,45 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
 
                 if (SettingsManager.spamFilterMode() == SettingsManager.SpamFilterMode.authCaptcha) {
                     // check if this message is captcha-answer
-                    String captchaAnswer = CaptchaManager.getInstance().getCaptcha(account, user).getAnswer();
-                    if (captchaAnswer != null) {
-                        if (body.equals(captchaAnswer)) {
+                    Captcha captcha = CaptchaManager.getInstance().getCaptcha(account, user);
+                    if (captcha != null) {
+                        // attempt limit overhead
+                        if (captcha.getAttemptCount() > CaptchaManager.CAPTCHA_MAX_ATTEMPT_COUNT) {
+                            // remove this captcha
+                            CaptchaManager.getInstance().removeCaptcha(account, user);
+                            // discard subscription
+                            try {
+                                PresenceManager.getInstance().discardSubscription(account, user);
+                            } catch (NetworkException e) {
+                                e.printStackTrace();
+                            }
+                            sendMessageWithoutChat(user.getJid(), thread, account,
+                                    Application.getInstance().getResources().getString(R.string.spam_filter_captcha_many_attempts));
+                            return;
+                        }
+                        if (body.equals(captcha.getAnswer())) {
                             // captcha solved successfully
                             // remove this captcha
                             CaptchaManager.getInstance().removeCaptcha(account, user);
 
                             // show auth
                             PresenceManager.getInstance().handleSubscriptionRequest(account, user);
-                            sendMessageWithoutChat(user.getJid(), thread, account, "Captcha-answer is correct. Subscription request showed.");
+                            sendMessageWithoutChat(user.getJid(), thread, account,
+                                    Application.getInstance().getResources().getString(R.string.spam_filter_captcha_correct));
                             return;
                         } else {
                             // captcha solved unsuccessfully
+                            // increment attempt count
+                            captcha.setAttemptCount(captcha.getAttemptCount() + 1);
                             // send warning-message
-                            sendMessageWithoutChat(user.getJid(), thread, account, "Captcha-answer is incorrect");
+                            sendMessageWithoutChat(user.getJid(), thread, account,
+                                    Application.getInstance().getResources().getString(R.string.spam_filter_captcha_incorrect));
                             return;
                         }
                     } else {
                         // no captcha exist and user not from roster
-                        sendMessageWithoutChat(user.getJid(), thread, account, "This user limited receiving messages from not-authorized users");
+                        sendMessageWithoutChat(user.getJid(), thread, account,
+                                Application.getInstance().getResources().getString(R.string.spam_filter_limit_message));
                         // and skip received message as spam
                         return;
                     }
@@ -545,7 +566,8 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
                 } else {
                     // if message from not-roster user
                     // send a warning message to sender
-                    sendMessageWithoutChat(user.getJid(), thread, account, "This user limited receiving messages from not-authorized users");
+                    sendMessageWithoutChat(user.getJid(), thread, account,
+                            Application.getInstance().getResources().getString(R.string.spam_filter_limit_message));
                     // and skip received message as spam
                     return;
                 }
@@ -571,12 +593,16 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
         }
     }
 
+    // send messages without creating chat and adding to roster
+    // used for service auto-generated messages
     public void sendMessageWithoutChat(Jid to, String threadId, AccountJid account, String text) {
         Message message = new Message();
         message.setTo(to);
         message.setType(Message.Type.chat);
         message.setBody(text);
         message.setThread(threadId);
+        // send auto-generated messages without carbons
+        CarbonManager.getInstance().setMessageToIgnoreCarbons(message);
         try {
             StanzaSender.sendStanza(account, message);
         } catch (NetworkException e) {
@@ -622,6 +648,14 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
         } catch (UserJid.UserJidCreateException e) {
             return;
         }
+
+        //check for spam
+        if (SettingsManager.spamFilterMode() != SettingsManager.SpamFilterMode.disabled
+                && RosterManager.getInstance().getRosterContact(account, companion) == null ) {
+            // just ignore carbons from not-authorized user
+            return;
+        }
+
         boolean processed = false;
         for (AbstractChat chat : chats.getNested(account.toString()).values()) {
             if (chat.onPacket(companion, message, true)) {
