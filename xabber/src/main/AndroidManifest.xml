@@ -473,9 +473,14 @@
         </activity>
         <activity android:name=".ui.activity.IntroActivity"
             android:theme="@style/ThemeDark"/>
-        <meta-data
-            android:name="io.fabric.ApiKey"
-            android:value="0d90bddb4ed7eb764eee9fad3fc9e67830763f3e" />
+        <activity android:name=".ui.activity.TutorialActivity"
+            android:theme="@style/ThemeDark"/>
+        <activity android:name=".ui.activity.XabberLoginActivity"
+            android:theme="@style/ThemeDark"/>
+	    
+	<meta-data
+	    android:name="io.fabric.ApiKey"
+	    android:value="0d90bddb4ed7eb764eee9fad3fc9e67830763f3e" />
     </application>
 
 </manifest>

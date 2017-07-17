@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <include layout="@layout/include_intro_background_image" />
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="100dp"
+        android:layout_marginLeft="32dp"
+        android:layout_marginRight="32dp"
+        android:fitsSystemWindows="true"
+        android:descendantFocusability="beforeDescendants"
+        android:focusableInTouchMode="true"
+        >
+
+        <include layout="@layout/include_login_fields" />
+
+        <include layout="@layout/include_login_social" />
+
+    </RelativeLayout>
+
+</RelativeLayout>
