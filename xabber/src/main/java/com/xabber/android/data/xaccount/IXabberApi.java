@@ -14,17 +14,22 @@ import rx.Single;
 public interface IXabberApi {
 
     @POST("accounts/login/")
-    Single<ResponseBody> login(@Header("Authorization") String credentials);
+    Single<XAccountTokenDTO> login(@Header("Authorization") String credentials);
 
-    // TODO: 20.07.17 delete additional headers
     @POST("accounts/logout/")
-    Single<ResponseBody> logout(@Header("Referer") String referer, @Header("X-CSRFToken") String token);
+    Single<ResponseBody> logout(@Header("Authorization") String token);
 
     @POST("accounts/social_auth/")
-    Single<ResponseBody> loginSocial(@Body AuthManager.SocialAuthRequest body, @Header("Referer") String referer, @Header("X-CSRFToken") String token);
+    Single<XAccountTokenDTO> loginSocial(@Body AuthManager.SocialAuthRequest body);
 
     @GET("accounts/current")
-    Single<XabberAccountDTO> getAccount();
+    Single<XabberAccountDTO> getAccount(@Header("Authorization") String token);
+
+    @GET("accounts/current/client-settings/")
+    Single<AuthManager.ListClientSettingsDTO> getClientSettings(@Header("Authorization") String token);
+
+    @POST("accounts/current/client-settings/")
+    Single<ResponseBody> updateClientSettings(@Header("Authorization") String token, @Body AuthManager.UpdateClientSettings body);
 
 }
 

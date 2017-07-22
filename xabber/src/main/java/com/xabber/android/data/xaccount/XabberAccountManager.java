@@ -5,6 +5,7 @@ import android.support.annotation.Nullable;
 import com.xabber.android.data.Application;
 import com.xabber.android.data.OnLoadListener;
 import com.xabber.android.data.database.RealmManager;
+import com.xabber.android.data.database.realm.XMPPAccountSettignsRealm;
 import com.xabber.android.data.database.realm.XMPPUserRealm;
 import com.xabber.android.data.database.realm.XabberAccountRealm;
 
@@ -13,6 +14,7 @@ import java.util.List;
 
 import io.realm.Realm;
 
+import io.realm.RealmList;
 import io.realm.RealmResults;
 import rx.Single;
 
@@ -56,25 +58,29 @@ public class XabberAccountManager implements OnLoadListener {
         return account;
     }
 
-    public Single<XabberAccount> saveOrUpdateXabberAccountToRealm(XabberAccountDTO xabberAccount) {
+    public void removeAccount() {
+        this.account = null;
+    }
+
+    public Single<XabberAccount> saveOrUpdateXabberAccountToRealm(XabberAccountDTO xabberAccount, String token) {
         XabberAccount account;
         XabberAccountRealm xabberAccountRealm = new XabberAccountRealm(String.valueOf(xabberAccount.getId()));
 
+        xabberAccountRealm.setToken(token);
         xabberAccountRealm.setUsername(xabberAccount.getUsername());
         xabberAccountRealm.setFirstName(xabberAccount.getFirstName());
         xabberAccountRealm.setLastName(xabberAccount.getLastName());
         xabberAccountRealm.setRegisterDate(xabberAccount.getRegistrationDate());
 
-//        List<XMPPUserRealm> realmUsers = new ArrayList<>();
-//        for (XMPPUser user : xabberAccount.getXmppUsers()) {
-//            XMPPUserRealm realmUser = new XMPPUserRealm(user.getId());
-//            realmUser.setUsername(user.getUsername());
-//            realmUser.setHost(user.getHost());
-//            realmUser.setRegistration_date(user.getRegisterDate());
-//            realmUsers.add(realmUser);
-//        }
-//
-//        xabberAccountRealm.setXmppUsers(realmUsers);
+        RealmList<XMPPUserRealm> realmUsers = new RealmList<>();
+        for (XMPPUserDTO user : xabberAccount.getXmppUsers()) {
+            XMPPUserRealm realmUser = new XMPPUserRealm(String.valueOf(user.getId()));
+            realmUser.setUsername(user.getUsername());
+            realmUser.setHost(user.getHost());
+            realmUser.setRegistration_date(user.getRegistrationDate());
+            realmUsers.add(realmUser);
+        }
+        xabberAccountRealm.setXmppUsers(realmUsers);
 
         Realm realm = RealmManager.getInstance().getNewBackgroundRealm();
         realm.beginTransaction();
@@ -88,6 +94,8 @@ public class XabberAccountManager implements OnLoadListener {
     }
 
     public static XabberAccount xabberAccountRealmToPOJO(XabberAccountRealm accountRealm) {
+        if (accountRealm == null) return null;
+
         XabberAccount xabberAccount = null;
 
         List<XMPPUser> xmppUsers = new ArrayList<>();
@@ -107,7 +115,8 @@ public class XabberAccountManager implements OnLoadListener {
                 accountRealm.getFirstName(),
                 accountRealm.getLastName(),
                 accountRealm.getRegisterDate(),
-                xmppUsers
+                xmppUsers,
+                accountRealm.getToken()
         );
 
         return xabberAccount;
@@ -126,6 +135,88 @@ public class XabberAccountManager implements OnLoadListener {
 
         realm.close();
         return xabberAccount;
+    }
+
+    public boolean deleteXabberAccountFromRealm() {
+        final boolean[] success = new boolean[1];
+        Realm realm = RealmManager.getInstance().getNewBackgroundRealm();
+
+        final RealmResults<XabberAccountRealm> results = realm.where(XabberAccountRealm.class).findAll();
+        realm.executeTransaction(new Realm.Transaction() {
+            @Override
+            public void execute(Realm realm) {
+                success[0] = results.deleteAllFromRealm();
+            }
+        });
+        realm.close();
+        return success[0];
+    }
+
+    public Single<List<XMPPAccountSettings>> loadXMPPAccountSettingsFromRealm() {
+        List<XMPPAccountSettings> result = null;
+
+        Realm realm = RealmManager.getInstance().getNewRealm();
+        RealmResults<XMPPAccountSettignsRealm> realmItems = realm.where(XMPPAccountSettignsRealm.class).findAll();
+        result = xmppAccountSettingsRealmListToPOJO(realmItems);
+
+        realm.close();
+        return Single.just(result);
+    }
+
+    @Nullable
+    public Single<List<XMPPAccountSettings>> saveOrUpdateXMPPAccountSettingsToRealm(AuthManager.ListClientSettingsDTO listXMPPAccountSettings) {
+        List<XMPPAccountSettings> result;
+        RealmList<XMPPAccountSettignsRealm> realmItems = new RealmList<>();
+
+        for (AuthManager.ClientSettingsDTO dtoItem : listXMPPAccountSettings.getSettings()) {
+            XMPPAccountSettignsRealm realmItem = new XMPPAccountSettignsRealm(dtoItem.getJid());
+
+            AuthManager.SettingsValuesDTO valuesDTO = dtoItem.getSettings();
+            if (valuesDTO != null) {
+                realmItem.setToken(valuesDTO.getToken());
+                realmItem.setColor(valuesDTO.getColor());
+                realmItem.setOrder(valuesDTO.getOrder());
+                // TODO: 21.07.17 add sync, timestamp, username
+            }
+            realmItems.add(realmItem);
+        }
+
+        Realm realm = RealmManager.getInstance().getNewBackgroundRealm();
+        realm.beginTransaction();
+        List<XMPPAccountSettignsRealm> resultRealm = realm.copyToRealmOrUpdate(realmItems);
+        result = xmppAccountSettingsRealmListToPOJO(resultRealm);
+        realm.commitTransaction();
+        realm.close();
+
+        return Single.just(result);
+    }
+
+    @Nullable
+    public List<XMPPAccountSettings> xmppAccountSettingsRealmListToPOJO(List<XMPPAccountSettignsRealm> realmitems) {
+        if (realmitems == null) return null;
+
+        List<XMPPAccountSettings> items = new ArrayList<>();
+        for (XMPPAccountSettignsRealm realmItem : realmitems) {
+            items.add(xmppAccountSettingsRealmToPOJO(realmItem));
+        }
+        return items;
+    }
+
+    @Nullable
+    public XMPPAccountSettings xmppAccountSettingsRealmToPOJO(XMPPAccountSettignsRealm realmItem) {
+        if (realmItem == null) return null;
+
+        XMPPAccountSettings item = new XMPPAccountSettings(
+                realmItem.getJid(),
+                realmItem.isSynchronization(),
+                realmItem.getTimestamp());
+
+        item.setOrder(realmItem.getOrder());
+        item.setColor(realmItem.getColor());
+        item.setToken(realmItem.getToken());
+        item.setUsername(realmItem.getUsername());
+
+        return item;
     }
 }
 
