@@ -22,6 +22,9 @@ public interface IXabberApi {
     @POST("accounts/social_auth/")
     Single<XAccountTokenDTO> loginSocial(@Body AuthManager.SocialAuthRequest body);
 
+    @POST("accounts/signup/")
+    Single<XAccountTokenDTO> signup(@Body AuthManager.Email email);
+
     @GET("accounts/current")
     Single<XabberAccountDTO> getAccount(@Header("Authorization") String token);
 
@@ -30,6 +33,12 @@ public interface IXabberApi {
 
     @POST("accounts/current/client-settings/")
     Single<ResponseBody> updateClientSettings(@Header("Authorization") String token, @Body AuthManager.UpdateClientSettings body);
+
+    @POST("accounts/email_confirmation/")
+    Single<ResponseBody> confirmEmail(@Body AuthManager.Code code);
+
+    @POST("accounts/email_confirmation/")
+    Single<ResponseBody> confirmEmail(@Body AuthManager.Key key);
 
 }
 

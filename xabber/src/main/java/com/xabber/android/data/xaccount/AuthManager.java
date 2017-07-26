@@ -88,11 +88,51 @@ public class AuthManager {
         return HttpApiManager.getXabberApi().updateClientSettings(getXabberToken(), updateClientSettings);
     }
 
+    public static Single<XAccountTokenDTO> signup(String email) {
+        return HttpApiManager.getXabberApi().signup(new Email(email));
+    }
+
+    public static Single<ResponseBody> confirmEmail(String code) {
+        return HttpApiManager.getXabberApi().confirmEmail(new Code(code));
+    }
+
+    public static Single<ResponseBody> confirmEmailWithKey(String key) {
+        return HttpApiManager.getXabberApi().confirmEmail(new Key(key));
+    }
+
+    // support
+
     private static String getXabberToken() {
         XabberAccount account = XabberAccountManager.getInstance().getAccount();
         if (account != null && account.getToken() != null)
             return "Token " + account.getToken();
         else return null;
+    }
+
+    // models
+
+    public static class Key {
+        final String key;
+
+        public Key(String key) {
+            this.key = key;
+        }
+    }
+
+    public static class Code {
+        final String code;
+
+        public Code(String code) {
+            this.code = code;
+        }
+    }
+
+    public static class Email {
+        final String email;
+
+        public Email(String email) {
+            this.email = email;
+        }
     }
 
     public static class SocialAuthRequest {
