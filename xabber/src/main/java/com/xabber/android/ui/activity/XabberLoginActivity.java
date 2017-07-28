@@ -54,9 +54,9 @@ import rx.subscriptions.CompositeSubscription;
 public class XabberLoginActivity extends ManagedActivity implements View.OnClickListener {
 
     private final static String TAG = XabberLoginActivity.class.getSimpleName();
-    private final static String CURRENT_FRAGMENT = "current_fragment";
-    private final static String FRAGMENT_LOGIN = "fragment_login";
-    private final static String FRAGMENT_SIGNUP = "fragment_signup";
+    public final static String CURRENT_FRAGMENT = "current_fragment";
+    public final static String FRAGMENT_LOGIN = "fragment_login";
+    public final static String FRAGMENT_SIGNUP = "fragment_signup";
 
     private Fragment fragmentLogin;
     private Fragment fragmentSignUp;
@@ -89,6 +89,10 @@ public class XabberLoginActivity extends ManagedActivity implements View.OnClick
 
         if (savedInstanceState != null)
             currentFragment = savedInstanceState.getString(CURRENT_FRAGMENT);
+        else {
+            Bundle extras = getIntent().getExtras();
+            if (extras != null) currentFragment = extras.getString(CURRENT_FRAGMENT);
+        }
 
         setContentView(R.layout.activity_xabber_login);
         setStatusBarTranslucent();
@@ -366,8 +370,9 @@ public class XabberLoginActivity extends ManagedActivity implements View.OnClick
     private void handleSuccessGetSettings(List<XMPPAccountSettings> settings) {
         hideProgress();
 
-        Intent intent = ContactListActivity.createIntent(this);
+        Intent intent = XabberAccountInfoActivity.createIntent(this);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        intent.putExtra(XabberAccountInfoActivity.CALL_FROM, XabberAccountInfoActivity.CALL_FROM_LOGIN);
         finish();
         startActivity(intent);
     }
@@ -421,8 +426,9 @@ public class XabberLoginActivity extends ManagedActivity implements View.OnClick
     private void handleSuccessGetAccountAfterSignUp(XabberAccount account) {
         hideProgress();
 
-        Intent intent = ContactListActivity.createIntent(this);
+        Intent intent = XabberAccountInfoActivity.createIntent(this);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        intent.putExtra(XabberAccountInfoActivity.CALL_FROM, XabberAccountInfoActivity.CALL_FROM_LOGIN);
         finish();
         startActivity(intent);
     }

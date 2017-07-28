@@ -35,10 +35,16 @@ public interface IXabberApi {
     Single<ResponseBody> updateClientSettings(@Header("Authorization") String token, @Body AuthManager.UpdateClientSettings body);
 
     @POST("accounts/email_confirmation/")
-    Single<ResponseBody> confirmEmail(@Body AuthManager.Code code);
+    Single<XabberAccountDTO> confirmEmail(@Header("Authorization") String token, @Body AuthManager.Code code);
 
     @POST("accounts/email_confirmation/")
-    Single<ResponseBody> confirmEmail(@Body AuthManager.Key key);
+    Single<XabberAccountDTO> confirmEmail(@Body AuthManager.Key key);
+
+    @POST("accounts/current/complete_registration/")
+    Single<XabberAccountDTO> completeRegister(@Header("Authorization") String token, @Body AuthManager.CompleteRegister register);
+
+    @POST("accounts/current/email_list/")
+    Single<ResponseBody> addEmail(@Header("Authorization") String token, @Body AuthManager.Email email);
 
 }
 

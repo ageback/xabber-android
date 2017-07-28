@@ -15,23 +15,59 @@
     <string name="sync_fail">Synchronization failed</string>
     <string name="logout_success">Logout successful</string>
     <string name="logout_fail">Logout failed</string>
+    <string name="confirm_success">Confirm email successful</string>
+    <string name="confirm_fail">Confirm email failed</string>
+    <string name="complete_success">Registration completed successfully</string>
+    <string name="complete_fail">Registration failed</string>
+    <string name="resend_success">Resend verification email successful</string>
+    <string name="resend_fail">Resend verification email failed</string>
+
+    <string name="toast_email_already_confirm">Email already confirm</string>
+    <string name="toast_not_authorized">You are not authorized</string>
+    <string name="toast_no_internet">No internet connection</string>
 
     <string name="progress_message">Please waiting</string>
     <string name="progress_title_sync">Synchronization..</string>
     <string name="progress_title_logout">Logout..</string>
     <string name="progress_title_login">Login..</string>
-    <string name="progress_title_signup">SignUp..</string>
+    <string name="progress_title_signup">Registration..</string>
+    <string name="progress_title_confirm">Confirmation..</string>
+    <string name="progress_title_complete">Registration completion..</string>
+    <string name="progress_title_resend">Resending email..</string>
 
-    <string name="xabber_account_title">Xabber Account</string>
-    <string name="xmpp_account_title">XMPP Accounts</string>
-    <string name="xabber_account_summary">Xabber account lets you easily sync your settings and connected XMPP accounts between various devices.</string>
-    <string name="xabber_account_confirm">Please confirm your email address</string>
-    <string name="xabber_account_not_verified">Account not verified</string>
+    <string name="hint_username">Username *</string>
+    <string name="hint_pass">Password *</string>
+    <string name="hint_conf_pass">Confirm password *</string>
+    <string name="hint_first_name">First name</string>
+    <string name="hint_last_name">Last name</string>
+    <string name="hint_host">Host</string>
 
-    <string name="logout_button">LOGOUT</string>
-    <string name="login_button">LOGIN</string>
+    <string name="hint_code">code</string>
+
+    <string name="default_host">xabber.org</string>
+
+    <string name="title_xabber_account">Xabber Account</string>
+    <string name="title_xmpp_account">XMPP Accounts</string>
+    <string name="title_email_confirm">Email confirmation</string>
+    <string name="title_complete_register">Complete registration</string>
+
+    <string name="summary_xabber_account">Xabber account lets you easily sync your settings and connected XMPP accounts between various devices.</string>
+    <string name="summary_confirm_account">Please confirm your email address</string>
+    <string name="summary_complete_register">Please complete registration of your account</string>
+
+    <string name="button_logout">LOGOUT</string>
+    <string name="button_login">LOGIN</string>
     <string name="button_resend_link">RESEND LINK</string>
+    <string name="button_complete_register">COMPLETE</string>
+    <string name="button_confirm">confirm</string>
+    <string name="button_enter">ENTER XABBER</string>
 
-    <string name="no_internet">No internet connection</string>
+    <string name="no_email">no email</string>
     <string name="empty_field">Empty field</string>
+    <string name="passwords_not_match">Passwords do not match</string>
+    <string name="username_rules">Username can contain only lowercase latin letters, numbers and dots</string>
+    <string name="username_rules_first_symbol">Username must start with letter</string>
+    <string name="username_rules_dots">Username cannot have two dots in a row</string>
+    <string name="account_not_confirmed">Account not confirmed</string>
+    <string name="register_not_completed">Registration not completed</string>
 </resources>
