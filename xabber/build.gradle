@@ -17,6 +17,7 @@ apply plugin: 'com.neenbedankt.android-apt'
 apply plugin: 'realm-android'
 apply plugin: 'com.frogermcs.androiddevmetrics'
 apply plugin: 'io.fabric'
+apply plugin: 'com.google.gms.google-services'
 
 android {
     compileSdkVersion 25
@@ -25,8 +26,8 @@ android {
     defaultConfig {
         minSdkVersion 15
         targetSdkVersion 25
-        versionCode 370
-        versionName '2.1(370)'
+        versionCode 371
+        versionName '2.1(371)'
     }
 
     lintOptions {
@@ -162,6 +163,8 @@ dependencies {
     //social
     compile 'com.facebook.android:facebook-android-sdk:4.23.0'
     compile 'com.twitter.sdk.android:twitter:3.0.0'
+    compile 'com.google.android.gms:play-services-auth:9.0.0'
+    compile 'com.google.api-client:google-api-client-android:1.22.0'
 
     compile 'com.github.apl-devs:appintro:v4.2.0'
     compile 'com.github.bumptech.glide:glide:3.7.0'
