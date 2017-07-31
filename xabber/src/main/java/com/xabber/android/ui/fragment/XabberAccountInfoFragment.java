@@ -9,7 +9,9 @@ import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.CompoundButton;
 import android.widget.RelativeLayout;
+import android.widget.Switch;
 import android.widget.TextView;
 
 import com.xabber.android.R;
@@ -20,6 +22,9 @@ import com.xabber.android.ui.activity.XabberAccountInfoActivity;
 import com.xabber.android.ui.adapter.XMPPAccountAdapter;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -32,6 +37,7 @@ public class XabberAccountInfoFragment extends Fragment {
     private TextView tvAccountEmail;
     private RelativeLayout rlLogout;
     private RelativeLayout rlSync;
+    private Switch switchSyncAll;
     private XMPPAccountAdapter adapter;
     private List<XMPPAccountSettings> xmppAccounts;
 
@@ -61,6 +67,15 @@ public class XabberAccountInfoFragment extends Fragment {
             @Override
             public void onClick(View v) {
                 ((XabberAccountInfoActivity)getActivity()).onSyncClick();
+            }
+        });
+
+        switchSyncAll = (Switch) view.findViewById(R.id.switchSyncAll);
+        switchSyncAll.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
+                if (adapter != null)
+                    adapter.setAllChecked(b);
             }
         });
 
@@ -95,6 +110,7 @@ public class XabberAccountInfoFragment extends Fragment {
     public void updateList(@NonNull List<XMPPAccountSettings> list) {
         xmppAccounts.clear();
         xmppAccounts.addAll(list);
+        Collections.sort(xmppAccounts);
         adapter.setItems(xmppAccounts);
     }
 
