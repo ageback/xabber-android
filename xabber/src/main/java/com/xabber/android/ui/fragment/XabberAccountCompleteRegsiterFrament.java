@@ -23,16 +23,16 @@ import com.xabber.android.ui.activity.XabberAccountInfoActivity;
 
 public class XabberAccountCompleteRegsiterFrament extends Fragment {
 
-    private TextView tvAccountEmail;
-    private RelativeLayout rlLogout;
+    private TextView tvAccountName;
+    private TextView tvSignType;
+    //private RelativeLayout rlLogout;
 
     private EditText edtUsername;
     private EditText edtPass;
     private EditText edtPass2;
     private EditText edtFirstName;
     private EditText edtLastName;
-    private EditText edtHost;
-    private Button btnComplete;
+    private Button btnRegister;
 
     @Nullable
     @Override
@@ -44,24 +44,25 @@ public class XabberAccountCompleteRegsiterFrament extends Fragment {
     public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        tvAccountEmail = (TextView) view.findViewById(R.id.tvAccountEmail);
+        tvAccountName = (TextView) view.findViewById(R.id.tvAccountName);
+        tvSignType = (TextView) view.findViewById(R.id.tvSignType);
 
-        rlLogout = (RelativeLayout) view.findViewById(R.id.rlLogout);
-        rlLogout.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                ((XabberAccountInfoActivity)getActivity()).onLogoutClick();
-            }
-        });
+//        rlLogout = (RelativeLayout) view.findViewById(R.id.rlLogout);
+//        rlLogout.setOnClickListener(new View.OnClickListener() {
+//            @Override
+//            public void onClick(View v) {
+//                ((XabberAccountInfoActivity)getActivity()).onLogoutClick();
+//            }
+//        });
 
         edtUsername = (EditText) view.findViewById(R.id.edtUsername);
         edtPass = (EditText) view.findViewById(R.id.edtPass);
         edtPass2 = (EditText) view.findViewById(R.id.edtPass2);
         edtFirstName = (EditText) view.findViewById(R.id.edtFirstName);
         edtLastName = (EditText) view.findViewById(R.id.edtLastName);
-        edtHost = (EditText) view.findViewById(R.id.edtHost);
-        btnComplete = (Button) view.findViewById(R.id.btnComplete);
-        btnComplete.setOnClickListener(new View.OnClickListener() {
+
+        btnRegister = (Button) view.findViewById(R.id.btnRegister);
+        btnRegister.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 verifyFields();
@@ -79,8 +80,11 @@ public class XabberAccountCompleteRegsiterFrament extends Fragment {
     }
 
     public void updateData(@NonNull XabberAccount account) {
-        if (account.getEmails().size() > 0)
-            tvAccountEmail.setText(account.getEmails().get(0).getEmail());
+        if (account.getEmails().size() > 0) {
+            tvAccountName.setText(account.getEmails().get(0).getEmail());
+            tvSignType.setText(R.string.signed_up_email);
+        }
+        // TODO: 31.07.17 вписывать имя аккаунта если оно доступно. Указывать соц.сеть
     }
 
     private void verifyFields() {
@@ -89,7 +93,6 @@ public class XabberAccountCompleteRegsiterFrament extends Fragment {
         String pass2 = edtPass2.getText().toString().trim();
         String firstName = edtFirstName.getText().toString().trim();
         String lastName = edtLastName.getText().toString().trim();
-        String host = edtHost.getText().toString().trim();
 
         if (username.isEmpty()) {
             edtUsername.setError(getString(R.string.empty_field));
@@ -129,7 +132,7 @@ public class XabberAccountCompleteRegsiterFrament extends Fragment {
             return;
         }
 
-        ((XabberAccountInfoActivity)getActivity()).onCompleteClick(username, pass, pass2, firstName, lastName, host);
+        ((XabberAccountInfoActivity)getActivity()).onCompleteClick(username, pass, pass2, firstName, lastName);
     }
 
 }

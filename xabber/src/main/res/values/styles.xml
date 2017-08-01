@@ -66,6 +66,10 @@
         <item name="colorControlActivated">@color/red_700</item>
     </style>
 
+    <style name="BlueCheckBox" parent="Theme.AppCompat.Light">
+        <item name="colorControlActivated">@color/account_register_blue</item>
+    </style>
+
     <style name="WhiteSwitchStyle">
         <item name="colorControlActivated">@color/white</item>
     </style>
@@ -78,8 +82,8 @@
         <item name="colorAccent">@color/red_700</item>
     </style>
 
-    <style name="GreenButton" parent="ThemeOverlay.AppCompat">
-        <item name="colorAccent">@color/green_700</item>
+    <style name="BlueButton" parent="ThemeOverlay.AppCompat">
+        <item name="colorAccent">@color/account_register_blue</item>
     </style>
 
     <style name="WhiteButton" parent="ThemeOverlay.AppCompat">
