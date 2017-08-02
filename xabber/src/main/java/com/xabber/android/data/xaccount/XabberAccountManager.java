@@ -10,6 +10,7 @@ import com.xabber.android.data.OnLoadListener;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.database.RealmManager;
 import com.xabber.android.data.database.realm.EmailRealm;
+import com.xabber.android.data.database.realm.SocialBindingRealm;
 import com.xabber.android.data.database.realm.XMPPAccountSettignsRealm;
 import com.xabber.android.data.database.realm.XMPPUserRealm;
 import com.xabber.android.data.database.realm.XabberAccountRealm;
@@ -17,6 +18,7 @@ import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.ui.color.ColorManager;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 import io.realm.Realm;
@@ -77,6 +79,24 @@ public class XabberAccountManager implements OnLoadListener {
                     }
                 });
         compositeSubscription.add(getAccountSubscription);
+    }
+
+    private void updateAccountSettings() {
+        Subscription updateSettingsSubscription = AuthManager.updateClientSettings(this.xmppAccounts)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(new Action1<List<XMPPAccountSettings>>() {
+                    @Override
+                    public void call(List<XMPPAccountSettings> s) {
+                        Log.d(LOG_TAG, "XMPP accounts loading from net: successfully");
+                    }
+                }, new Action1<Throwable>() {
+                    @Override
+                    public void call(Throwable throwable) {
+                        Log.d(LOG_TAG, "XMPP accounts loading from net: error: " + throwable.toString());
+                    }
+                });
+        compositeSubscription.add(updateSettingsSubscription);
     }
 
     private void handleSuccessGetAccount(@NonNull XabberAccount xabberAccount) {
@@ -159,6 +179,17 @@ public class XabberAccountManager implements OnLoadListener {
         }
         xabberAccountRealm.setEmails(realmEmails);
 
+        RealmList<SocialBindingRealm> realmSocials = new RealmList<>();
+        for (SocialBindingDTO social : xabberAccount.getSocialBindings()) {
+            SocialBindingRealm realmSocial = new SocialBindingRealm(String.valueOf(social.getId()));
+            realmSocial.setProvider(social.getProvider());
+            realmSocial.setUid(social.getUid());
+            realmSocial.setFirstName(social.getFirstName());
+            realmSocial.setLastName(social.getLastName());
+            realmSocials.add(realmSocial);
+        }
+        xabberAccountRealm.setSocialBindings(realmSocials);
+
         Realm realm = RealmManager.getInstance().getNewBackgroundRealm();
         realm.beginTransaction();
         XabberAccountRealm accountRealm = realm.copyToRealmOrUpdate(xabberAccountRealm);
@@ -197,6 +228,18 @@ public class XabberAccountManager implements OnLoadListener {
             emails.add(email);
         }
 
+        List<SocialBindingDTO> socials = new ArrayList<>();
+        for (SocialBindingRealm socialRealm : accountRealm.getSocialBindings()) {
+            SocialBindingDTO social = new SocialBindingDTO(
+                    Integer.parseInt(socialRealm.getId()),
+                    socialRealm.getProvider(),
+                    socialRealm.getUid(),
+                    socialRealm.getFirstName(),
+                    socialRealm.getLastName());
+
+            socials.add(social);
+        }
+
         xabberAccount = new XabberAccount(
                 Integer.parseInt(accountRealm.getId()),
                 accountRealm.getAccountStatus(),
@@ -206,6 +249,7 @@ public class XabberAccountManager implements OnLoadListener {
                 accountRealm.getRegisterDate(),
                 xmppUsers,
                 emails,
+                socials,
                 accountRealm.getToken()
         );
 
@@ -281,8 +325,37 @@ public class XabberAccountManager implements OnLoadListener {
                 realmItem.setToken(valuesDTO.getToken());
                 realmItem.setColor(valuesDTO.getColor());
                 realmItem.setOrder(valuesDTO.getOrder());
-                // TODO: 21.07.17 add sync, timestamp, username
+                realmItem.setUsername(valuesDTO.getUsername());
             }
+            realmItem.setTimestamp(dtoItem.getTimestamp());
+            realmItems.add(realmItem);
+        }
+
+        Realm realm = RealmManager.getInstance().getNewBackgroundRealm();
+        realm.beginTransaction();
+        List<XMPPAccountSettignsRealm> resultRealm = realm.copyToRealmOrUpdate(realmItems);
+        result = xmppAccountSettingsRealmListToPOJO(resultRealm);
+        realm.commitTransaction();
+        realm.close();
+
+        updateXmppAccounts(result);
+        return Single.just(result);
+    }
+
+    @Nullable
+    public Single<List<XMPPAccountSettings>> saveOrUpdateXMPPAccountSettingsToRealm(List<XMPPAccountSettings> items) {
+        List<XMPPAccountSettings> result;
+        RealmList<XMPPAccountSettignsRealm> realmItems = new RealmList<>();
+
+        for (XMPPAccountSettings item : items) {
+            XMPPAccountSettignsRealm realmItem = new XMPPAccountSettignsRealm(item.getJid());
+
+            realmItem.setToken(item.getToken());
+            realmItem.setColor(item.getColor());
+            realmItem.setOrder(item.getOrder());
+            realmItem.setUsername(item.getUsername());
+            realmItem.setTimestamp(item.getTimestamp());
+
             realmItems.add(realmItem);
         }
 
@@ -354,6 +427,31 @@ public class XabberAccountManager implements OnLoadListener {
             if (jid.equals(accountJidString)) return accountJid;
         }
         return null;
+    }
+
+    public void setColor(AccountJid accountJid, int colorIndex) {
+        if (accountJid != null) {
+            for (XMPPAccountSettings account : xmppAccounts) {
+                if (account.getJid().equals(accountJid.getFullJid().asBareJid().toString())) {
+                    account.setColor(ColorManager.getInstance().convertIndexToColorName(colorIndex));
+                    account.setTimestamp(getCurrentTime());
+                }
+            }
+            updateAccountSettings();
+        }
+    }
+
+    public void setXMPPAccountOrder(HashMap<String, Integer> items) {
+        for (XMPPAccountSettings account : xmppAccounts) {
+            int orderValue = items.get(account.getJid());
+            if (orderValue > 0) account.setOrder(orderValue);
+            account.setTimestamp(getCurrentTime());
+        }
+        updateAccountSettings();
+    }
+
+    public int getCurrentTime() {
+        return (int) (System.currentTimeMillis() / 1000L);
     }
 }
 

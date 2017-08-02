@@ -21,6 +21,7 @@ import android.support.v4.app.NavUtils;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.Toolbar;
+import android.support.v7.widget.helper.ItemTouchHelper;
 import android.view.MenuItem;
 import android.view.View;
 
@@ -33,6 +34,7 @@ import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.ui.adapter.AccountListAdapter;
 import com.xabber.android.ui.color.BarPainter;
 import com.xabber.android.ui.dialog.AccountDeleteDialog;
+import com.xabber.android.ui.widget.SimpleItemTouchHelperCallback;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -43,6 +45,7 @@ public class AccountListActivity extends ManagedActivity implements OnAccountCha
 
     private AccountListAdapter accountListAdapter;
     private BarPainter barPainter;
+    private ItemTouchHelper touchHelper;
 
     public static Intent createIntent(Context context) {
         return new Intent(context, AccountListActivity.class);
@@ -74,6 +77,11 @@ public class AccountListActivity extends ManagedActivity implements OnAccountCha
 
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(accountListAdapter);
+
+        ItemTouchHelper.Callback callback =
+                new SimpleItemTouchHelperCallback(accountListAdapter);
+        touchHelper = new ItemTouchHelper(callback);
+        touchHelper.attachToRecyclerView(recyclerView);
     }
 
     private void update() {
@@ -149,5 +157,10 @@ public class AccountListActivity extends ManagedActivity implements OnAccountCha
         }
 
         return false;
+    }
+
+    @Override
+    public void onStartDrag(RecyclerView.ViewHolder viewHolder) {
+        touchHelper.startDrag(viewHolder);
     }
 }

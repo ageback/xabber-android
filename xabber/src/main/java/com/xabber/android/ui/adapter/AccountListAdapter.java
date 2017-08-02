@@ -14,12 +14,14 @@
  */
 package com.xabber.android.ui.adapter;
 
+import android.support.v4.view.MotionEventCompat;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.SwitchCompat;
 import android.view.ContextMenu;
 import android.view.LayoutInflater;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
@@ -35,12 +37,14 @@ import com.xabber.android.data.xaccount.XMPPAccountSettings;
 import com.xabber.android.data.xaccount.XabberAccountManager;
 import com.xabber.android.ui.activity.ManagedActivity;
 import com.xabber.android.ui.color.ColorManager;
+import com.xabber.android.ui.widget.ItemTouchHelperAdapter;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 
-public class AccountListAdapter extends RecyclerView.Adapter {
+public class AccountListAdapter extends RecyclerView.Adapter implements ItemTouchHelperAdapter {
 
     @SuppressWarnings("WeakerAccess")
     static final String LOG_TAG = AccountListAdapter.class.getSimpleName();
@@ -55,6 +59,7 @@ public class AccountListAdapter extends RecyclerView.Adapter {
         void onEditAccountStatus(AccountItem accountItem);
         void onEditAccount(AccountItem accountItem);
         void onDeleteAccount(AccountItem accountItem);
+        void onStartDrag(RecyclerView.ViewHolder viewHolder);
     }
 
     public AccountListAdapter(ManagedActivity activity, Listener listener) {
@@ -83,6 +88,30 @@ public class AccountListAdapter extends RecyclerView.Adapter {
     }
 
     @Override
+    public boolean onItemMove(int fromPosition, int toPosition) {
+        if (fromPosition < toPosition) {
+            for (int i = fromPosition; i < toPosition; i++) {
+                Collections.swap(accountItems, i, i + 1);
+            }
+        } else {
+            for (int i = fromPosition; i > toPosition; i--) {
+                Collections.swap(accountItems, i, i - 1);
+            }
+        }
+        notifyItemMoved(fromPosition, toPosition);
+
+        // update local accounts order
+        HashMap<String, Integer> map = new HashMap<>();
+        int order = 1;
+        for (AccountItem account : accountItems) {
+            map.put(account.getRealJid().asBareJid().toString(), order);
+            order++;
+        }
+        XabberAccountManager.getInstance().setXMPPAccountOrder(map);
+        return true;
+    }
+
+    @Override
     public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
         return new AccountViewHolder(LayoutInflater.from(parent.getContext())
                 .inflate(R.layout.item_account, parent, false));
@@ -90,7 +119,7 @@ public class AccountListAdapter extends RecyclerView.Adapter {
 
     @Override
     public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
-        AccountViewHolder accountHolder = (AccountViewHolder) holder;
+        final AccountViewHolder accountHolder = (AccountViewHolder) holder;
         AccountItem accountItem = accountItems.get(position);
 
         accountHolder.color.setBackgroundColor(ColorManager.getInstance().getAccountPainter().
@@ -103,6 +132,17 @@ public class AccountListAdapter extends RecyclerView.Adapter {
         accountHolder.status.setText(accountItem.getState().getStringId());
 
         accountHolder.enabledSwitch.setChecked(accountItem.isEnabled());
+
+        accountHolder.ivAnchor.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (MotionEventCompat.getActionMasked(event) ==
+                        MotionEvent.ACTION_DOWN) {
+                    listener.onStartDrag(accountHolder);
+                }
+                return false;
+            }
+        });
     }
 
     @Override
@@ -116,6 +156,7 @@ public class AccountListAdapter extends RecyclerView.Adapter {
         TextView name;
         TextView status;
         SwitchCompat enabledSwitch;
+        ImageView ivAnchor;
 
 
         AccountViewHolder(View itemView) {
@@ -125,6 +166,7 @@ public class AccountListAdapter extends RecyclerView.Adapter {
             name = (TextView) itemView.findViewById(R.id.item_account_name);
             status = (TextView) itemView.findViewById(R.id.item_account_status);
             enabledSwitch = (SwitchCompat) itemView.findViewById(R.id.item_account_switch);
+            ivAnchor = (ImageView) itemView.findViewById(R.id.ivAnchor);
 
             // I used on click listener instead of on checked change listener to avoid callback in onBindViewHolder
             enabledSwitch.setOnClickListener(this);
