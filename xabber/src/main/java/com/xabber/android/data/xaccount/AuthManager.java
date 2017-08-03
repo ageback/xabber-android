@@ -43,14 +43,14 @@ public class AuthManager {
                             return Single.just(responseBody);
                         else return Single.error(new Throwable("Realm: xabber account deletion error"));
                     }
-                })
-                .flatMap(new Func1<ResponseBody, Single<? extends ResponseBody>>() {
-                    @Override
-                    public Single<? extends ResponseBody> call(ResponseBody responseBody) {
-                        XabberAccountManager.getInstance().deleteXMPPAccountsFromRealm();
-                        return Single.just(responseBody);
-                    }
                 });
+//                .flatMap(new Func1<ResponseBody, Single<? extends ResponseBody>>() {
+//                    @Override
+//                    public Single<? extends ResponseBody> call(ResponseBody responseBody) {
+//                        XabberAccountManager.getInstance().deleteXMPPAccountsFromRealm();
+//                        return Single.just(responseBody);
+//                    }
+//                });
     }
 
     public static Single<XAccountTokenDTO> loginSocial(String provider, String socialToken) {
@@ -98,8 +98,11 @@ public class AuthManager {
 
         List<ClientSettingsDTO> list = new ArrayList<>();
         for (XMPPAccountSettings account : accountSettingsList) {
-            list.add(new ClientSettingsDTO(account.getJid(), new SettingsValuesDTO(account.getOrder(),
-                    account.getColor(), account.getToken(), account.getUsername()), account.getTimestamp()));
+            // add to sync only accounts required sync
+            if (account.isSynchronization()) {
+                list.add(new ClientSettingsDTO(account.getJid(), new SettingsValuesDTO(account.getOrder(),
+                        account.getColor(), account.getToken(), account.getUsername()), account.getTimestamp()));
+            }
         }
 
         return HttpApiManager.getXabberApi().updateClientSettings(getXabberTokenHeader(), list)

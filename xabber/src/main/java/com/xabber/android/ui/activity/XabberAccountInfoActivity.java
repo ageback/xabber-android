@@ -190,12 +190,10 @@ public class XabberAccountInfoActivity extends BaseLoginActivity implements Tool
         }
     }
 
-    private void updateXMPPAccountList(List<XMPPAccountSettings> list) {
-        if (list != null) {
-            XabberAccountInfoFragment fragment = (XabberAccountInfoFragment) getFragmentManager().findFragmentByTag(FRAGMENT_INFO);
-            if (fragment != null && fragment.isVisible())
-                ((XabberAccountInfoFragment) fragmentInfo).updateList(list);
-        }
+    private void updateLastSyncTime() {
+        XabberAccountInfoFragment fragment = (XabberAccountInfoFragment) getFragmentManager().findFragmentByTag(FRAGMENT_INFO);
+        if (fragment != null && fragment.isVisible())
+            ((XabberAccountInfoFragment) fragmentInfo).updateLastSyncTime();
     }
 
     public void showLoginFragment() {
@@ -332,8 +330,8 @@ public class XabberAccountInfoActivity extends BaseLoginActivity implements Tool
                     @Override
                     public void call(List<XMPPAccountSettings> s) {
                         Log.d(LOG_TAG, "XMPP accounts loading from net: successfully");
-                        updateXMPPAccountList(s);
                         hideProgress();
+                        updateLastSyncTime();
                         Toast.makeText(XabberAccountInfoActivity.this, R.string.sync_success, Toast.LENGTH_SHORT).show();
                     }
                 }, new Action1<Throwable>() {
@@ -355,8 +353,8 @@ public class XabberAccountInfoActivity extends BaseLoginActivity implements Tool
                     @Override
                     public void call(List<XMPPAccountSettings> s) {
                         Log.d(LOG_TAG, "XMPP accounts loading from net: successfully");
-                        updateXMPPAccountList(s);
                         hideProgress();
+                        updateLastSyncTime();
                         Toast.makeText(XabberAccountInfoActivity.this, R.string.sync_success, Toast.LENGTH_SHORT).show();
                     }
                 }, new Action1<Throwable>() {

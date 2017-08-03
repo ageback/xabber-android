@@ -15,11 +15,13 @@ import android.widget.Switch;
 import android.widget.TextView;
 
 import com.xabber.android.R;
+import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.xaccount.XMPPAccountSettings;
 import com.xabber.android.data.xaccount.XabberAccount;
 import com.xabber.android.data.xaccount.XabberAccountManager;
 import com.xabber.android.ui.activity.XabberAccountInfoActivity;
 import com.xabber.android.ui.adapter.XMPPAccountAdapter;
+import com.xabber.android.ui.dialog.AccountSyncDialogFragment;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -35,11 +37,9 @@ public class XabberAccountInfoFragment extends Fragment {
 
     private TextView tvAccountName;
     private TextView tvAccountEmail;
+    private TextView tvLastSyncDate;
     private RelativeLayout rlLogout;
     private RelativeLayout rlSync;
-    private Switch switchSyncAll;
-    private XMPPAccountAdapter adapter;
-    private List<XMPPAccountSettings> xmppAccounts;
 
     @Nullable
     @Override
@@ -53,6 +53,7 @@ public class XabberAccountInfoFragment extends Fragment {
 
         tvAccountName = (TextView) view.findViewById(R.id.tvAccountName);
         tvAccountEmail = (TextView) view.findViewById(R.id.tvAccountEmail);
+        tvLastSyncDate = (TextView) view.findViewById(R.id.tvLastSyncDate);
 
         rlLogout = (RelativeLayout) view.findViewById(R.id.rlLogout);
         rlLogout.setOnClickListener(new View.OnClickListener() {
@@ -66,38 +67,20 @@ public class XabberAccountInfoFragment extends Fragment {
         rlSync.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                ((XabberAccountInfoActivity)getActivity()).onSyncClick();
+                AccountSyncDialogFragment.newInstance()
+                        .show(getFragmentManager(), AccountSyncDialogFragment.class.getSimpleName());
             }
         });
-
-        switchSyncAll = (Switch) view.findViewById(R.id.switchSyncAll);
-        switchSyncAll.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
-                if (adapter != null)
-                    adapter.setAllChecked(b);
-            }
-        });
-
-        adapter = new XMPPAccountAdapter();
-        xmppAccounts = new ArrayList<>();
-        RecyclerView recyclerView = (RecyclerView) view.findViewById(R.id.rcvXmppUsers);
-        recyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
-        recyclerView.setNestedScrollingEnabled(false);
-        adapter.setItems(xmppAccounts);
-        recyclerView.setAdapter(adapter);
     }
 
     @Override
     public void onResume() {
         super.onResume();
 
-        List<XMPPAccountSettings> items = XabberAccountManager.getInstance().getXmppAccounts();
-        if (items != null) updateList(items);
-
         XabberAccount account = XabberAccountManager.getInstance().getAccount();
         if (account != null) updateData(account);
         else ((XabberAccountInfoActivity)getActivity()).showLoginFragment();
+        updateLastSyncTime();
     }
 
     public void updateData(@NonNull XabberAccount account) {
@@ -107,11 +90,8 @@ public class XabberAccountInfoFragment extends Fragment {
             tvAccountEmail.setText(account.getEmails().get(0).getEmail());
     }
 
-    public void updateList(@NonNull List<XMPPAccountSettings> list) {
-        xmppAccounts.clear();
-        xmppAccounts.addAll(list);
-        Collections.sort(xmppAccounts);
-        adapter.setItems(xmppAccounts);
+    public void updateLastSyncTime() {
+        tvLastSyncDate.setText(getString(R.string.last_sync_date, SettingsManager.getLastSyncDate()));
     }
 
 }
