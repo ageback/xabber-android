@@ -52,6 +52,7 @@ import com.xabber.android.data.notification.BaseAccountNotificationProvider;
 import com.xabber.android.data.notification.NotificationManager;
 import com.xabber.android.data.roster.PresenceManager;
 import com.xabber.android.data.roster.RosterManager;
+import com.xabber.android.data.xaccount.XabberAccountManager;
 
 import org.jivesoftware.smack.util.StringUtils;
 import org.jivesoftware.smackx.mam.element.MamPrefsIQ;
@@ -337,7 +338,7 @@ public class AccountManager implements OnLoadListener, OnUnloadListener, OnWipeL
      * @throws NetworkException if user or server part are invalid.
      */
     public AccountJid addAccount(String user, String password, boolean syncable,
-                                 boolean storePassword, boolean useOrbot, boolean registerNewAccount)
+                                 boolean storePassword, boolean xabberSync, boolean useOrbot, boolean registerNewAccount)
             throws NetworkException {
         if (user == null) {
             throw new NetworkException(R.string.EMPTY_USER_NAME);
@@ -405,6 +406,10 @@ public class AccountManager implements OnLoadListener, OnUnloadListener, OnWipeL
         if (accountItems.size() > 1 && SettingsManager.contactsEnableShowAccounts()) {
             SettingsManager.enableContactsShowAccount();
         }
+
+        // add xmpp account settings
+        XabberAccountManager.getInstance().addXmppAccountSettings(accountItem, xabberSync);
+
         return accountItem.getAccount();
     }
 
@@ -455,6 +460,11 @@ public class AccountManager implements OnLoadListener, OnUnloadListener, OnWipeL
      * Remove user`s account.
      */
     public void removeAccount(AccountJid account) {
+        // disable synchronization for this account in xabber account
+        SettingsManager.setSyncAllAccounts(false);
+        XabberAccountManager.getInstance().setSyncForAccount(account, false);
+
+        // removing local account
         removeAccountWithoutCallback(account);
         onAccountChanged(account);
     }

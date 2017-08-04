@@ -33,31 +33,57 @@ public class AccountSyncDialogFragment extends DialogFragment {
     private List<XMPPAccountSettings> xmppAccounts;
     private Switch switchSyncAll;
     private XMPPAccountAdapter adapter;
+    private boolean noCancel = false;
 
-    public static AccountSyncDialogFragment newInstance() {
-        return new AccountSyncDialogFragment();
+    private static final String NO_CANCEL = "NO_CANCEL";
+
+    public static AccountSyncDialogFragment newInstance(boolean noCancel) {
+        AccountSyncDialogFragment fragment = new AccountSyncDialogFragment();
+        Bundle args = new Bundle();
+        args.putBoolean(NO_CANCEL, noCancel);
+        fragment.setArguments(args);
+        return fragment;
     }
 
     @Override
     public Dialog onCreateDialog(Bundle savedInstanceState) {
 
+        Bundle args = getArguments();
+        boolean noCancel = args.getBoolean(NO_CANCEL, false);
+
         AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
         builder.setView(setupView())
-                .setMessage("Synchronization")
-                .setPositiveButton("synchronize", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
+                .setMessage(R.string.title_sync);
+
+
+        if (!noCancel) {
+            builder.setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    AccountSyncDialogFragment.this.getDialog().cancel();
+                }
+            }).setPositiveButton(R.string.button_sync, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    if (!switchSyncAll.isChecked())
                         XabberAccountManager.getInstance().setSyncAllAccounts(xmppAccounts);
-                        SettingsManager.setSyncAllAccounts(switchSyncAll.isChecked());
-                        ((XabberAccountInfoActivity)getActivity()).onSyncClick();
-                    }
-                })
-                .setNegativeButton("cancel", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        AccountSyncDialogFragment.this.getDialog().cancel();
-                    }
-                });
+                    SettingsManager.setSyncAllAccounts(switchSyncAll.isChecked());
+                    ((XabberAccountInfoActivity)getActivity()).onSyncClick(false);
+                }
+            });
+        } else {
+            builder.setPositiveButton(R.string.button_sync, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    if (!switchSyncAll.isChecked())
+                        XabberAccountManager.getInstance().setSyncAllAccounts(xmppAccounts);
+                    SettingsManager.setSyncAllAccounts(switchSyncAll.isChecked());
+                    ((XabberAccountInfoActivity)getActivity()).onSyncClick(true);
+                }
+            });
+        }
+        this.noCancel = noCancel;
+
         return builder.create();
     }
 
@@ -104,5 +130,11 @@ public class AccountSyncDialogFragment extends DialogFragment {
             this.xmppAccounts.add(newAccount);
         }
         Collections.sort(xmppAccounts);
+    }
+
+    @Override
+    public void onCancel(DialogInterface dialog) {
+        super.onCancel(dialog);
+        if (noCancel) ((XabberAccountInfoActivity)getActivity()).onSyncClick(true);
     }
 }

@@ -4,30 +4,18 @@ import android.app.Fragment;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.v7.widget.LinearLayoutManager;
-import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.CompoundButton;
 import android.widget.RelativeLayout;
-import android.widget.Switch;
 import android.widget.TextView;
 
 import com.xabber.android.R;
 import com.xabber.android.data.SettingsManager;
-import com.xabber.android.data.xaccount.XMPPAccountSettings;
 import com.xabber.android.data.xaccount.XabberAccount;
 import com.xabber.android.data.xaccount.XabberAccountManager;
 import com.xabber.android.ui.activity.XabberAccountInfoActivity;
-import com.xabber.android.ui.adapter.XMPPAccountAdapter;
 import com.xabber.android.ui.dialog.AccountSyncDialogFragment;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
 
 /**
  * Created by valery.miller on 27.07.17.
@@ -67,10 +55,12 @@ public class XabberAccountInfoFragment extends Fragment {
         rlSync.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                AccountSyncDialogFragment.newInstance()
-                        .show(getFragmentManager(), AccountSyncDialogFragment.class.getSimpleName());
+                showSyncDialog(false);
             }
         });
+
+        if (getArguments().getBoolean("SHOW_SYNC", false))
+            showSyncDialog(true);
     }
 
     @Override
@@ -92,6 +82,11 @@ public class XabberAccountInfoFragment extends Fragment {
 
     public void updateLastSyncTime() {
         tvLastSyncDate.setText(getString(R.string.last_sync_date, SettingsManager.getLastSyncDate()));
+    }
+
+    public void showSyncDialog(boolean noCancel) {
+        AccountSyncDialogFragment.newInstance(noCancel)
+                .show(getFragmentManager(), AccountSyncDialogFragment.class.getSimpleName());
     }
 
 }

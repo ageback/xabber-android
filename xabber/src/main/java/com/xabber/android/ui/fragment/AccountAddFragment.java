@@ -23,14 +23,12 @@ import com.xabber.android.ui.activity.AccountActivity;
 import com.xabber.android.ui.dialog.OrbotInstallerDialog;
 import com.xabber.android.ui.helper.OrbotHelper;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-
 import cn.net.wesoft.android.utils.MD5;
 public class AccountAddFragment extends Fragment implements View.OnClickListener {
 
     private CheckBox storePasswordView;
     private CheckBox storePasswordMd5EncryptView;
+    private CheckBox chkSync;
     private CheckBox useOrbotView;
     private CheckBox createAccountCheckBox;
     private LinearLayout passwordConfirmView;
@@ -48,6 +46,7 @@ public class AccountAddFragment extends Fragment implements View.OnClickListener
 
         storePasswordView = (CheckBox) view.findViewById(R.id.store_password);
         storePasswordMd5EncryptView = (CheckBox) view.findViewById(R.id.store_password_md5_encrypt);
+        chkSync = (CheckBox) view.findViewById(R.id.chkSync);
         useOrbotView = (CheckBox) view.findViewById(R.id.use_orbot);
         createAccountCheckBox = (CheckBox) view.findViewById(R.id.register_account);
         createAccountCheckBox.setOnClickListener(this);
@@ -97,6 +96,7 @@ public class AccountAddFragment extends Fragment implements View.OnClickListener
                     storePasswordMd5EncryptView.isChecked() ? MD5.MD5(passwordView.getText().toString()):passwordView.getText().toString(),
                     false,
                     storePasswordView.isChecked(),
+                    chkSync.isChecked(),
                     useOrbotView.isChecked(),
                     createAccountCheckBox.isChecked());
         } catch (NetworkException e) {

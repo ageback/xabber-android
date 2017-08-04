@@ -39,9 +39,10 @@ import com.xabber.android.ui.activity.ManagedActivity;
 import com.xabber.android.ui.color.ColorManager;
 import com.xabber.android.ui.widget.ItemTouchHelperAdapter;
 
+import org.jxmpp.jid.BareJid;
+
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 
 public class AccountListAdapter extends RecyclerView.Adapter implements ItemTouchHelperAdapter {
@@ -53,6 +54,7 @@ public class AccountListAdapter extends RecyclerView.Adapter implements ItemTouc
     @SuppressWarnings("WeakerAccess")
     Listener listener;
     ManagedActivity activity;
+    boolean showAnchors = false;
 
     public interface Listener {
         void onAccountClick(AccountJid account);
@@ -68,6 +70,11 @@ public class AccountListAdapter extends RecyclerView.Adapter implements ItemTouc
         this.listener = listener;
     }
 
+    public void setShowAnchors(boolean showAnchors) {
+        this.showAnchors = showAnchors;
+        notifyDataSetChanged();
+    }
+
     public void setAccountItems(List<AccountItem> accountItems) {
         this.accountItems = accountItems;
 
@@ -76,15 +83,19 @@ public class AccountListAdapter extends RecyclerView.Adapter implements ItemTouc
 
         for (AccountItem account : accountItems) {
             for (XMPPAccountSettings set : accountSettings) {
-                if (account.getRealJid() != null) {
-                    String accountJidString = account.getRealJid().asBareJid().toString();
-                    if (set.getJid().equals(accountJidString))
+                BareJid jid = account.getAccount().getFullJid().asBareJid();
+                if (jid != null) {
+                    if (set.getJid().equals(jid.toString()))
                         account.setOrder(set.getOrder());
                 }
             }
         }
         Collections.sort(accountItems);
         notifyDataSetChanged();
+    }
+
+    public List<AccountItem> getItems() {
+        return accountItems;
     }
 
     @Override
@@ -99,15 +110,6 @@ public class AccountListAdapter extends RecyclerView.Adapter implements ItemTouc
             }
         }
         notifyItemMoved(fromPosition, toPosition);
-
-        // update local accounts order
-        HashMap<String, Integer> map = new HashMap<>();
-        int order = 1;
-        for (AccountItem account : accountItems) {
-            map.put(account.getRealJid().asBareJid().toString(), order);
-            order++;
-        }
-        XabberAccountManager.getInstance().setXMPPAccountOrder(map);
         return true;
     }
 
@@ -143,6 +145,9 @@ public class AccountListAdapter extends RecyclerView.Adapter implements ItemTouc
                 return false;
             }
         });
+
+        if (showAnchors) accountHolder.ivAnchor.setVisibility(View.VISIBLE);
+        else accountHolder.ivAnchor.setVisibility(View.GONE);
     }
 
     @Override
