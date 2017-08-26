@@ -1,12 +1,16 @@
 package com.xabber.android.ui.fragment;
 
+import android.app.AlertDialog;
+import android.app.Dialog;
 import android.app.Fragment;
+import android.content.DialogInterface;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.CheckBox;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
@@ -24,7 +28,7 @@ import com.xabber.android.ui.dialog.AccountSyncDialogFragment;
 public class XabberAccountInfoFragment extends Fragment {
 
     private TextView tvAccountName;
-    private TextView tvAccountEmail;
+    private TextView tvAccountUsername;
     private TextView tvLastSyncDate;
     private RelativeLayout rlLogout;
     private RelativeLayout rlSync;
@@ -40,14 +44,14 @@ public class XabberAccountInfoFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         tvAccountName = (TextView) view.findViewById(R.id.tvAccountName);
-        tvAccountEmail = (TextView) view.findViewById(R.id.tvAccountEmail);
+        tvAccountUsername = (TextView) view.findViewById(R.id.tvAccountUsername);
         tvLastSyncDate = (TextView) view.findViewById(R.id.tvLastSyncDate);
 
         rlLogout = (RelativeLayout) view.findViewById(R.id.rlLogout);
         rlLogout.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                ((XabberAccountInfoActivity)getActivity()).onLogoutClick();
+                showLogoutDialog();
             }
         });
 
@@ -75,9 +79,12 @@ public class XabberAccountInfoFragment extends Fragment {
 
     public void updateData(@NonNull XabberAccount account) {
         String accountName = account.getFirstName() + " " + account.getLastName();
+        if (accountName.trim().isEmpty())
+            accountName = getString(R.string.title_xabber_account);
+
         tvAccountName.setText(accountName);
-        if (account.getEmails().size() > 0)
-            tvAccountEmail.setText(account.getEmails().get(0).getEmail());
+        if (account.getUsername() != null && !account.getUsername().isEmpty())
+            tvAccountUsername.setText(getString(R.string.username, account.getUsername()));
     }
 
     public void updateLastSyncTime() {
@@ -87,6 +94,26 @@ public class XabberAccountInfoFragment extends Fragment {
     public void showSyncDialog(boolean noCancel) {
         AccountSyncDialogFragment.newInstance(noCancel)
                 .show(getFragmentManager(), AccountSyncDialogFragment.class.getSimpleName());
+    }
+
+    private void showLogoutDialog() {
+        LayoutInflater inflater = getActivity().getLayoutInflater();
+        View view = inflater.inflate(R.layout.dialog_logout_xabber_account, null);
+        final CheckBox chbDeleteAccounts = (CheckBox) view.findViewById(R.id.chbDeleteAccounts);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
+        builder.setTitle(R.string.progress_title_logout)
+                .setMessage(R.string.logout_summary)
+                .setView(view)
+                .setPositiveButton(R.string.button_logout, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        ((XabberAccountInfoActivity)getActivity()).onLogoutClick(chbDeleteAccounts.isChecked());
+                    }
+                })
+                .setNegativeButton(R.string.cancel, null);
+        Dialog dialog = builder.create();
+        dialog.show();
     }
 
 }

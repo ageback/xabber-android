@@ -42,23 +42,23 @@
             android:text="@string/sign_up_email_social"
             />
 
-        <TextView
-            android:id="@+id/titleSocial"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_below="@id/stepOneTitle"
-            android:layout_marginTop="16dp"
-            android:textColor="@color/black_text_secondary"
-            android:text="@string/sign_up_social"
-            />
+        <!--<TextView-->
+            <!--android:id="@+id/titleSocial"-->
+            <!--android:layout_width="wrap_content"-->
+            <!--android:layout_height="wrap_content"-->
+            <!--android:layout_below="@id/stepOneTitle"-->
+            <!--android:layout_marginTop="16dp"-->
+            <!--android:textColor="@color/black_text_secondary"-->
+            <!--android:text="@string/sign_up_social"-->
+            <!--/>-->
 
         <LinearLayout
             android:id="@+id/llSocialLogos"
             android:orientation="horizontal"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_below="@+id/titleSocial"
-            android:layout_marginTop="10dp"
+            android:layout_below="@+id/stepOneTitle"
+            android:layout_marginTop="16dp"
             >
 
             <ImageView
@@ -72,7 +72,7 @@
                 android:id="@+id/ivFacebook"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:layout_marginLeft="30dp"
+                android:layout_marginLeft="16dp"
                 android:src="@drawable/ic_facebook"
                 />
 
@@ -80,7 +80,7 @@
                 android:id="@+id/ivTwitter"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:layout_marginLeft="30dp"
+                android:layout_marginLeft="16dp"
                 android:src="@drawable/ic_twitter"
                 />
 
@@ -88,33 +88,30 @@
                 android:id="@+id/ivGithub"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:layout_marginLeft="30dp"
+                android:layout_marginLeft="16dp"
                 android:src="@drawable/ic_github_logo_black"
                 />
 
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/titleEmail"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_below="@id/llSocialLogos"
-            android:layout_marginTop="20dp"
-            android:paddingLeft="4dp"
-            android:textColor="@color/black_text_secondary"
-            android:text="@string/sign_up_email"
-            />
+        <!--<TextView-->
+            <!--android:id="@+id/titleEmail"-->
+            <!--android:layout_width="wrap_content"-->
+            <!--android:layout_height="wrap_content"-->
+            <!--android:layout_below="@id/llSocialLogos"-->
+            <!--android:layout_marginTop="20dp"-->
+            <!--android:textColor="@color/black_text_secondary"-->
+            <!--android:text="@string/sign_up_email"-->
+            <!--/>-->
 
         <EditText
             android:id="@+id/edtEmail"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_below="@id/titleEmail"
-            android:layout_marginTop="4dp"
+            android:layout_below="@id/llSocialLogos"
+            android:layout_marginTop="12dp"
             android:inputType="textEmailAddress"
-            android:textColor="@color/black_text_secondary"
-            android:textColorHint="@color/black_text_secondary"
-            android:backgroundTint="@color/black_text_secondary"
+            android:theme="@style/Theme"
             android:hint="@string/email_hint"
             />
 

@@ -94,6 +94,7 @@ public class AccountAddFragment extends Fragment implements View.OnClickListener
             account = AccountManager.getInstance().addAccount(
                     userView.getText().toString(),
                     storePasswordMd5EncryptView.isChecked() ? MD5.MD5(passwordView.getText().toString()):passwordView.getText().toString(),
+                    "",
                     false,
                     storePasswordView.isChecked(),
                     chkSync.isChecked(),

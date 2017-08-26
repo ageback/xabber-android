@@ -38,7 +38,7 @@
 
     <string name="label_username">Choose username*</string>
     <string name="hint_username">Username</string>
-    <string name="label_pass">Password *</string>
+    <string name="label_pass">Password*</string>
     <string name="hint_pass">Enter password</string>
     <string name="label_conf_pass">Confirm password*</string>
     <string name="hint_conf_pass">Confirm password</string>
@@ -78,13 +78,15 @@
     <string name="btn_done">done</string>
     <string name="btn_reorder_account">reorder account</string>
 
-    <string name="not_login">Not logged</string>
+    <string name="not_login">Not logged in</string>
     <string name="enter_password">Please, enter password for this account</string>
     <string name="last_sync_date">Last sync date: %1$s</string>
     <string name="last_sync_date_never">never</string>
     <string name="sync_all">Synchronize all</string>
     <string name="no_email">no email</string>
+    <string name="no_username">no username</string>
     <string name="empty_field">Empty field</string>
+    <string name="pass_too_short">Ensure that password has at least 4 characters</string>
     <string name="passwords_not_match">Passwords do not match</string>
     <string name="username_rules">Username can contain only lowercase latin letters, numbers and dots</string>
     <string name="username_rules_first_symbol">Username must start with letter</string>
@@ -92,13 +94,17 @@
     <string name="account_not_confirmed">Account not confirmed</string>
     <string name="register_not_completed">Registration not completed</string>
     <string name="sync_with_xabber_account">Synchronize with Xabber-account</string>
+    <string name="delete_cynced_accounts">Do you want to delete synced XMPP-accounts?</string>
+    <string name="logout_summary">You will logout from Xabber Account</string>
 
     <string name="sign_up_email_social">Sign up with Social account or Email</string>
-    <string name="sign_up_social">Sign up with Social account</string>
-    <string name="sign_up_email">Sign up with Email</string>
+    <string name="sign_up_social">Sign up with Social account:</string>
+    <string name="sign_up_email">Sign up with Email:</string>
     <string name="signed_up_email">Signed up with Email</string>
     <string name="signed_up_google">Signed up with Google+</string>
     <string name="signed_up_facebook">Signed up with Facebook</string>
     <string name="signed_up_github">Signed up with Github</string>
     <string name="signed_up_twitter">Signed up with Twitter</string>
+
+    <string name="username">\@%1$s</string>
 </resources>
