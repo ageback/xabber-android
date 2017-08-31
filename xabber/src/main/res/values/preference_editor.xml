@@ -33,9 +33,10 @@
     <string name="debug_crash_reports_dialog_settings_button">Settings</string>
 
     <string name="events_lightning">Light indication\nBlink LED on notification</string>
+    <string name="events_lightning_muc">Light indication\nBlink LED on notification from conferences</string>
     <string name="events_persistent">Taskbar icon\nShow persistent notification. This option prevents Android from unloading the app from memory</string>
-    <string name="events_sound">Audio alert\nChoose notification sound</string>
-    <string name="events_vibro">Vibrate\nVibrate on notification</string>
+    <string name="events_sound">Sound\nChoose notification sound</string>
+    <string name="events_vibro">Vibrate</string>
 
     <string name="interface_theme">Theme</string>
     <string name="interface_theme_dark">Dark</string>
@@ -93,7 +94,8 @@
     <string name="events_message_chat">Chats only</string>
     <string name="events_message_chat_and_muc">Chats and conferences</string>
     <string name="events_message_none">Don\'t notify</string>
-    <string name="events_show_text">Show message in notification\nShow message text in notification area</string>
+    <string name="events_show_text">Message preview\nShow message text from chats in notification area</string>
+    <string name="events_show_text_muc">Message preview\nShow message text from conferences in notification area</string>
     <string name="events_visible_chat">Notify in current chat\nNotify on incoming messages in current chat</string>
     <string name="events_suppress_100">Suppress some status messages\nDon\'t get \'This room is not anonymous\' messages</string>
     <string name="negative_priotiry_summary">%s (you won\'t receive messages from any chat)</string>
@@ -139,5 +141,20 @@
     <string name="category_inapp_notifications">In-app notification</string>
     <string name="category_key_phrase">Key phrases</string>
 
+    <string name="events_on_chat_title">Alert</string>
+    <string name="events_on_chat_summary">Alert about new messages in chats</string>
+    <string name="events_on_muc_title">Alert</string>
+    <string name="events_on_muc_summary">Alert about new messages in conferences</string>
 
+    <string name="vibro_default">By default</string>
+    <string name="vibro_short">Short vibration</string>
+    <string name="vibro_long">Long vibration</string>
+    <string name="vibro_if_silent">Only in silent mode</string>
+
+    <string name="events_in_app_sounds_title">In-app sounds</string>
+    <string name="events_in_app_sounds_summary">Play sounds on message if you in other chat</string>
+    <string name="events_in_app_vibrate_title">In-app vibrate</string>
+    <string name="events_in_app_vibrate_summary">Do vibrate on message if you in other chat</string>
+    <string name="events_in_app_preview_title">In-app preview</string>
+    <string name="events_in_app_preview_summary">Show preview on message if you in other chat</string>
 </resources>

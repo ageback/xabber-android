@@ -126,44 +126,61 @@
 
 <!-- preference_events -->
     <string name="events_sound_key">events_sound_uri</string>
+    <string name="events_sound_muc_key">events_sound_muc_uri</string>
     <string name="events_sound_default">@string/default_sound</string>
 
-    <string name="events_vibro_key">events_vibro</string>
-    <bool name="events_vibro_default">true</bool>
-
-    <string name="events_ignore_system_vibro_key">events_ignore_system_vibro</string>
-    <bool name="events_ignore_system_vibro_default">false</bool>
+    <string name="events_vibro_chat_key">events_vibro_chat_key</string>
+    <string name="events_vibro_muc_key">events_vibro_muc_key</string>
+    <string name="events_vibro_disable">disable</string>
+    <string name="events_vibro_bydefault">default</string>
+    <string name="events_vibro_short">short</string>
+    <string name="events_vibro_long">long</string>
+    <string name="events_vibro_if_silent">if silent</string>
+    <string-array name="events_vibro_entries">
+        <item>@string/disabled</item>
+        <item>@string/vibro_default</item>
+        <item>@string/vibro_short</item>
+        <item>@string/vibro_long</item>
+        <item>@string/vibro_if_silent</item>
+    </string-array>
+    <string-array name="events_vibro_entryvalues">
+        <item>@string/events_vibro_disable</item>
+        <item>@string/events_vibro_bydefault</item>
+        <item>@string/events_vibro_short</item>
+        <item>@string/events_vibro_long</item>
+        <item>@string/events_vibro_if_silent</item>
+    </string-array>
 
     <string name="events_lightning_key">events_lightning</string>
+    <string name="events_lightning_muc_key">events_lightning_muc</string>
     <bool name="events_lightning_default">true</bool>
 
     <string name="events_persistent_key">events_persistent</string>
     <bool name="events_persistent_default">true</bool>
 
     <string name="events_show_text_key">events_show_text</string>
+    <string name="events_show_text_muc_key">events_show_text_muc</string>
     <bool name="events_show_text_default">true</bool>
 
-    <string name="events_message_key">events_message</string>
-    <string name="events_message_none_value">none</string>
-    <string name="events_message_chat_value">chat</string>
-    <string name="events_message_chat_and_muc_value">chat_and_muc</string>
-    <string-array name="events_message_entries">
-        <item>@string/events_message_none</item>
-        <item>@string/events_message_chat</item>
-        <item>@string/events_message_chat_and_muc</item>
-    </string-array>
-    <string-array name="events_message_entryvalues">
-        <item>@string/events_message_none_value</item>
-        <item>@string/events_message_chat_value</item>
-        <item>@string/events_message_chat_and_muc_value</item>
-    </string-array>
-    <string name="events_message_default">@string/events_message_chat_value</string>
+    <string name="events_on_chat_key">events_on_chat</string>
+    <bool name="events_on_chat_default">true</bool>
+    <string name="events_on_muc_key">events_on_muc</string>
+    <bool name="events_on_muc_default">true</bool>
 
     <string name="events_visible_chat_key">events_visible_chat</string>
     <bool name="events_visible_chat_default">false</bool>
 
     <string name="events_first_only_key">events_first_only</string>
     <bool name="events_first_only_default">false</bool>
+
+    <string name="events_in_app_sounds_key">events_in_app_sounds</string>
+    <bool name="events_in_app_sounds_default">true</bool>
+
+    <string name="events_in_app_vibrate_key">events_in_app_vibrate</string>
+    <bool name="events_in_app_vibrate_default">true</bool>
+
+    <string name="events_in_app_preview_key">events_in_app_preview</string>
+    <bool name="events_in_app_preview_default">true</bool>
 
 <!-- preference_chats -->
 	<string name="preference_chats">@string/chat_viewer</string>

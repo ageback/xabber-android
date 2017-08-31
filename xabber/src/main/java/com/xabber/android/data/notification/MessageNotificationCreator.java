@@ -1,7 +1,9 @@
 package com.xabber.android.data.notification;
 
 import android.app.PendingIntent;
+import android.content.Context;
 import android.content.Intent;
+import android.media.AudioManager;
 import android.support.v4.app.NotificationCompat;
 import android.text.Spannable;
 import android.text.SpannableString;
@@ -48,7 +50,18 @@ public class MessageNotificationCreator {
 
         MessageNotification message = messageNotifications.get(messageNotifications.size() - 1);
 
-        boolean showText  = ChatManager.getInstance().isShowText(message.getAccount(), message.getUser());
+        boolean showText = true;
+        boolean isMUC = false;
+
+        // muc
+        if (MUCManager.getInstance().hasRoom(message.getAccount(), message.getUser().getJid().asEntityBareJidIfPossible())) {
+            isMUC = true;
+            showText = ChatManager.getInstance().isShowTextOnMuc(message.getAccount(), message.getUser());
+
+        } else { // chat
+            isMUC = false;
+            showText = ChatManager.getInstance().isShowText(message.getAccount(), message.getUser());
+        }
 
         NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(application);
         notificationBuilder.setContentTitle(getTitle(message, messageCount));
@@ -69,7 +82,7 @@ public class MessageNotificationCreator {
         notificationBuilder.setCategory(NotificationCompat.CATEGORY_MESSAGE);
         notificationBuilder.setPriority(NotificationCompat.PRIORITY_HIGH);
 
-        NotificationManager.addEffects(notificationBuilder, messageItem);
+        NotificationManager.addEffects(notificationBuilder, messageItem, isMUC, checkVibrateMode());
 
         return notificationBuilder.build();
     }
@@ -151,11 +164,13 @@ public class MessageNotificationCreator {
 
             return bigTextStyle;
         } else {
-            return getInboxStyle(messageCount, message.getAccount().toString());
+            if (MUCManager.getInstance().hasRoom(message.getAccount(), message.getUser().getJid().asEntityBareJidIfPossible()))
+                return getInboxStyle(messageCount, message.getAccount().toString(), true);
+            else return getInboxStyle(messageCount, message.getAccount().toString(), false);
         }
     }
 
-    private NotificationCompat.Style getInboxStyle(int messageCount, String accountName) {
+    private NotificationCompat.Style getInboxStyle(int messageCount, String accountName, boolean isMuc) {
         NotificationCompat.InboxStyle inboxStyle = new NotificationCompat.InboxStyle();
 
         inboxStyle.setBigContentTitle(getMultiContactTitle(messageCount));
@@ -165,6 +180,9 @@ public class MessageNotificationCreator {
 
             boolean showTextForThisContact
                     = ChatManager.getInstance().isShowText(messageNotification.getAccount(), messageNotification.getUser());
+            if (isMuc)
+                showTextForThisContact
+                        = ChatManager.getInstance().isShowTextOnMuc(messageNotification.getAccount(), messageNotification.getUser());
 
             inboxStyle.addLine(getContactNameAndMessage(messageNotification, showTextForThisContact));
         }
@@ -199,6 +217,11 @@ public class MessageNotificationCreator {
         Intent intent = ChatActivity.createClearTopIntent(application, message.getAccount(), message.getUser());
         return PendingIntent.getActivities(application, UNIQUE_REQUEST_CODE++,
                 new Intent[]{backIntent, intent}, PendingIntent.FLAG_ONE_SHOT);
+    }
+
+    private boolean checkVibrateMode() {
+        AudioManager am = (AudioManager) application.getSystemService(Context.AUDIO_SERVICE);
+        return am.getRingerMode() == AudioManager.RINGER_MODE_VIBRATE;
     }
 
 }

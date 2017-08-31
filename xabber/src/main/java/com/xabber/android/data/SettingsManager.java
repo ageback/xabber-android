@@ -243,9 +243,44 @@ public class SettingsManager implements OnInitializedListener,
                 R.string.events_sound_default);
     }
 
-    public static boolean eventsVibro() {
-        return getBoolean(R.string.events_vibro_key,
-                R.bool.events_vibro_default);
+    public static Uri eventsSoundMuc() {
+        return getSound(R.string.events_sound_muc_key,
+                Settings.System.DEFAULT_NOTIFICATION_URI,
+                R.string.events_sound_default);
+    }
+
+    public static VibroMode eventsVibroChat() {
+        String value = getString(R.string.events_vibro_chat_key, R.string.events_vibro_bydefault);
+        if (Application.getInstance().getString(R.string.events_vibro_disable).equals(value)) {
+            return VibroMode.disabled;
+        } else if (Application.getInstance().getString(R.string.events_vibro_bydefault).equals(value)) {
+            return VibroMode.defaultvibro;
+        } else if (Application.getInstance().getString(R.string.events_vibro_short).equals(value)) {
+            return VibroMode.shortvibro;
+        } else if (Application.getInstance().getString(R.string.events_vibro_long).equals(value)) {
+            return VibroMode.longvibro;
+        } else if (Application.getInstance().getString(R.string.events_vibro_if_silent).equals(value)) {
+            return VibroMode.onlyifsilent;
+        } else {
+            throw new IllegalStateException();
+        }
+    }
+
+    public static VibroMode eventsVibroMuc() {
+        String value = getString(R.string.events_vibro_muc_key, R.string.events_vibro_bydefault);
+        if (Application.getInstance().getString(R.string.events_vibro_disable).equals(value)) {
+            return VibroMode.disabled;
+        } else if (Application.getInstance().getString(R.string.events_vibro_bydefault).equals(value)) {
+            return VibroMode.defaultvibro;
+        } else if (Application.getInstance().getString(R.string.events_vibro_short).equals(value)) {
+            return VibroMode.shortvibro;
+        } else if (Application.getInstance().getString(R.string.events_vibro_long).equals(value)) {
+            return VibroMode.longvibro;
+        } else if (Application.getInstance().getString(R.string.events_vibro_if_silent).equals(value)) {
+            return VibroMode.onlyifsilent;
+        } else {
+            throw new IllegalStateException();
+        }
     }
 
     public static boolean eventsSuppress100() {
@@ -253,13 +288,18 @@ public class SettingsManager implements OnInitializedListener,
                 R.bool.chat_events_suppress_100_default);
     }
 
-    public static boolean eventsIgnoreSystemVibro() {
-        return getBoolean(R.string.events_ignore_system_vibro_key,
-                R.bool.events_ignore_system_vibro_default);
-    }
+//    public static boolean eventsIgnoreSystemVibro() {
+//        return getBoolean(R.string.events_ignore_system_vibro_key,
+//                R.bool.events_ignore_system_vibro_default);
+//    }
 
     public static boolean eventsLightning() {
         return getBoolean(R.string.events_lightning_key,
+                R.bool.events_lightning_default);
+    }
+
+    public static boolean eventsLightningForMuc() {
+        return getBoolean(R.string.events_lightning_muc_key,
                 R.bool.events_lightning_default);
     }
 
@@ -273,21 +313,34 @@ public class SettingsManager implements OnInitializedListener,
                 R.bool.events_show_text_default);
     }
 
-    public static EventsMessage eventsMessage() {
-        String value = getString(R.string.events_message_key,
-                R.string.events_message_default);
-        if (Application.getInstance()
-                .getString(R.string.events_message_none_value).equals(value))
-            return EventsMessage.none;
-        else if (Application.getInstance()
-                .getString(R.string.events_message_chat_value).equals(value))
-            return EventsMessage.chat;
-        else if (Application.getInstance()
-                .getString(R.string.events_message_chat_and_muc_value)
-                .equals(value))
-            return EventsMessage.chatAndMuc;
-        else
-            throw new IllegalStateException();
+    public static boolean eventsShowTextOnMuc() {
+        return getBoolean(R.string.events_show_text_muc_key,
+                R.bool.events_show_text_default);
+    }
+
+    public static boolean eventsOnChat() {
+        return getBoolean(R.string.events_on_chat_key,
+                R.bool.events_on_chat_default);
+    }
+
+    public static boolean eventsOnMuc() {
+        return getBoolean(R.string.events_on_muc_key,
+                R.bool.events_on_muc_default);
+    }
+
+    public static boolean eventsInAppSounds() {
+        return getBoolean(R.string.events_in_app_sounds_key,
+                R.bool.events_in_app_sounds_default);
+    }
+
+    public static boolean eventsInAppVibrate() {
+        return getBoolean(R.string.events_in_app_vibrate_key,
+                R.bool.events_in_app_vibrate_default);
+    }
+
+    public static boolean eventsInAppPreview() {
+        return getBoolean(R.string.events_in_app_preview_key,
+                R.bool.events_in_app_preview_default);
     }
 
     public static boolean eventsVisibleChat() {
@@ -942,6 +995,33 @@ public class SettingsManager implements OnInitializedListener,
          * No auth requests.
          */
         noAuth
+    }
+
+    public enum VibroMode {
+        /**
+         * Vibrate is disabled.
+         */
+        disabled,
+
+        /**
+         * Default vibration
+         */
+        defaultvibro,
+
+        /**
+         * Short vibration
+         */
+        shortvibro,
+
+        /**
+         * Long vibration
+         */
+        longvibro,
+
+        /**
+         * Vibration only in silent mode
+         */
+        onlyifsilent
     }
 
 }
