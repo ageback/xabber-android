@@ -7,19 +7,32 @@ import android.content.DialogInterface;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CheckBox;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.xabber.android.R;
 import com.xabber.android.data.SettingsManager;
+import com.xabber.android.data.xaccount.AuthManager;
+import com.xabber.android.data.xaccount.XMPPAccountSettings;
 import com.xabber.android.data.xaccount.XabberAccount;
 import com.xabber.android.data.xaccount.XabberAccountManager;
 import com.xabber.android.ui.activity.XabberAccountInfoActivity;
 import com.xabber.android.ui.dialog.AccountSyncDialogFragment;
+import com.xabber.android.utils.RetrofitErrorConverter;
+
+import java.util.List;
+
+import rx.Subscription;
+import rx.android.schedulers.AndroidSchedulers;
+import rx.functions.Action1;
+import rx.schedulers.Schedulers;
+import rx.subscriptions.CompositeSubscription;
 
 /**
  * Created by valery.miller on 27.07.17.
@@ -27,11 +40,16 @@ import com.xabber.android.ui.dialog.AccountSyncDialogFragment;
 
 public class XabberAccountInfoFragment extends Fragment {
 
+    private static final String LOG_TAG = XabberAccountInfoFragment.class.getSimpleName();
+
     private TextView tvAccountName;
     private TextView tvAccountUsername;
     private TextView tvLastSyncDate;
     private RelativeLayout rlLogout;
     private RelativeLayout rlSync;
+    private boolean dialogShowed;
+
+    private CompositeSubscription compositeSubscription = new CompositeSubscription();
 
     @Nullable
     @Override
@@ -51,7 +69,10 @@ public class XabberAccountInfoFragment extends Fragment {
         rlLogout.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                showLogoutDialog();
+                if (!dialogShowed) {
+                    dialogShowed = true;
+                    showLogoutDialog();
+                }
             }
         });
 
@@ -59,7 +80,10 @@ public class XabberAccountInfoFragment extends Fragment {
         rlSync.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                showSyncDialog(false);
+                if (!dialogShowed) {
+                    dialogShowed = true;
+                    showSyncDialog(false);
+                }
             }
         });
 
@@ -77,6 +101,12 @@ public class XabberAccountInfoFragment extends Fragment {
         updateLastSyncTime();
     }
 
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        compositeSubscription.clear();
+    }
+
     public void updateData(@NonNull XabberAccount account) {
         String accountName = account.getFirstName() + " " + account.getLastName();
         if (accountName.trim().isEmpty())
@@ -91,9 +121,48 @@ public class XabberAccountInfoFragment extends Fragment {
         tvLastSyncDate.setText(getString(R.string.last_sync_date, SettingsManager.getLastSyncDate()));
     }
 
-    public void showSyncDialog(boolean noCancel) {
-        AccountSyncDialogFragment.newInstance(noCancel)
-                .show(getFragmentManager(), AccountSyncDialogFragment.class.getSimpleName());
+    public void showSyncDialog(final boolean noCancel) {
+        Subscription getSettingsSubscription = AuthManager.getClientSettings()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(new Action1<List<XMPPAccountSettings>>() {
+                    @Override
+                    public void call(List<XMPPAccountSettings> list) {
+                        List<XMPPAccountSettings> items = XabberAccountManager.getInstance().createSyncList(list);
+
+                        if (items != null && items.size() > 0) {
+                            // save full list to list for sync
+                            XabberAccountManager.getInstance().setXmppAccountsForSync(items);
+                            // show dialog
+                            AccountSyncDialogFragment.newInstance(noCancel)
+                                    .show(getFragmentManager(), AccountSyncDialogFragment.class.getSimpleName());
+                            dialogShowed = false;
+                        } else Toast.makeText(getActivity(), "Не удалось начать синхронизацию", Toast.LENGTH_SHORT).show();
+                    }
+                }, new Action1<Throwable>() {
+                    @Override
+                    public void call(Throwable throwable) {
+                        handleErrorGetSettings(throwable);
+                    }
+                });
+        compositeSubscription.add(getSettingsSubscription);
+    }
+
+    private void handleErrorGetSettings(Throwable throwable) {
+        String message = RetrofitErrorConverter.throwableToHttpError(throwable);
+        if (message != null) {
+            if (message.equals("Invalid token")) {
+                XabberAccountManager.getInstance().onInvalidToken();
+                ((XabberAccountInfoActivity)getActivity()).showLoginFragment();
+                Toast.makeText(getActivity(), "Аккаунт был удален", Toast.LENGTH_LONG).show();
+            } else {
+                Log.d(LOG_TAG, "Error while synchronization: " + message);
+                Toast.makeText(getActivity(), message, Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            Log.d(LOG_TAG, "Error while synchronization: " + throwable.toString());
+            Toast.makeText(getActivity(), "Error while synchronization: " + throwable.toString(), Toast.LENGTH_LONG).show();
+        }
     }
 
     private void showLogoutDialog() {
@@ -114,6 +183,6 @@ public class XabberAccountInfoFragment extends Fragment {
                 .setNegativeButton(R.string.cancel, null);
         Dialog dialog = builder.create();
         dialog.show();
+        dialogShowed = false;
     }
-
 }
