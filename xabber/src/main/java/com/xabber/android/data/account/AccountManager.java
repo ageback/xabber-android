@@ -22,6 +22,7 @@ import android.text.TextUtils;
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
 import com.xabber.android.data.OnUnloadListener;
+import com.xabber.android.data.connection.ConnectionSettings;
 import com.xabber.android.data.database.MessageDatabaseManager;
 import com.xabber.android.data.database.RealmManager;
 import com.xabber.android.data.database.realm.AccountRealm;
@@ -190,6 +191,7 @@ public class AccountManager implements OnLoadListener, OnUnloadListener, OnWipeL
                     accountRealm.getToken(),
                     accountRealm.getColorIndex(),
                     accountRealm.getOrder(),
+                    accountRealm.isSyncNotAllowed(),
                     accountRealm.getTimestamp(),
                     accountRealm.getPriority(),
                     accountRealm.getStatusMode(),
@@ -322,7 +324,7 @@ public class AccountManager implements OnLoadListener, OnUnloadListener, OnWipeL
      */
     private AccountItem addAccount(boolean custom, String host, int port,
                                    DomainBareJid serverName, Localpart userName, boolean storePassword,
-                                   String password, String token, Resourcepart resource, int color, int order, int timestamp, int priority,
+                                   String password, String token, Resourcepart resource, int color, int order, boolean syncNotAllowed, int timestamp, int priority,
                                    StatusMode statusMode, String statusText, boolean enabled,
                                    boolean saslEnabled, TLSMode tlsMode, boolean compression,
                                    ProxyType proxyType, String proxyHost, int proxyPort,
@@ -331,7 +333,7 @@ public class AccountManager implements OnLoadListener, OnUnloadListener, OnWipeL
                                    boolean registerNewAccount) {
 
         AccountItem accountItem = new AccountItem(custom, host, port, serverName, userName,
-                resource, storePassword, password, token, color, order, timestamp, priority, statusMode, statusText, enabled,
+                resource, storePassword, password, token, color, order, syncNotAllowed, timestamp, priority, statusMode, statusText, enabled,
                 saslEnabled, tlsMode, compression, proxyType, proxyHost, proxyPort, proxyUser,
                 proxyPassword, syncable, keyPair, lastSync, archiveMode);
 
@@ -405,7 +407,7 @@ public class AccountManager implements OnLoadListener, OnUnloadListener, OnWipeL
         ArchiveMode archiveMode = ArchiveMode.valueOf(application.getString(R.string.account_archive_mode_default_value));
 
         accountItem = addAccount(useCustomHost, host, port, serverName, userName,
-                storePassword, password, token, resource, getNextColorIndex(), getNextOrder(),
+                storePassword, password, token, resource, getNextColorIndex(), getNextOrder(), false,
                 XabberAccountManager.getInstance().getCurrentTime(), 0, StatusMode.available,
                 SettingsManager.statusText(), true, true, tlsRequired ? TLSMode.required : TLSMode.enabled,
                 useCompression, useOrbot ? ProxyType.orbot : ProxyType.none, "localhost", 8080,
@@ -596,11 +598,28 @@ public class AccountManager implements OnLoadListener, OnUnloadListener, OnWipeL
             Date lastSync = accountItem.getLastSync();
             removeAccountWithoutCallback(account);
             result = addAccount(custom, host, port, serverName, userName, storePassword,
-                    password, token, resource, colorIndex, accountItem.getOrder(), accountItem.getTimestamp(), priority, statusMode, statusText, enabled,
+                    password, token, resource, colorIndex, accountItem.getOrder(), accountItem.isSyncNotAllowed(),
+                    accountItem.getTimestamp(), priority, statusMode, statusText, enabled,
                     saslEnabled, tlsMode, compression, proxyType, proxyHost, proxyPort, proxyUser,
                     proxyPassword, syncable, keyPair, lastSync, archiveMode, false);
         }
         onAccountChanged(result.getAccount());
+
+        // disable sync for account if it use not default settings
+        ConnectionSettings connectionSettings = result.getConnectionSettings();
+        if (connectionSettings.isCustomHostAndPort()
+                || connectionSettings.getProxyType() != ProxyType.none
+                || connectionSettings.getTlsMode() == TLSMode.legacy) {
+
+            result.setSyncNotAllowed(true);
+        } else result.setSyncNotAllowed(false);
+    }
+
+    public boolean haveNotAllowedSyncAccounts() {
+        for (AccountItem account : accountItems.values()) {
+            if (account.isSyncNotAllowed()) return true;
+        }
+        return false;
     }
 
     public void setKeyPair(AccountJid account, KeyPair keyPair) {

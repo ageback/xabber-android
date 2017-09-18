@@ -10,6 +10,7 @@
     <string name="signup">РЕГИСТРАЦИЯ</string>
     <string name="forgot_pass">ЗАБЫЛИ ПАРОЛЬ?</string>
     <string name="agrees">Я согласен получать периодические обновления от команды Xabber. Мы обещаем не беспокоить вас слишком часто.</string>
+    <string name="create_xabber_org">Создать учетную запись XMPP на сервере Xabber.org?</string>
 
     <string name="sync_success">Синхронизация завершена</string>
     <string name="sync_fail">Синхронизация не удалась</string>
@@ -128,6 +129,7 @@
     <string name="sync_status_remote">Облачные настройки изменены</string>
     <string name="sync_status_ok">Синхронизирован</string>
     <string name="sync_status_deleted">Облачные настройки удалены</string>
+    <string name="sync_status_not_allowed">Синхронизация не доступна</string>
 
     <string name="tutorial_title_1">A better way to chat</string>
     <string name="tutorial_title_2">Introducing Xabber Account</string>

@@ -1,6 +1,5 @@
 package com.xabber.android.data.xaccount;
 
-import android.content.Context;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Log;
@@ -18,7 +17,6 @@ import com.xabber.android.data.database.realm.SyncStateRealm;
 import com.xabber.android.data.database.realm.XMPPUserRealm;
 import com.xabber.android.data.database.realm.XabberAccountRealm;
 import com.xabber.android.data.entity.AccountJid;
-import com.xabber.android.ui.activity.ManagedActivity;
 import com.xabber.android.ui.color.ColorManager;
 import com.xabber.android.utils.RetrofitErrorConverter;
 
@@ -27,6 +25,7 @@ import org.greenrobot.eventbus.EventBus;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -114,7 +113,14 @@ public class XabberAccountManager implements OnLoadListener {
     }
 
     public boolean isAccountSynchronize(String jid) {
-        if (accountsSyncState.containsKey(jid))
+        boolean syncNotAllowed = false;
+        AccountJid accountJid = getExistingAccount(jid);
+        if (accountJid != null) {
+            AccountItem accountItem = AccountManager.getInstance().getAccount(accountJid);
+            if (accountItem != null) syncNotAllowed = accountItem.isSyncNotAllowed();
+        }
+
+        if (accountsSyncState.containsKey(jid) && !syncNotAllowed)
             return accountsSyncState.get(jid);
         else return false;
     }
@@ -405,43 +411,62 @@ public class XabberAccountManager implements OnLoadListener {
     public Single<List<XMPPAccountSettings>> updateLocalAccounts(@Nullable List<XMPPAccountSettings> accounts) {
         if (accounts != null) {
             for (XMPPAccountSettings account : accounts) {
-                // if account synced
-                if (isAccountSynchronize(account.getJid()) || SettingsManager.isSyncAllAccounts()) {
-                    AccountJid accountJid = getExistingAccount(account.getJid());
-
-                    // create new xmpp-account
-                    if (accountJid == null && !account.isDeleted()) {
-                        try {
-                            AccountJid jid = AccountManager.getInstance().addAccount(account.getJid(), "", account.getToken(), false, true, true, false, false);
-                            AccountManager.getInstance().setColor(jid, ColorManager.getInstance().convertColorNameToIndex(account.getColor()));
-                            AccountManager.getInstance().setOrder(jid, account.getOrder());
-                            AccountManager.getInstance().setTimestamp(jid, account.getTimestamp());
-                            AccountManager.getInstance().onAccountChanged(jid);
-                        } catch (NetworkException e) {
-                            Application.getInstance().onError(e);
-                        }
-
-                    // update existing xmpp-account
-                    // now we are updated only color of account
-                    } else if (accountJid != null && !account.isDeleted()) {
-                        AccountManager.getInstance().setOrder(accountJid, account.getOrder());
-                        AccountManager.getInstance().setTimestamp(accountJid, account.getTimestamp());
-                        AccountManager.getInstance().setColor(accountJid, ColorManager.getInstance().convertColorNameToIndex(account.getColor()));
-                        AccountManager.getInstance().onAccountChanged(accountJid);
-
-                    // delete existing account
-                    } else if (accountJid != null && account.isDeleted()) {
-                        AccountManager.getInstance().removeAccountWithoutSync(accountJid);
-                    }
-                }
+                updateLocalAccount(account);
             }
         }
         return Single.just(accounts);
     }
 
+    public void updateLocalAccount(XMPPAccountSettings account) {
+        // if account synced
+        if (isAccountSynchronize(account.getJid()) || SettingsManager.isSyncAllAccounts()) {
+            AccountJid accountJid = getExistingAccount(account.getJid());
+
+            // create new xmpp-account
+            if (accountJid == null && !account.isDeleted()) {
+                try {
+                    AccountJid jid = AccountManager.getInstance().addAccount(account.getJid(), "", account.getToken(), false, true, true, false, false);
+                    AccountManager.getInstance().setColor(jid, ColorManager.getInstance().convertColorNameToIndex(account.getColor()));
+                    AccountManager.getInstance().setOrder(jid, account.getOrder());
+                    AccountManager.getInstance().setTimestamp(jid, account.getTimestamp());
+                    AccountManager.getInstance().onAccountChanged(jid);
+                } catch (NetworkException e) {
+                    Application.getInstance().onError(e);
+                }
+
+                // update existing xmpp-account
+                // now we are updated only color of account
+            } else if (accountJid != null && !account.isDeleted()) {
+                AccountManager.getInstance().setOrder(accountJid, account.getOrder());
+                AccountManager.getInstance().setTimestamp(accountJid, account.getTimestamp());
+                AccountManager.getInstance().setColor(accountJid, ColorManager.getInstance().convertColorNameToIndex(account.getColor()));
+                AccountManager.getInstance().onAccountChanged(accountJid);
+
+                // delete existing account
+            } else if (accountJid != null && account.isDeleted()) {
+                AccountManager.getInstance().removeAccountWithoutSync(accountJid);
+            }
+        }
+    }
+
     public void createLocalAccountIfNotExist() {
-        updateLocalAccounts(xmppAccountsForCreate);
-        xmppAccountsForCreate.clear();
+        Collections.sort(xmppAccountsForCreate, Collections.reverseOrder());
+        Application.getInstance().runInBackground(new Runnable() {
+            @Override
+            public void run() {
+                if (xmppAccountsForCreate != null) {
+                    for (XMPPAccountSettings account : xmppAccountsForCreate) {
+                        updateLocalAccount(account);
+                        try {
+                            Thread.sleep(100);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+                xmppAccountsForCreate.clear();
+            }
+        });
     }
 
     public void deleteSyncedLocalAccounts() {
@@ -629,6 +654,7 @@ public class XabberAccountManager implements OnLoadListener {
                         status = XMPPAccountSettings.SyncStatus.localNewer;
                         remoteItem.setTimestamp(localItem.getTimestamp());
                     }
+                    remoteItem.setSyncNotAllowed(localItem.isSyncNotAllowed());
                 }
 
                 remoteItem.setStatus(status);
@@ -660,6 +686,7 @@ public class XabberAccountManager implements OnLoadListener {
                 localItem.setColor(ColorManager.getInstance().convertIndexToColorName(localAccount.getColorIndex()));
                 localItem.setStatus(XMPPAccountSettings.SyncStatus.local);
                 localItem.setSynchronization(isAccountSynchronize(localItem.getJid()));
+                localItem.setSyncNotAllowed(localAccount.isSyncNotAllowed());
                 resultList.add(localItem);
             }
         }
