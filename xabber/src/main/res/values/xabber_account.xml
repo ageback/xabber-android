@@ -10,7 +10,7 @@
     <string name="signup">SIGN UP</string>
     <string name="forgot_pass">FORGOT PASSWORD?</string>
     <string name="agrees">I agree to receive occasional updates from Xabber team. We promise not to bother you too often with it.</string>
-    <string name="create_xabber_org">Do you want to create XMPP-account in Xabber.org server?</string>
+    <string name="create_xabber_org">Do you want to add the Xabber.org account to the application?</string>
 
     <string name="sync_success">Synchronization successful</string>
     <string name="sync_fail">Synchronization failed</string>
@@ -59,6 +59,7 @@
     <string name="title_email_confirm">Confirm Email address</string>
     <string name="title_email_confirmed">Confirmed Email address</string>
     <string name="title_complete_register">Complete registration</string>
+    <string name="title_completed_register">Registration completed</string>
     <string name="title_start_messaging">Start messaging!</string>
     <string name="title_reordering_account">Reorder accounts</string>
     <string name="title_sync">Synchronization</string>
@@ -130,6 +131,8 @@
     <string name="sync_status_ok">Synchronized</string>
     <string name="sync_status_deleted">Remote settings was deleted</string>
     <string name="sync_status_not_allowed">Synchronization not available</string>
+    <string name="sync_status_enabled">Synchronization enabled</string>
+    <string name="sync_status_disabled">Synchronization disabled</string>
 
     <string name="tutorial_title_1">A better way to chat</string>
     <string name="tutorial_title_2">Introducing Xabber Account</string>
@@ -143,4 +146,12 @@
 
     <string name="account_deleted">This Xabber Account was deleted</string>
 
+    <string name="login_without_xabber_account">basic xmpp experience</string>
+
+    <string name="sync_not_allowed_summary">Accounts with unusual settings (custom host, legasy SSL, proxy) not can not be synchronized.</string>
+    <string name="github_alert">Authorization with GitHub is not yet available</string>
+
+    <string name="complete_register_summary">Do you want to add new account: %1$s in your xmpp-accounts list?</string>
+    <string name="complete_register_add">Add</string>
+    <string name="complete_register_no">No</string>
 </resources>

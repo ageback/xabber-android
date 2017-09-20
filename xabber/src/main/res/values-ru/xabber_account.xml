@@ -10,7 +10,7 @@
     <string name="signup">РЕГИСТРАЦИЯ</string>
     <string name="forgot_pass">ЗАБЫЛИ ПАРОЛЬ?</string>
     <string name="agrees">Я согласен получать периодические обновления от команды Xabber. Мы обещаем не беспокоить вас слишком часто.</string>
-    <string name="create_xabber_org">Создать учетную запись XMPP на сервере Xabber.org?</string>
+    <string name="create_xabber_org">Вы хотите добавить учетную запись Xabber.org в приложение?</string>
 
     <string name="sync_success">Синхронизация завершена</string>
     <string name="sync_fail">Синхронизация не удалась</string>
@@ -59,6 +59,7 @@
     <string name="title_email_confirm">Подтвердите Email-адрес</string>
     <string name="title_email_confirmed">Email-адрес подтвержден</string>
     <string name="title_complete_register">Завершите регистрацию</string>
+    <string name="title_completed_register">Регистрация завершена</string>
     <string name="title_start_messaging">Приступите к общению!</string>
     <string name="title_reordering_account">Изменить порядок учетных записей</string>
     <string name="title_sync">Синхронизация</string>
@@ -130,6 +131,8 @@
     <string name="sync_status_ok">Синхронизирован</string>
     <string name="sync_status_deleted">Облачные настройки удалены</string>
     <string name="sync_status_not_allowed">Синхронизация не доступна</string>
+    <string name="sync_status_enabled">Синхронизация включена</string>
+    <string name="sync_status_disabled">Синхронизация выключена</string>
 
     <string name="tutorial_title_1">A better way to chat</string>
     <string name="tutorial_title_2">Introducing Xabber Account</string>
@@ -142,4 +145,13 @@
     <string name="tutorial_description_4">Use social authentification to quickly login to Xabber and instantly connect all your accounts on new device.</string>
 
     <string name="account_deleted">Используемый Вами Xabber Account был удалён</string>
+
+    <string name="login_without_xabber_account">использовать xmpp-аккаунт</string>
+
+    <string name="sync_not_allowed_summary">XMPP-аккаунты с нестандaртными настройками (указать хост вручную, legasy SSL, прокси) не могут быть синхронизированы.</string>
+    <string name="github_alert">Авторизация с помощью GitHub пока не доступна</string>
+
+    <string name="complete_register_summary">Добавить только что зарегистрированный аккаунт %1$s в список Ваших XMPP аккаунтов?</string>
+    <string name="complete_register_add">Добавить</string>
+    <string name="complete_register_no">Нет</string>
 </resources>

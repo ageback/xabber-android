@@ -4,15 +4,16 @@ import android.app.Fragment;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.v7.widget.AppCompatCheckBox;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.RelativeLayout;
 import android.widget.TextView;
 
 import com.xabber.android.R;
+import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.xaccount.XabberAccount;
 import com.xabber.android.data.xaccount.XabberAccountManager;
 import com.xabber.android.ui.activity.XabberAccountInfoActivity;
@@ -25,7 +26,6 @@ public class XabberAccountCompleteRegsiterFrament extends Fragment {
 
     private TextView tvAccountName;
     private TextView tvSignType;
-    //private RelativeLayout rlLogout;
 
     private EditText edtUsername;
     private EditText edtPass;
@@ -46,14 +46,6 @@ public class XabberAccountCompleteRegsiterFrament extends Fragment {
 
         tvAccountName = (TextView) view.findViewById(R.id.tvAccountName);
         tvSignType = (TextView) view.findViewById(R.id.tvSignType);
-
-//        rlLogout = (RelativeLayout) view.findViewById(R.id.rlLogout);
-//        rlLogout.setOnClickListener(new View.OnClickListener() {
-//            @Override
-//            public void onClick(View v) {
-//                ((XabberAccountInfoActivity)getActivity()).onLogoutClick();
-//            }
-//        });
 
         edtUsername = (EditText) view.findViewById(R.id.edtUsername);
         edtPass = (EditText) view.findViewById(R.id.edtPass);
@@ -116,6 +108,7 @@ public class XabberAccountCompleteRegsiterFrament extends Fragment {
                 }
             }
         }
+
     }
 
     private void verifyFields() {
@@ -168,7 +161,7 @@ public class XabberAccountCompleteRegsiterFrament extends Fragment {
             return;
         }
 
-        ((XabberAccountInfoActivity)getActivity()).onCompleteClick(username, pass, pass2, firstName, lastName);
+        ((XabberAccountInfoActivity)getActivity()).onCompleteClick(username, pass, pass2, firstName, lastName, true);
     }
 
 }
