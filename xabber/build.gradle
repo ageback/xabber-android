@@ -26,8 +26,8 @@ android {
     defaultConfig {
         minSdkVersion 15
         targetSdkVersion 25
-        versionCode 394
-        versionName '2.1(394)'
+        versionCode 395
+        versionName '2.1(395)'
     }
 
     lintOptions {
@@ -126,6 +126,24 @@ def initFabricPropertiesIfNeeded() {
         ant.propertyfile(file: "fabric.properties", comment: commentMessage) {
             entry(key: "apiSecret", value: apiSecret)
             entry(key: "apiKey", value: apiKey)
+        }
+    }
+}
+
+def build_param = "${build}";
+
+if (build_param != "dev") {
+    //exclude dev
+    android.variantFilter { variant ->
+        if (variant.getFlavors().get(0).name.equals('dev')) {
+            variant.setIgnore(true);
+        }
+    }
+} else {
+    //exclude all but dev
+    android.variantFilter { variant ->
+        if (!variant.getFlavors().get(0).name.equals('dev')) {
+            variant.setIgnore(true);
         }
     }
 }
