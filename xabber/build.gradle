@@ -26,8 +26,8 @@ android {
     defaultConfig {
         minSdkVersion 15
         targetSdkVersion 25
-        versionCode 395
-        versionName '2.1(395)'
+        versionCode 398
+        versionName '2.1(398)'
     }
 
     lintOptions {
@@ -164,6 +164,7 @@ dependencies {
 
     compile "com.android.support:design:$supportVersion"
     compile "com.android.support:support-v13:$supportVersion"
+    compile 'com.android.support:multidex:1.0.1'
 
     compile 'com.github.Str4tocaster:otr4j:custom-SNAPSHOT'
     compile 'com.google.zxing:android-integration:3.3.0'
