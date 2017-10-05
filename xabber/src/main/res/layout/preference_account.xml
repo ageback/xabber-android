@@ -4,8 +4,8 @@
     android:orientation="vertical"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:padding="16dp"
     android:minHeight="48dp"
+    android:paddingBottom="8dp"
     >
 
     <LinearLayout
@@ -13,6 +13,9 @@
         android:orientation="horizontal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:layout_marginLeft="16dp"
+        android:layout_marginRight="16dp"
         android:visibility="gone"
         >
 
@@ -29,9 +32,10 @@
 
             <de.hdodenhof.circleimageview.CircleImageView
                 android:id="@+id/avatar"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:src="@drawable/ic_avatar_1"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_stat_online"
                 app:civ_border_color="@android:color/transparent"
                 app:civ_border_width="3dp" />
 
@@ -52,18 +56,17 @@
                 android:layout_weight="1"
                 android:ellipsize="marquee"
                 android:lines="1"
-                android:text="@string/account_not_confirmed"
                 android:textColor="@color/green_700"
                 android:textSize="18sp" />
 
             <TextView
-                android:id="@+id/tvAccountEmail"
+                android:id="@+id/tvAccountUsername"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:ellipsize="marquee"
                 android:lines="1"
-                android:text="@string/no_email"
+                android:text="@string/no_username"
                 android:textColor="@color/grey_500"
                 android:textSize="14sp" />
         </LinearLayout>
@@ -73,14 +76,17 @@
         android:id="@+id/noAccount"
         android:orientation="vertical"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:layout_marginLeft="16dp"
+        android:layout_marginRight="16dp">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="?android:attr/textColorPrimary"
             android:textSize="16sp"
-            android:text="@string/title_xabber_account"
+            android:text="@string/not_login"
             />
 
         <TextView

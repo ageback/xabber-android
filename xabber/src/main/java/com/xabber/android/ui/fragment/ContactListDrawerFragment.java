@@ -13,18 +13,25 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import com.bumptech.glide.Glide;
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
-import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.account.listeners.OnAccountChangedListener;
 import com.xabber.android.data.entity.AccountJid;
+import com.xabber.android.data.http.PatreonManager;
+import com.xabber.android.data.http.XabberComClient;
+import com.xabber.android.data.log.LogManager;
+import com.xabber.android.data.xaccount.XabberAccount;
+import com.xabber.android.data.xaccount.XabberAccountManager;
 import com.xabber.android.ui.adapter.NavigationDrawerAccountAdapter;
 import com.xabber.android.ui.color.AccountPainter;
 import com.xabber.android.ui.color.ColorManager;
+import com.xabber.android.ui.widget.TextViewFadeAnimator;
 
 import java.util.Collection;
 
@@ -37,6 +44,16 @@ public class ContactListDrawerFragment extends Fragment implements View.OnClickL
     private View headerTitle;
     private ImageView drawerHeaderImage;
     private int[] headerImageResources;
+
+    private LinearLayout llAccountInfo;
+    private LinearLayout llNoAccount;
+    private TextView tvAccountName;
+    private TextView tvAccountEmail;
+
+    private TextView tvPatreonTitle;
+    private ProgressBar pbPatreon;
+    private TextViewFadeAnimator animator;
+    private String[] patreonTexts;
 
     @Override
     public void onAttach(Activity activity) {
@@ -88,6 +105,8 @@ public class ContactListDrawerFragment extends Fragment implements View.OnClickL
         headerTitle = headerView.findViewById(R.id.drawer_header_action_xmpp_accounts);
         headerTitle.setOnClickListener(this);
 
+        view.findViewById(R.id.drawer_header_action_xabber_account).setOnClickListener(this);
+
         listView.addHeaderView(headerView);
 
         adapter = new NavigationDrawerAccountAdapter(getActivity());
@@ -100,7 +119,14 @@ public class ContactListDrawerFragment extends Fragment implements View.OnClickL
 
         divider = footerView.findViewById(R.id.drawer_divider);
 
+        llAccountInfo = (LinearLayout) view.findViewById(R.id.accountInfo);
+        llNoAccount = (LinearLayout) view.findViewById(R.id.noAccount);
+        tvAccountName = (TextView) view.findViewById(R.id.tvAccountName);
+        tvAccountEmail = (TextView) view.findViewById(R.id.tvAccountEmail);
 
+        tvPatreonTitle = (TextView) view.findViewById(R.id.tvPatreonTitle);
+        pbPatreon = (ProgressBar) view.findViewById(R.id.pbPatreon);
+        view.findViewById(R.id.drawer_action_patreon).setOnClickListener(this);
 
         return view;
     }
@@ -150,6 +176,8 @@ public class ContactListDrawerFragment extends Fragment implements View.OnClickL
             headerTitle.setVisibility(View.VISIBLE);
             divider.setVisibility(View.VISIBLE);
         }
+        setupXabberAccountView();
+        setupPatreonView();
     }
 
     @Override
@@ -161,5 +189,73 @@ public class ContactListDrawerFragment extends Fragment implements View.OnClickL
         void onContactListDrawerListener(int viewId);
 
         void onAccountSelected(AccountJid account);
+    }
+
+    private void setupXabberAccountView() {
+        XabberAccount account = XabberAccountManager.getInstance().getAccount();
+
+        if (account != null) {
+            llAccountInfo.setVisibility(View.VISIBLE);
+            llNoAccount.setVisibility(View.GONE);
+
+            String accountName = account.getFirstName() + " " + account.getLastName();
+            if (accountName.trim().isEmpty())
+                accountName = getActivity().getString(R.string.title_xabber_account);
+
+            if (XabberAccount.STATUS_NOT_CONFIRMED.equals(account.getAccountStatus())) {
+                tvAccountName.setText(accountName);
+                tvAccountEmail.setText(R.string.title_email_confirm);
+            }
+            if (XabberAccount.STATUS_CONFIRMED.equals(account.getAccountStatus())) {
+                tvAccountName.setText(accountName);
+                tvAccountEmail.setText(R.string.title_complete_register);
+            }
+            if (XabberAccount.STATUS_REGISTERED.equals(account.getAccountStatus())) {
+
+                tvAccountName.setText(accountName);
+                tvAccountEmail.setText(getString(R.string.username, account.getUsername()));
+            }
+        } else {
+            llAccountInfo.setVisibility(View.GONE);
+            llNoAccount.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void setupPatreonView() {
+        XabberComClient.Patreon patreon = PatreonManager.getInstance().getPatreon();
+        if (patreon != null) {
+            XabberComClient.PatreonGoal currentGoal = null;
+            for (XabberComClient.PatreonGoal goal: patreon.getGoals()) {
+                if (goal.getGoal() > patreon.getPledged()) {
+                    currentGoal = goal;
+                    break;
+                }
+            }
+
+            if (currentGoal != null) {
+                patreonTexts = new String[3];
+                patreonTexts[0] = patreon.getString();
+                patreonTexts[1] = getString(R.string.patreon_pledged, patreon.getPledged(), currentGoal.getGoal());
+                patreonTexts[2] = getString(R.string.patreon_current_goal, currentGoal.getTitle());
+
+                tvPatreonTitle.setSelected(true);
+                pbPatreon.setMax(currentGoal.getGoal());
+                pbPatreon.setProgress(patreon.getPledged());
+
+                animator = new TextViewFadeAnimator(tvPatreonTitle, patreonTexts);
+                startPatreonAnim();
+            }
+        }
+    }
+
+    public void startPatreonAnim() {
+        animator = new TextViewFadeAnimator(tvPatreonTitle, patreonTexts);
+        animator.startAnimation();
+    }
+
+    public void stopPatreonAnim() {
+        if (animator != null)
+            animator.stopAnimation();
+        tvPatreonTitle.setText(patreonTexts[0]);
     }
 }

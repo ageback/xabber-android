@@ -17,6 +17,11 @@ public class XMPPAccountSettings implements Comparable<XMPPAccountSettings> {
     private int order;
     private String color;
     private String token;
+    private boolean syncNotAllowed;
+
+    private boolean deleted;
+
+    private SyncStatus status;
 
     public XMPPAccountSettings(String jid, boolean synchronization, int timestamp) {
         this.jid = jid;
@@ -80,8 +85,70 @@ public class XMPPAccountSettings implements Comparable<XMPPAccountSettings> {
         this.token = token;
     }
 
+    public SyncStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(SyncStatus status) {
+        this.status = status;
+    }
+
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
+    }
+
+    public boolean isSyncNotAllowed() {
+        return syncNotAllowed;
+    }
+
+    public void setSyncNotAllowed(boolean syncNotAllowed) {
+        this.syncNotAllowed = syncNotAllowed;
+    }
+
     @Override
     public int compareTo(@NonNull XMPPAccountSettings xmppAccountSettings) {
         return this.getOrder() - xmppAccountSettings.getOrder();
+    }
+
+    public enum SyncStatus {
+
+        /**
+         * Settings exist only in device
+         */
+        local,
+
+        /**
+         * Settings exist only in remote
+         */
+        remote,
+
+        /**
+         * Settings exist in local and remote
+         * Local settings newer than remote
+         */
+        localNewer,
+
+        /**
+         * Settings exist in local and remote
+         * Remote settings newer than local
+         */
+        remoteNewer,
+
+        /**
+         * Settings exist in local and remote
+         * Both settings has same time
+         */
+        localEqualsRemote,
+
+        /**
+         * Remote settings was deleted
+         * Remote settings newer than local
+         */
+        deleted
+
     }
 }

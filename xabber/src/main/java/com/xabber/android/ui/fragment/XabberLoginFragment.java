@@ -1,11 +1,14 @@
 package com.xabber.android.ui.fragment;
 
 import android.app.Fragment;
+import android.content.Context;
+import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.RelativeLayout;
@@ -13,6 +16,7 @@ import android.widget.Toast;
 
 import com.xabber.android.R;
 import com.xabber.android.data.connection.NetworkManager;
+import com.xabber.android.ui.activity.XabberAccountInfoActivity;
 import com.xabber.android.ui.activity.XabberLoginActivity;
 
 /**
@@ -41,11 +45,11 @@ public class XabberLoginFragment extends Fragment implements View.OnClickListene
         edtPass = (EditText) view.findViewById(R.id.edtPass);
         btnLogin = (Button) view.findViewById(R.id.btnLogin);
         rlForgotPass = (RelativeLayout) view.findViewById(R.id.rlForgotPass);
-        rlSignUp = (RelativeLayout) view.findViewById(R.id.rlSignUp);
+        //rlSignUp = (RelativeLayout) view.findViewById(R.id.rlSignUp);
 
         btnLogin.setOnClickListener(this);
         rlForgotPass.setOnClickListener(this);
-        rlSignUp.setOnClickListener(this);
+        //rlSignUp.setOnClickListener(this);
     }
 
     @Override
@@ -55,14 +59,21 @@ public class XabberLoginFragment extends Fragment implements View.OnClickListene
                 onLoginClick();
                 break;
             case R.id.rlForgotPass:
+                ((XabberLoginActivity)getActivity()).onForgotPassClick();
                 break;
-            case R.id.rlSignUp:
-                ((XabberLoginActivity)getActivity()).showSignUpFragment();
-                break;
+//            case R.id.rlSignUp:
+//                Intent intent = XabberAccountInfoActivity.createIntent(getActivity());
+//                intent.putExtra(XabberAccountInfoActivity.CALL_FROM, XabberAccountInfoActivity.CALL_FROM_LOGIN);
+//                startActivity(intent);
+//                break;
         }
     }
 
     private void onLoginClick() {
+        // hide keyboard
+        InputMethodManager imm = (InputMethodManager)getActivity().getSystemService(Context.INPUT_METHOD_SERVICE);
+        imm.hideSoftInputFromWindow(edtPass.getWindowToken(), 0);
+
         String login = edtLogin.getText().toString().trim();
         String pass = edtPass.getText().toString().trim();
 

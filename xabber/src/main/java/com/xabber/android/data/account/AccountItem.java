@@ -41,7 +41,7 @@ import java.util.UUID;
  *
  * @author alexander.ivanov
  */
-public class AccountItem extends ConnectionItem {
+public class AccountItem extends ConnectionItem implements Comparable<AccountItem> {
 
     public static final String UNDEFINED_PASSWORD = "";
 
@@ -52,6 +52,9 @@ public class AccountItem extends ConnectionItem {
      */
     private String id;
     private int colorIndex;
+    private int order;
+    private int timestamp;
+    private boolean syncNotAllowed;
 
     /**
      * Whether account is enabled.
@@ -115,7 +118,8 @@ public class AccountItem extends ConnectionItem {
 
     public AccountItem(boolean custom, String host,
                        int port, DomainBareJid serverName, Localpart userName, Resourcepart resource,
-                       boolean storePassword, String password, int colorIndex,
+                       boolean storePassword, String password, String token, int colorIndex, int order,
+                       boolean syncNotAllowed, int timestamp,
                        int priority, StatusMode statusMode, String statusText,
                        boolean enabled, boolean saslEnabled, TLSMode tlsMode,
                        boolean compression, ProxyType proxyType, String proxyHost,
@@ -123,10 +127,13 @@ public class AccountItem extends ConnectionItem {
                        boolean syncable, KeyPair keyPair, Date lastSync,
                        ArchiveMode archiveMode) {
         super(custom, host, port, serverName, userName, resource,
-                storePassword, password, saslEnabled, tlsMode, compression,
+                storePassword, password, token, saslEnabled, tlsMode, compression,
                 proxyType, proxyHost, proxyPort, proxyUser, proxyPassword);
         this.id = UUID.randomUUID().toString();
         this.colorIndex = colorIndex;
+        this.order = order;
+        this.timestamp = timestamp;
+        this.syncNotAllowed = syncNotAllowed;
 
         this.enabled = enabled;
         this.priority = getValidPriority(priority);
@@ -164,6 +171,22 @@ public class AccountItem extends ConnectionItem {
      */
     void setId(String id) {
         this.id = id;
+    }
+
+    public int getOrder() {
+        return order;
+    }
+
+    public void setOrder(int order) {
+        this.order = order;
+    }
+
+    public boolean isSyncNotAllowed() {
+        return syncNotAllowed;
+    }
+
+    public void setSyncNotAllowed(boolean syncNotAllowed) {
+        this.syncNotAllowed = syncNotAllowed;
     }
 
     /**
@@ -242,6 +265,14 @@ public class AccountItem extends ConnectionItem {
     void setStatus(StatusMode statusMode, String statusText) {
         this.statusMode = statusMode;
         this.statusText = statusText;
+    }
+
+    public int getTimestamp() {
+        return timestamp;
+    }
+
+    public void setTimestamp(int timestamp) {
+        this.timestamp = timestamp;
     }
 
     /**
@@ -357,6 +388,11 @@ public class AccountItem extends ConnectionItem {
         AccountManager.getInstance().removePasswordRequest(getAccount());
     }
 
+    void setPassword(String password) {
+        getConnectionSettings().setPassword(password);
+        AccountManager.getInstance().removePasswordRequest(getAccount());
+    }
+
     /**
      * Remove password and update notification if {@link #storePassword} is
      * disabled.
@@ -410,5 +446,10 @@ public class AccountItem extends ConnectionItem {
 
     void setSuccessfulConnectionHappened(boolean successfulConnectionHappened) {
         this.successfulConnectionHappened = successfulConnectionHappened;
+    }
+
+    @Override
+    public int compareTo(@NonNull AccountItem accountItem) {
+        return order - accountItem.order;
     }
 }

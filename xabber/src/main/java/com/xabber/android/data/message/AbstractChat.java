@@ -211,7 +211,7 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
      * @return Whether user should be notified about incoming messages in chat.
      */
     protected boolean notifyAboutMessage() {
-        return SettingsManager.eventsMessage() != SettingsManager.EventsMessage.none;
+        return SettingsManager.eventsOnChat();
     }
 
     abstract protected MessageItem createNewMessageItem(String text);
@@ -322,14 +322,8 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
         messageItem.setStanzaId(stanzaId);
         FileManager.processFileMessage(messageItem);
 
-        if (notify && notifyAboutMessage()) {
-            if (visible) {
-                if (ChatManager.getInstance().isNotifyVisible(account, user)) {
-                    NotificationManager.getInstance().onMessageNotification(messageItem);
-                }
-            } else {
-                NotificationManager.getInstance().onMessageNotification(messageItem);
-            }
+        if (notify && notifyAboutMessage() && !visible) {
+            NotificationManager.getInstance().onMessageNotification(messageItem);
         }
 
         return messageItem;

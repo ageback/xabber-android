@@ -57,4 +57,17 @@
   public *;
 }
 
+# Google API-Client
+-keepattributes Signature,RuntimeVisibleAnnotations,AnnotationDefault
+-keepclassmembers class * {
+  @com.google.api.client.util.Key <fields>;
+}
+-dontwarn com.google.api.client.extensions.android.**
+-dontwarn com.google.api.client.googleapis.extensions.android.**
+-dontwarn com.google.android.gms.**
+-dontnote java.nio.file.Files, java.nio.file.Path
+-dontnote **.ILicensingService
+-dontnote sun.misc.Unsafe
+-dontwarn sun.misc.Unsafe
+
 -dontwarn com.xabber.**

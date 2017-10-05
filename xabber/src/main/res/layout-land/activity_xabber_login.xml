@@ -1,25 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/cardview_light_background">
 
-    <include layout="@layout/include_intro_background_image" />
+    <include layout="@layout/toolbar_default" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_below="@id/toolbar_default"
+
         android:orientation="horizontal"
-        android:layout_toLeftOf="@+id/spaceR"
-        android:layout_toStartOf="@+id/spaceR"
         >
 
         <RelativeLayout
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:layout_marginTop="50dp"
-            android:layout_marginLeft="32dp"
-            android:layout_marginStart="32dp"
+            android:layout_marginLeft="16dp"
+            android:layout_marginStart="16dp"
             android:layout_marginRight="16dp"
             android:layout_marginEnd="16dp"
             android:fitsSystemWindows="true"
@@ -40,9 +40,8 @@
             android:layout_weight="1"
             android:layout_marginLeft="16dp"
             android:layout_marginStart="16dp"
-            android:layout_marginRight="32dp"
-            android:layout_marginEnd="32dp"
-            android:layout_marginTop="40dp"
+            android:layout_marginRight="16dp"
+            android:layout_marginEnd="16dp"
             >
 
             <include layout="@layout/include_login_social" />
@@ -51,11 +50,5 @@
 
 
     </LinearLayout>
-    <Space
-        android:id="@+id/spaceR"
-        android:layout_width="48dp"
-        android:layout_height="match_parent"
-        android:layout_alignParentRight="true"
-        android:layout_alignParentEnd="true"
-        />
+
 </RelativeLayout>

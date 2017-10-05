@@ -377,6 +377,24 @@
                 android:value="com.xabber.android.ui.preferences.PreferenceEditor" />
         </activity>
         <activity
+            android:name=".ui.preferences.PresenceSettings"
+            android:parentActivityName=".ui.preferences.PreferenceEditor">
+
+            <!-- Parent activity meta-data to support 4.0 and lower -->
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="com.xabber.android.ui.preferences.PreferenceEditor" />
+        </activity>
+        <activity
+            android:name=".ui.preferences.PrivacySettings"
+            android:parentActivityName=".ui.preferences.PreferenceEditor">
+
+            <!-- Parent activity meta-data to support 4.0 and lower -->
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="com.xabber.android.ui.preferences.PreferenceEditor" />
+        </activity>
+        <activity
             android:name=".ui.activity.ConferenceSelectActivity"
             android:parentActivityName=".ui.activity.ContactListActivity">
 
@@ -455,6 +473,15 @@
                 android:value="com.xabber.android.ui.activity.AccountActivity" />
         </activity>
         <activity
+            android:name=".ui.activity.AccountSyncActivity"
+            android:parentActivityName=".ui.activity.AccountActivity">
+
+            <!-- Parent activity meta-data to support 4.0 and lower -->
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="com.xabber.android.ui.activity.AccountActivity" />
+        </activity>
+        <activity
             android:name=".ui.activity.AccountSettingsActivity"
             android:parentActivityName=".ui.activity.AccountActivity">
 
@@ -486,8 +513,15 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" />
                 <data android:host="www.xabber.com" />
+                <data android:pathPrefix="/account/emails/confirmation" />
             </intent-filter>
 
+        </activity>
+        <activity android:name=".ui.activity.PatreonAppealActivity"
+            android:theme="@style/ThemeDark">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="com.xabber.android.ui.activity.ContactListActivity" />
         </activity>
         <meta-data android:name="com.facebook.sdk.ApplicationId"
             android:value="@string/SOCIAL_AUTH_FACEBOOK_KEY"/>

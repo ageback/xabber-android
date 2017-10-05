@@ -18,6 +18,8 @@ import com.xabber.android.data.Application;
 import com.xabber.android.data.NetworkException;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.entity.AccountJid;
+import com.xabber.android.data.xaccount.XabberAccount;
+import com.xabber.android.data.xaccount.XabberAccountManager;
 import com.xabber.android.ui.activity.AccountAddActivity;
 import com.xabber.android.ui.activity.AccountActivity;
 import com.xabber.android.ui.dialog.OrbotInstallerDialog;
@@ -30,6 +32,7 @@ import cn.net.wesoft.android.utils.MD5;
 public class AccountAddFragment extends Fragment implements View.OnClickListener {
 
     private CheckBox storePasswordView;
+    private CheckBox chkSync;
     private CheckBox storePasswordMd5EncryptView;
     private CheckBox useOrbotView;
     private CheckBox createAccountCheckBox;
@@ -47,6 +50,11 @@ public class AccountAddFragment extends Fragment implements View.OnClickListener
         View view = inflater.inflate(R.layout.fragment_account_add, container, false);
 
         storePasswordView = (CheckBox) view.findViewById(R.id.store_password);
+        chkSync = (CheckBox) view.findViewById(R.id.chkSync);
+        if (XabberAccountManager.getInstance().getAccount() == null) {
+            chkSync.setVisibility(View.GONE);
+            chkSync.setChecked(false);
+        }
         storePasswordMd5EncryptView = (CheckBox) view.findViewById(R.id.store_password_md5_encrypt);
         useOrbotView = (CheckBox) view.findViewById(R.id.use_orbot);
         createAccountCheckBox = (CheckBox) view.findViewById(R.id.register_account);
@@ -93,16 +101,21 @@ public class AccountAddFragment extends Fragment implements View.OnClickListener
         AccountJid account;
         try {
             account = AccountManager.getInstance().addAccount(
-                    userView.getText().toString(),
+                    userView.getText().toString().trim(),
                     storePasswordMd5EncryptView.isChecked() ? MD5.MD5(passwordView.getText().toString()):passwordView.getText().toString(),
+                    "",
                     false,
                     storePasswordView.isChecked(),
+                    chkSync.isChecked(),
                     useOrbotView.isChecked(),
-                    createAccountCheckBox.isChecked());
+                    createAccountCheckBox.isChecked(), true);
         } catch (NetworkException e) {
             Application.getInstance().onError(e);
             return;
         }
+
+        // update remote settings
+        if (chkSync.isChecked()) XabberAccountManager.getInstance().updateSettingsWithSaveLastAccount(account);
 
         getActivity().setResult(Activity.RESULT_OK, AccountAddActivity.createAuthenticatorResult(account));
         startActivity(AccountActivity.createIntent(getActivity(), account));

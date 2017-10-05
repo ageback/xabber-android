@@ -36,29 +36,28 @@ public class AccountPreference extends Preference {
         LinearLayout llAccountInfo = (LinearLayout) view.findViewById(R.id.accountInfo);
         LinearLayout llNoAccount = (LinearLayout) view.findViewById(R.id.noAccount);
         TextView tvAccountName = (TextView) view.findViewById(R.id.tvAccountName);
-        TextView tvAccountEmail = (TextView) view.findViewById(R.id.tvAccountEmail);
+        TextView tvAccountUsername = (TextView) view.findViewById(R.id.tvAccountUsername);
         XabberAccount account = XabberAccountManager.getInstance().getAccount();
 
         if (account != null) {
             llAccountInfo.setVisibility(View.VISIBLE);
             llNoAccount.setVisibility(View.GONE);
 
-            String email = getContext().getString(R.string.no_email);
-            if (account.getEmails().size() > 0)
-                email = account.getEmails().get(0).getEmail();
+            String accountName = account.getFirstName() + " " + account.getLastName();
+            if (accountName.trim().isEmpty())
+                accountName = getContext().getString(R.string.title_xabber_account);
 
             if (XabberAccount.STATUS_NOT_CONFIRMED.equals(account.getAccountStatus())) {
-                tvAccountName.setText(R.string.account_not_confirmed);
-                tvAccountEmail.setText(email);
+                tvAccountName.setText(accountName);
+                tvAccountUsername.setText(R.string.title_email_confirm);
             }
             if (XabberAccount.STATUS_CONFIRMED.equals(account.getAccountStatus())) {
-                tvAccountName.setText(R.string.register_not_completed);
-                tvAccountEmail.setText(email);
+                tvAccountName.setText(accountName);
+                tvAccountUsername.setText(R.string.title_complete_register);
             }
             if (XabberAccount.STATUS_REGISTERED.equals(account.getAccountStatus())) {
-                String accountName = account.getFirstName() + " " + account.getLastName();
                 tvAccountName.setText(accountName);
-                tvAccountEmail.setText(email);
+                tvAccountUsername.setText(getContext().getString(R.string.username, account.getUsername()));
             }
         } else {
             llAccountInfo.setVisibility(View.GONE);

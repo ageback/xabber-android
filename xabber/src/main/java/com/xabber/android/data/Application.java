@@ -15,8 +15,10 @@
 package com.xabber.android.data;
 
 import android.app.Activity;
+import android.content.Context;
 import android.os.Handler;
 import android.support.annotation.NonNull;
+import android.support.multidex.MultiDex;
 
 import com.crashlytics.android.Crashlytics;
 import com.crashlytics.android.core.CrashlyticsCore;
@@ -43,6 +45,7 @@ import com.xabber.android.data.extension.muc.MUCManager;
 import com.xabber.android.data.extension.otr.OTRManager;
 import com.xabber.android.data.extension.ssn.SSNManager;
 import com.xabber.android.data.extension.vcard.VCardManager;
+import com.xabber.android.data.http.PatreonManager;
 import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.message.MessageManager;
 import com.xabber.android.data.message.ReceiptManager;
@@ -160,6 +163,12 @@ public class Application extends android.app.Application {
                 return thread;
             }
         });
+    }
+
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(base);
+        MultiDex.install(this);
     }
 
     @NonNull
@@ -328,6 +337,7 @@ public class Application extends android.app.Application {
         addManager(ScreenManager.getInstance());
         addManager(AccountManager.getInstance());
         addManager(XabberAccountManager.getInstance());
+        addManager(PatreonManager.getInstance());
         addManager(MUCManager.getInstance());
         addManager(MessageManager.getInstance());
         addManager(ChatManager.getInstance());
