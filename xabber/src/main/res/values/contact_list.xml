@@ -97,4 +97,13 @@
     <string name="remove_selected_bookmarks">Remove selected</string>
     <string name="remove_all_bookmarks_confirm">Do you really want to remove all bookmarks from account %1$s?</string>
     <string name="remove_selected_bookmarks_confirm">Do you really want to remove selected bookmarks from account %1$s?</string>
+
+    <string name="SOCIAL_AUTH_FACEBOOK_KEY">Facebook Key</string>
+    <string name="SOCIAL_AUTH_FACEBOOK_SCHEME">Facebook Scheme</string>
+
+    <string name="SOCIAL_AUTH_GOOGLE_SECRET">SOCIAL_AUTH_GOOGLE_SECRET</string>
+    <string name="SOCIAL_AUTH_GOOGLE_KEY">SOCIAL_AUTH_GOOGLE_KEY</string>
+
+    <string name="SOCIAL_AUTH_TWITTER_SECRET">SOCIAL_AUTH_TWITTER_SECRET</string>
+    <string name="SOCIAL_AUTH_TWITTER_KEY">SOCIAL_AUTH_TWITTER_KEY</string>
 </resources>

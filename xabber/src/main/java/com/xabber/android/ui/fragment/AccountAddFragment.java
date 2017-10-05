@@ -25,9 +25,6 @@ import com.xabber.android.ui.activity.AccountActivity;
 import com.xabber.android.ui.dialog.OrbotInstallerDialog;
 import com.xabber.android.ui.helper.OrbotHelper;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-
 import cn.net.wesoft.android.utils.MD5;
 public class AccountAddFragment extends Fragment implements View.OnClickListener {
 
