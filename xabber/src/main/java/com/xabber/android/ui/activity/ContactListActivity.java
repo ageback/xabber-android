@@ -53,6 +53,7 @@ import com.xabber.android.data.entity.BaseEntity;
 import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.avatar.AvatarManager;
 import com.xabber.android.data.extension.muc.MUCManager;
+import com.xabber.android.data.http.PatreonManager;
 import com.xabber.android.data.intent.EntityIntentBuilder;
 import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.message.AbstractChat;
@@ -197,7 +198,24 @@ public class ContactListActivity extends ManagedActivity implements OnAccountCha
         toolbar.setOnClickListener(this);
 
         drawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
-        drawerToggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.application_title_short, R.string.application_title_short);
+        drawerToggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.application_title_short, R.string.application_title_short) {
+            @Override
+            public void onDrawerOpened(View drawerView) {
+                super.onDrawerOpened(drawerView);
+                ContactListDrawerFragment navigationFragment =
+                        (ContactListDrawerFragment) getFragmentManager().findFragmentByTag("navigation");
+                navigationFragment.startPatreonAnim();
+                PatreonManager.getInstance().updatePatreonIfNeed();
+            }
+
+            @Override
+            public void onDrawerClosed(View drawerView) {
+                super.onDrawerClosed(drawerView);
+                ContactListDrawerFragment navigationFragment =
+                        (ContactListDrawerFragment) getFragmentManager().findFragmentByTag("navigation");
+                navigationFragment.stopPatreonAnim();
+            }
+        };
         drawerLayout.setDrawerListener(drawerToggle);
 
         toolbar.inflateMenu(R.menu.toolbar_contact_list);
@@ -791,6 +809,9 @@ public class ContactListActivity extends ManagedActivity implements OnAccountCha
                 if (account != null)
                     startActivity(XabberAccountInfoActivity.createIntent(this));
                 else startActivity(TutorialActivity.createIntent(this));
+                break;
+            case R.id.drawer_action_patreon:
+                startActivity(PatreonAppealActivity.createIntent(this));
                 break;
         }
     }

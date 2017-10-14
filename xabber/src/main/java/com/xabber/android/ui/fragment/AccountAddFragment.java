@@ -99,7 +99,7 @@ public class AccountAddFragment extends Fragment implements View.OnClickListener
         AccountJid account;
         try {
             account = AccountManager.getInstance().addAccount(
-                    userView.getText().toString(),
+                    userView.getText().toString().trim(),
                     storePasswordMd5EncryptView.isChecked() ? MD5.MD5(passwordView.getText().toString()):passwordView.getText().toString(),
                     "",
                     false,
