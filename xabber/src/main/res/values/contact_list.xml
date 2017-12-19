@@ -28,6 +28,11 @@
     <string name="contact_delete_confirm">Do you really want to delete contact %1$s from account %2$s?</string>
     <string name="contact_list">Contact list</string>
     <string name="discard_subscription">Decline contact</string>
+    <string name="archive_chat">Archive</string>
+    <string name="unarchive_chat">Unarchive</string>
+    <string name="mute_chat">Mute</string>
+    <string name="unmute_chat">Unmute</string>
+    <string name="show_archived">Show archived</string>
     <string name="exit">Exit</string>
     <string name="group_active_chat">Active chats</string>
     <string name="group_none">No groups</string>
@@ -37,6 +42,7 @@
     <string name="NO_SUCH_ACCOUNT">Account not found</string>
     <string name="NOT_CONNECTED">Connection not established</string>
     <string name="request_subscription">Request subscription</string>
+    <string name="action_send_contact">Send contact</string>
     <string name="XMPP_EXCEPTION">Stream error</string>
     <string name="application_state_closing">Saving changes…\nApplication will be closed soon.</string>
     <string name="certificate_confirmation">%1$s.\nIssuer uses deprecated (SHA-1) fingerprint that can\'t be trusted: %2$s? Do you want to not be notified about this issue with this certificate?</string>
@@ -97,6 +103,19 @@
     <string name="remove_selected_bookmarks">Remove selected</string>
     <string name="remove_all_bookmarks_confirm">Do you really want to remove all bookmarks from account %1$s?</string>
     <string name="remove_selected_bookmarks_confirm">Do you really want to remove selected bookmarks from account %1$s?</string>
+    <string name="placeholder_no_archived">Archive has no chats</string>
+    <string name="placeholder_no_unread">No unread chats</string>
+
+    <string name="chat_was_archived">Chat was archived</string>
+    <string name="chat_was_unarchived">Removed from archive</string>
+    <string name="undo">UNDO</string>
+
+    <string name="recent_chats">Recent chats</string>
+    <string name="unread_chats">Unread chats</string>
+    <string name="archived_chats">Archived chats</string>
+    <string name="all_chats">All chats</string>
+    <string name="no_messages">No messages</string>
+    <string name="show_all_chats">Show all chats</string>
 
     <string name="SOCIAL_AUTH_FACEBOOK_KEY">Facebook Key</string>
     <string name="SOCIAL_AUTH_FACEBOOK_SCHEME">Facebook Scheme</string>

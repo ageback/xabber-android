@@ -33,7 +33,9 @@ import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.blocking.BlockingManager;
 import com.xabber.android.data.extension.muc.MUCManager;
+import com.xabber.android.data.message.AbstractChat;
 import com.xabber.android.data.message.MessageManager;
+import com.xabber.android.data.message.NotificationState;
 import com.xabber.android.data.notification.NotificationManager;
 import com.xabber.android.data.roster.AbstractContact;
 import com.xabber.android.data.roster.GroupManager;
@@ -81,17 +83,17 @@ public class ContextMenuHelper {
                                                      final UpdatableAdapter adapter,
                                                      ContextMenu menu,
                                                      final AccountJid account, final UserJid user) {
-        menu.findItem(R.id.action_chat).setOnMenuItemClickListener(
-                new MenuItem.OnMenuItemClickListener() {
-
-                    @Override
-                    public boolean onMenuItemClick(MenuItem item) {
-                        MessageManager.getInstance().openChat(account, user);
-                        activity.startActivity(ChatActivity.createSpecificChatIntent(
-                                activity, account, user));
-                        return true;
-                    }
-                });
+//        menu.findItem(R.id.action_chat).setOnMenuItemClickListener(
+//                new MenuItem.OnMenuItemClickListener() {
+//
+//                    @Override
+//                    public boolean onMenuItemClick(MenuItem item) {
+//                        MessageManager.getInstance().openChat(account, user);
+//                        activity.startActivity(ChatActivity.createSpecificChatIntent(
+//                                activity, account, user));
+//                        return true;
+//                    }
+//                });
 
         menu.findItem(R.id.action_edit_conference).setIntent(
                 ConferenceAddActivity.createIntent(activity, account, user.getBareUserJid()));
@@ -129,8 +131,8 @@ public class ContextMenuHelper {
 
                 });
 
-        menu.findItem(R.id.action_contact_info).setIntent(
-                ContactEditActivity.createIntent(activity, account, user));
+//        menu.findItem(R.id.action_contact_info).setIntent(
+//                ContactEditActivity.createIntent(activity, account, user));
         menu.findItem(R.id.action_edit_contact_groups).setIntent(
                 GroupEditActivity.createIntent(activity, account, user));
 
@@ -155,40 +157,40 @@ public class ContextMenuHelper {
             }
         });
 
-        menu.findItem(R.id.action_close_chat).setOnMenuItemClickListener(
-                new MenuItem.OnMenuItemClickListener() {
+//        menu.findItem(R.id.action_close_chat).setOnMenuItemClickListener(
+//                new MenuItem.OnMenuItemClickListener() {
+//
+//                    @Override
+//                    public boolean onMenuItemClick(MenuItem item) {
+//                        MessageManager.getInstance().closeChat(account,
+//                                user);
+//                        NotificationManager.getInstance()
+//                                .removeMessageNotification(account,
+//                                        user);
+//                        adapter.onChange();
+//                        return true;
+//                    }
+//
+//                });
 
-                    @Override
-                    public boolean onMenuItemClick(MenuItem item) {
-                        MessageManager.getInstance().closeChat(account,
-                                user);
-                        NotificationManager.getInstance()
-                                .removeMessageNotification(account,
-                                        user);
-                        adapter.onChange();
-                        return true;
-                    }
-
-                });
-
-        menu.findItem(R.id.action_request_subscription)
-                .setOnMenuItemClickListener(
-                        new MenuItem.OnMenuItemClickListener() {
-
-                            @Override
-                            public boolean onMenuItemClick(MenuItem item) {
-                                try {
-                                    PresenceManager.getInstance()
-                                            .requestSubscription(
-                                                    account, user);
-                                } catch (NetworkException e) {
-                                    Application.getInstance()
-                                            .onError(e);
-                                }
-                                return true;
-                            }
-
-                        });
+//        menu.findItem(R.id.action_request_subscription)
+//                .setOnMenuItemClickListener(
+//                        new MenuItem.OnMenuItemClickListener() {
+//
+//                            @Override
+//                            public boolean onMenuItemClick(MenuItem item) {
+//                                try {
+//                                    PresenceManager.getInstance()
+//                                            .requestSubscription(
+//                                                    account, user);
+//                                } catch (NetworkException e) {
+//                                    Application.getInstance()
+//                                            .onError(e);
+//                                }
+//                                return true;
+//                            }
+//
+//                        });
 
         menu.findItem(R.id.action_accept_subscription).setOnMenuItemClickListener(
                 new MenuItem.OnMenuItemClickListener() {
@@ -216,6 +218,54 @@ public class ContextMenuHelper {
                         return true;
                     }
                 });
+
+//        menu.findItem(R.id.action_archive_chat).setOnMenuItemClickListener(
+//                new MenuItem.OnMenuItemClickListener() {
+//                    @Override
+//                    public boolean onMenuItemClick(MenuItem item) {
+//                        AbstractChat chat = MessageManager.getInstance().getChat(account, user);
+//                        if (chat != null) chat.setArchived(true, true);
+//                        adapter.onChange();
+//                        return true;
+//                    }
+//                });
+//
+//        menu.findItem(R.id.action_unarchive_chat).setOnMenuItemClickListener(
+//                new MenuItem.OnMenuItemClickListener() {
+//                    @Override
+//                    public boolean onMenuItemClick(MenuItem item) {
+//                        AbstractChat chat = MessageManager.getInstance().getChat(account, user);
+//                        if (chat != null) chat.setArchived(false, true);
+//                        adapter.onChange();
+//                        return true;
+//                    }
+//                });
+
+        menu.findItem(R.id.action_mute_chat).setOnMenuItemClickListener(
+                new MenuItem.OnMenuItemClickListener() {
+                    @Override
+                    public boolean onMenuItemClick(MenuItem item) {
+                        AbstractChat chat = MessageManager.getInstance().getChat(account, user);
+                        if (chat != null) chat.setNotificationState(
+                                new NotificationState(NotificationState.NotificationMode.disabled,
+                                        0), true);
+                        adapter.onChange();
+                        return true;
+                    }
+                });
+
+        menu.findItem(R.id.action_unmute_chat).setOnMenuItemClickListener(
+                new MenuItem.OnMenuItemClickListener() {
+                    @Override
+                    public boolean onMenuItemClick(MenuItem item) {
+                        AbstractChat chat = MessageManager.getInstance().getChat(account, user);
+                        if (chat != null) chat.setNotificationState(
+                                new NotificationState(NotificationState.NotificationMode.enabled,
+                                        0), true);
+                        adapter.onChange();
+                        return true;
+                    }
+                });
     }
 
     private static void setContactContextMenuItemsVisibilty(AbstractContact abstractContact,
@@ -236,9 +286,9 @@ public class ContextMenuHelper {
                 menu.findItem(R.id.action_delete_contact).setVisible(false);
             }
 
-            if (!MessageManager.getInstance().hasActiveChat(account, user)) {
-                menu.findItem(R.id.action_close_chat).setVisible(false);
-            }
+//            if (!MessageManager.getInstance().hasActiveChat(account, user)) {
+//                menu.findItem(R.id.action_close_chat).setVisible(false);
+//            }
 
             Boolean supported = BlockingManager.getInstance().isSupported(account);
 
@@ -246,17 +296,17 @@ public class ContextMenuHelper {
                     && !MUCManager.getInstance().isMucPrivateChat(account, user)) {
                 menu.findItem(R.id.action_block_contact).setVisible(false);
             }
-            if (abstractContact.isSubscribed()) {
-                menu.findItem(R.id.action_request_subscription).setVisible(false);
-            }
+//            if (abstractContact.isSubscribed()) {
+//                menu.findItem(R.id.action_request_subscription).setVisible(false);
+//            }
         } else { // is conference
 
-            menu.findItem(R.id.action_contact_info).setVisible(false);
+//            menu.findItem(R.id.action_contact_info).setVisible(false);
             menu.findItem(R.id.action_edit_contact_groups).setVisible(false);
             menu.findItem(R.id.action_delete_contact).setVisible(false);
             menu.findItem(R.id.action_block_contact).setVisible(false);
-            menu.findItem(R.id.action_close_chat).setVisible(false);
-            menu.findItem(R.id.action_request_subscription).setVisible(false);
+//            menu.findItem(R.id.action_close_chat).setVisible(false);
+//            menu.findItem(R.id.action_request_subscription).setVisible(false);
 
             if (MUCManager.getInstance().inUse(account, user.getJid().asEntityBareJidIfPossible())) {
                 menu.findItem(R.id.action_edit_conference).setVisible(false);
@@ -274,6 +324,17 @@ public class ContextMenuHelper {
             menu.findItem(R.id.action_accept_subscription).setVisible(false);
             menu.findItem(R.id.action_discard_subscription).setVisible(false);
         }
+
+        // archive/unarchive chat
+        AbstractChat chat = MessageManager.getInstance().getChat(account, user);
+//        if (chat != null) {
+//            menu.findItem(R.id.action_archive_chat).setVisible(!chat.isArchived());
+//            menu.findItem(R.id.action_unarchive_chat).setVisible(chat.isArchived());
+//        }
+
+        // mute chat
+        menu.findItem(R.id.action_mute_chat).setVisible(chat != null && chat.notifyAboutMessage());
+        menu.findItem(R.id.action_unmute_chat).setVisible(chat != null && !chat.notifyAboutMessage());
     }
 
     public static void createGroupContextMenu(final ManagedActivity activity,
