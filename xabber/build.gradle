@@ -11,6 +11,7 @@ apply plugin: 'com.android.application'
 
 repositories {
     maven { url 'https://maven.fabric.io/public' }
+    google()
 }
 
 apply plugin: 'com.neenbedankt.android-apt'
