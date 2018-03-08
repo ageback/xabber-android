@@ -15,9 +15,13 @@
 package com.xabber.android.data;
 
 import android.app.Activity;
+import android.content.Context;
 import android.os.Handler;
 import android.support.annotation.NonNull;
+import android.support.multidex.MultiDex;
 
+import com.crashlytics.android.Crashlytics;
+import com.crashlytics.android.core.CrashlyticsCore;
 import com.frogermcs.androiddevmetrics.AndroidDevMetrics;
 import com.xabber.android.BuildConfig;
 import com.xabber.android.R;
@@ -41,6 +45,7 @@ import com.xabber.android.data.extension.muc.MUCManager;
 import com.xabber.android.data.extension.otr.OTRManager;
 import com.xabber.android.data.extension.ssn.SSNManager;
 import com.xabber.android.data.extension.vcard.VCardManager;
+import com.xabber.android.data.http.PatreonManager;
 import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.message.MessageManager;
 import com.xabber.android.data.message.ReceiptManager;
@@ -50,8 +55,10 @@ import com.xabber.android.data.notification.NotificationManager;
 import com.xabber.android.data.roster.GroupManager;
 import com.xabber.android.data.roster.PresenceManager;
 import com.xabber.android.data.roster.RosterManager;
+import com.xabber.android.data.xaccount.XabberAccountManager;
 import com.xabber.android.service.XabberService;
 
+import io.fabric.sdk.android.Fabric;
 import org.jivesoftware.smack.provider.ProviderFileLoader;
 import org.jivesoftware.smack.provider.ProviderManager;
 
@@ -74,6 +81,7 @@ import java.util.concurrent.ThreadFactory;
  */
 public class Application extends android.app.Application {
 
+    private static final String LOG_TAG = Application.class.getSimpleName();
     private static Application instance;
     private final ArrayList<Object> registeredManagers;
     /**
@@ -157,6 +165,12 @@ public class Application extends android.app.Application {
         });
     }
 
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(base);
+        MultiDex.install(this);
+    }
+
     @NonNull
     private ExecutorService createSingleThreadExecutor(final String threadName) {
         return Executors.newSingleThreadExecutor(new ThreadFactory() {
@@ -204,22 +218,24 @@ public class Application extends android.app.Application {
     }
 
     private void onClose() {
-        LogManager.i(this, "onClose");
+        LogManager.i(LOG_TAG, "onClose1");
         for (Object manager : registeredManagers) {
             if (manager instanceof OnCloseListener) {
                 ((OnCloseListener) manager).onClose();
             }
         }
         closed = true;
+        LogManager.i(LOG_TAG, "onClose2");
     }
 
     void onUnload() {
-        LogManager.i(this, "onUnload");
+        LogManager.i(LOG_TAG, "onUnload1");
         for (Object manager : registeredManagers) {
             if (manager instanceof OnUnloadListener) {
                 ((OnUnloadListener) manager).onUnload();
             }
         }
+        LogManager.i(LOG_TAG, "onUnload2");
         android.os.Process.killProcess(android.os.Process.myPid());
     }
 
@@ -272,8 +288,10 @@ public class Application extends android.app.Application {
      * Requests to close application in some time in future.
      */
     public void requestToClose() {
+        LogManager.i(LOG_TAG, "requestToClose1");
         closing = true;
         stopService(XabberService.createIntent(this));
+        LogManager.i(LOG_TAG, "requestToClose2");
     }
 
     /**
@@ -286,6 +304,15 @@ public class Application extends android.app.Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        // Set up Crashlytics, disabled for debug builds
+        Crashlytics crashlyticsKit = new Crashlytics.Builder()
+                .core(new CrashlyticsCore.Builder().disabled(BuildConfig.DEBUG).build())
+                .build();
+
+        // Initialize Fabric with the debug-disabled crashlytics.
+        if (BuildConfig.USE_CRASHLYTICS) {
+            Fabric.with(this, crashlyticsKit);
+        }
 
         if (BuildConfig.DEBUG) {
             AndroidDevMetrics.initWith(this);
@@ -309,6 +336,8 @@ public class Application extends android.app.Application {
         addManager(ConnectionManager.getInstance());
         addManager(ScreenManager.getInstance());
         addManager(AccountManager.getInstance());
+        addManager(XabberAccountManager.getInstance());
+        addManager(PatreonManager.getInstance());
         addManager(MUCManager.getInstance());
         addManager(MessageManager.getInstance());
         addManager(ChatManager.getInstance());
@@ -353,7 +382,10 @@ public class Application extends android.app.Application {
      * Service have been destroyed.
      */
     public void onServiceDestroy() {
+        LogManager.i(LOG_TAG, "onServiceDestroy");
+
         if (closed) {
+            LogManager.i(LOG_TAG, "onServiceDestroy closed");
             return;
         }
         onClose();

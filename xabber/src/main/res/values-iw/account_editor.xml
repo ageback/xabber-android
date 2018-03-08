@@ -4,8 +4,8 @@
   <string name="account_compression">השתמש בדחיסה</string>
   <string name="account_enabled">מאופשר</string>
   <string name="account_host">מארח</string>
-  <string name="account_password">סיסמה</string>
-  <string name="confirm_password">אשר את הסיסמה</string>
+  <string name="account_password">ססמה</string>
+  <string name="confirm_password">אישור הססמה</string>
   <string name="account_port">יציאה</string>
   <string name="account_priority">עדיפות</string>
   <string name="account_resource">משאב</string>
@@ -23,7 +23,7 @@
   <string name="account_archive_mode_available">על השרת כאשר זמין</string>
   <string name="account_archive_mode_dont_store">אל תאחסן</string>
   <string name="account_archive_mode_local">באופן מקומי על מכשיר זה</string>
-  <string name="account_archive_mode_server">על שרת</string>
+  <string name="account_archive_mode_server">על השרת</string>
   <string name="account_archive_mode_unread">שמור באופן מקומי רק הודעות שלא נקראו או שלא נשלחו</string>
   <string name="account_compression_summary">סמן כדי לאפשר דחיסת נתונים</string>
   <string name="account_custom">מארח מותאם אישית</string>
@@ -31,7 +31,7 @@
   <string name="account_enabled_summary">הפעל את החשבון</string>
   <string name="account_invalid_port">היציאה חייבת להיות מספר (ברירת מחדל: 5222)‎</string>
   <string name="account_invalid_port_range">יציאה חייבת להיות בין 1 ל-65535 (ברירת מחדל: 5222)</string>
-  <string name="account_invalid_priority">ערך עדיפות חייב להיות מספר בין 128- לבין 128 (ברירת מחדל: 10)‎</string>
+  <string name="account_invalid_priority">ערך עדיפות חייב להיות מספר בין 128- לבין 127 (ברירת מחדל: 10)‎</string>
   <string name="account_oauth">אימות</string>
   <string name="account_oauth_invalidated">לא מאומת</string>
   <string name="account_oauth_summary">הגדרות OAuth</string>
@@ -72,4 +72,6 @@
   <string name="account_color_name_teal">טורקיז</string>
   <string name="account_color_name_blue_grey">כחול אפור</string>
   <string name="account_color_name_cyan">תכול</string>
+  <string name="account_mam_sync_title">טעינת היסטוריית הודעות</string>
+  <string name="account_mam_sync_all">טעינת היסטוריה עבור כל המשתמשים</string>
 </resources>

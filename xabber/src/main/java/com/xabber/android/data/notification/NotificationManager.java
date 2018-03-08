@@ -14,29 +14,30 @@
  */
 package com.xabber.android.data.notification;
 
+import android.annotation.SuppressLint;
 import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.media.AudioManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Vibrator;
+import android.support.annotation.RequiresApi;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.TaskStackBuilder;
 
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
-import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.OnCloseListener;
 import com.xabber.android.data.OnInitializedListener;
 import com.xabber.android.data.OnLoadListener;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.account.AccountManager;
-import com.xabber.android.data.account.ArchiveMode;
-import com.xabber.android.data.account.listeners.OnAccountArchiveModeChangedListener;
 import com.xabber.android.data.account.listeners.OnAccountChangedListener;
 import com.xabber.android.data.account.listeners.OnAccountRemovedListener;
 import com.xabber.android.data.connection.ConnectionState;
@@ -44,6 +45,7 @@ import com.xabber.android.data.database.messagerealm.MessageItem;
 import com.xabber.android.data.database.sqlite.NotificationTable;
 import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.UserJid;
+import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.message.MessageManager;
 import com.xabber.android.data.message.chat.ChatManager;
 import com.xabber.android.data.message.phrase.PhraseManager;
@@ -67,8 +69,7 @@ import java.util.List;
  * @author alexander.ivanov
  */
 public class NotificationManager implements OnInitializedListener, OnAccountChangedListener,
-        OnCloseListener, OnLoadListener, Runnable, OnAccountRemovedListener,
-        OnAccountArchiveModeChangedListener {
+        OnCloseListener, OnLoadListener, Runnable, OnAccountRemovedListener {
 
     public static final int PERSISTENT_NOTIFICATION_ID = 1;
     public static final int MESSAGE_NOTIFICATION_ID = 2;
@@ -150,7 +151,9 @@ public class NotificationManager implements OnInitializedListener, OnAccountChan
             }
         };
 
-        persistentNotificationBuilder = new NotificationCompat.Builder(application);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            persistentNotificationBuilder = new NotificationCompat.Builder(application, createNotificationChannelService());
+        else persistentNotificationBuilder = new NotificationCompat.Builder(application, "");
         initPersistentNotification();
 
 
@@ -159,18 +162,38 @@ public class NotificationManager implements OnInitializedListener, OnAccountChan
         persistentNotificationColor = application.getResources().getColor(R.color.persistent_notification_color);
     }
 
-    public static void addEffects(NotificationCompat.Builder notificationBuilder, MessageItem messageItem) {
+    public static void addEffects(NotificationCompat.Builder notificationBuilder,
+                                  MessageItem messageItem, boolean isMUC, boolean isPhoneInVibrateMode, boolean isAppInForeground) {
         if (messageItem == null) {
             return;
         }
         if (MessageManager.getInstance().getChat(messageItem.getAccount(), messageItem.getUser()).getFirstNotification() || !SettingsManager.eventsFirstOnly()) {
             Uri sound = PhraseManager.getInstance().getSound(messageItem.getAccount(),
-                    messageItem.getUser(), messageItem.getText());
+                    messageItem.getUser(), messageItem.getText(), isMUC);
             boolean makeVibration = ChatManager.getInstance().isMakeVibro(messageItem.getAccount(),
                     messageItem.getUser());
 
-            NotificationManager.getInstance().setNotificationDefaults(notificationBuilder,
-                    makeVibration, sound, AudioManager.STREAM_NOTIFICATION);
+            boolean led;
+            if (isMUC) led = SettingsManager.eventsLightningForMuc();
+            else led = SettingsManager.eventsLightning();
+
+            NotificationManager.getInstance().setNotificationDefaults(notificationBuilder, led, sound, AudioManager.STREAM_NOTIFICATION);
+
+            // vibration
+            if (makeVibration)
+                setVibration(isMUC, isPhoneInVibrateMode, notificationBuilder);
+
+            // in-app notifications
+            if (isAppInForeground) {
+                // disable vibrate
+                if (!SettingsManager.eventsInAppVibrate()) {
+                    notificationBuilder.setVibrate(new long[] {0, 0});
+                }
+                // disable sounds
+                if (!SettingsManager.eventsInAppSounds()) {
+                    notificationBuilder.setSound(null);
+                }
+            }
         }
     }
 
@@ -274,7 +297,10 @@ public class NotificationManager implements OnInitializedListener, OnAccountChan
             ticker = top.getTitle();
         }
 
-        NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(application);
+        NotificationCompat.Builder notificationBuilder;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            notificationBuilder = new NotificationCompat.Builder(application, createNotificationChannel());
+        else notificationBuilder = new NotificationCompat.Builder(application, "");
 
         notificationBuilder.setSmallIcon(provider.getIcon());
         notificationBuilder.setTicker(ticker);
@@ -292,7 +318,7 @@ public class NotificationManager implements OnInitializedListener, OnAccountChan
         notificationBuilder.setContentIntent(taskStackBuilder.getPendingIntent(0, PendingIntent.FLAG_UPDATE_CURRENT));
 
         if (ticker != null) {
-            setNotificationDefaults(notificationBuilder, SettingsManager.eventsVibro(), provider.getSound(), provider.getStreamType());
+            setNotificationDefaults(notificationBuilder, SettingsManager.eventsLightning(), provider.getSound(), provider.getStreamType());
         }
 
         notificationBuilder.setDeleteIntent(clearNotifications);
@@ -308,22 +334,13 @@ public class NotificationManager implements OnInitializedListener, OnAccountChan
      * @param notificationBuilder
      * @param streamType
      */
-    public void setNotificationDefaults(NotificationCompat.Builder notificationBuilder, boolean vibration, Uri sound, int streamType) {
+    public void setNotificationDefaults(NotificationCompat.Builder notificationBuilder, boolean led, Uri sound, int streamType) {
         notificationBuilder.setSound(sound, streamType);
         notificationBuilder.setDefaults(0);
 
         int defaults = 0;
 
-        if (vibration) {
-            if (SettingsManager.eventsIgnoreSystemVibro()) {
-                startVibration();
-            } else {
-                defaults |= Notification.DEFAULT_VIBRATE;
-
-            }
-        }
-
-        if (SettingsManager.eventsLightning()) {
+        if (led) {
             defaults |= Notification.DEFAULT_LIGHTS;
         }
 
@@ -377,7 +394,12 @@ public class NotificationManager implements OnInitializedListener, OnAccountChan
 
 
         for (AccountJid account : accountList) {
-            ConnectionState state = AccountManager.getInstance().getAccount(account).getState();
+
+            AccountItem accountItem = AccountManager.getInstance().getAccount(account);
+            if (accountItem == null) {
+                continue;
+            }
+            ConnectionState state = accountItem.getState();
 
             LogManager.i(this, "updatePersistentNotification account " + account + " state " + state );
 
@@ -463,11 +485,11 @@ public class NotificationManager implements OnInitializedListener, OnAccountChan
     }
 
     private void notify(int id, Notification notification) {
-        LogManager.i(this, "Notification: " + id
-                + ", ticker: " + notification.tickerText
+        String msg = "Notification: " + id
                 + ", sound: " + notification.sound
                 + ", vibro: " + (notification.defaults & Notification.DEFAULT_VIBRATE)
-                + ", light: " + (notification.defaults & Notification.DEFAULT_LIGHTS));
+                + ", light: " + (notification.defaults & Notification.DEFAULT_LIGHTS);
+        LogManager.i(this, msg + ", ticker: " + notification.tickerText, msg + ", ticker: ***");
         try {
             notificationManager.notify(id, notification);
         } catch (SecurityException e) {
@@ -502,14 +524,12 @@ public class NotificationManager implements OnInitializedListener, OnAccountChan
         final Date timestamp = messageNotification.getTimestamp();
         final int count = messageNotification.getCount();
 
-        if (AccountManager.getInstance().getArchiveMode(account) != ArchiveMode.dontStore) {
-            Application.getInstance().runInBackgroundUserRequest(new Runnable() {
-                @Override
-                public void run() {
-                    NotificationTable.getInstance().write(account.toString(), user.toString(), text, timestamp, count);
-                }
-            });
-        }
+        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
+            @Override
+            public void run() {
+                NotificationTable.getInstance().write(account.toString(), user.toString(), text, timestamp, count);
+            }
+        });
 
         updateMessageNotification(messageItem);
     }
@@ -582,19 +602,6 @@ public class NotificationManager implements OnInitializedListener, OnAccountChan
     }
 
     @Override
-    public void onAccountArchiveModeChanged(AccountItem accountItem) {
-        final AccountJid account = accountItem.getAccount();
-        if (AccountManager.getInstance().getArchiveMode(account) != ArchiveMode.dontStore)
-            return;
-        Application.getInstance().runInBackgroundUserRequest(new Runnable() {
-            @Override
-            public void run() {
-                NotificationTable.getInstance().removeAccount(account);
-            }
-        });
-    }
-
-    @Override
     public void onAccountsChanged(Collection<AccountJid> accounts) {
         handler.post(this);
     }
@@ -627,5 +634,59 @@ public class NotificationManager implements OnInitializedListener, OnAccountChan
     @Override
     public void onClose() {
         notificationManager.cancelAll();
+    }
+
+    private static void setVibration(boolean isMUC, boolean isPhoneInVibrateMode, NotificationCompat.Builder notificationBuilder) {
+        SettingsManager.VibroMode vibroMode;
+        if (isMUC) vibroMode = SettingsManager.eventsVibroMuc();
+        else vibroMode = SettingsManager.eventsVibroChat();
+
+        switch (vibroMode) {
+            case disabled:
+                notificationBuilder.setVibrate(new long[] {0, 0});
+                break;
+            case defaultvibro:
+                notificationBuilder.setVibrate(new long[] {0, 500});
+                break;
+            case shortvibro:
+                notificationBuilder.setVibrate(new long[] {0, 250});
+                break;
+            case longvibro:
+                notificationBuilder.setVibrate(new long[] {0, 1000});
+                break;
+            case onlyifsilent:
+                if (isPhoneInVibrateMode)
+                    notificationBuilder.setVibrate(new long[] {0, 500});
+                break;
+            default:
+                notificationBuilder.setVibrate(new long[] {0, 500});
+                break;
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    private String createNotificationChannelService() {
+        String channelId = "xabber_service";
+        String channelName = "Xabber Background Service";
+        @SuppressLint("WrongConstant") NotificationChannel channel =
+                new NotificationChannel(channelId, channelName,
+                        android.app.NotificationManager.IMPORTANCE_NONE);
+        android.app.NotificationManager service = (android.app.NotificationManager)
+                Application.getInstance().getSystemService(Context.NOTIFICATION_SERVICE);
+        if (service != null) service.createNotificationChannel(channel);
+        return channelId;
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    public String createNotificationChannel() {
+        String channelId = "xabber_notification";
+        String channelName = "Xabber Notification";
+        @SuppressLint("WrongConstant") NotificationChannel channel =
+                new NotificationChannel(channelId, channelName,
+                        android.app.NotificationManager.IMPORTANCE_HIGH);
+        android.app.NotificationManager service = (android.app.NotificationManager)
+                Application.getInstance().getSystemService(Context.NOTIFICATION_SERVICE);
+        if (service != null) service.createNotificationChannel(channel);
+        return channelId;
     }
 }

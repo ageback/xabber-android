@@ -8,9 +8,9 @@ import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.log.LogManager;
 
-import org.jivesoftware.smack.SASLAuthentication;
+import org.apache.http.conn.ssl.AllowAllHostnameVerifier;
 import org.jivesoftware.smack.proxy.ProxyInfo;
-import org.jivesoftware.smack.sasl.provided.SASLPlainMechanism;
+import org.jivesoftware.smack.sasl.core.SASLXOauth2Mechanism;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
 import org.jivesoftware.smack.util.TLSUtils;
@@ -19,9 +19,10 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
-import java.util.Map;
 
+import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSession;
 import javax.net.ssl.X509TrustManager;
 
 import de.duenndns.ssl.MemorizingTrustManager;
@@ -50,22 +51,33 @@ class ConnectionBuilder {
         builder.setProxyInfo(getProxyInfo(connectionSettings));
 
         try {
+            LogManager.i(LOG_TAG, "SettingsManager.securityCheckCertificate: " + SettingsManager.securityCheckCertificate());
+
             if (SettingsManager.securityCheckCertificate()) {
                 SSLContext sslContext = SSLContext.getInstance("TLS");
                 MemorizingTrustManager mtm = CertificateManager.getInstance().getNewMemorizingTrustManager(account);
                 sslContext.init(null, new X509TrustManager[]{mtm}, new java.security.SecureRandom());
                 builder.setCustomSSLContext(sslContext);
                 builder.setHostnameVerifier(
-                        mtm.wrapHostnameVerifier(new org.apache.http.conn.ssl.StrictHostnameVerifier()));
+                        mtm.wrapHostnameVerifier(new CustomDomainVerifier()));
             } else {
                 TLSUtils.acceptAllCertificates(builder);
+                builder.setHostnameVerifier(new AllowAllHostnameVerifier());
             }
         } catch (NoSuchAlgorithmException | KeyManagementException e) {
             LogManager.exception(LOG_TAG, e);
         }
 
-        setUpSasl();
+        // if account have token
+        if (connectionSettings.getToken() != null && !connectionSettings.getToken().isEmpty()
+                && connectionSettings.getPassword() != null
+                && connectionSettings.getPassword().isEmpty()) {
+            // then enable only SASLXOauth2Mechanism
+            builder.addEnabledSaslMechanism(SASLXOauth2Mechanism.NAME);
 
+            // and set token as password
+            builder.setUsernameAndPassword(connectionSettings.getUserName(), connectionSettings.getToken());
+        }
 
         LogManager.i(LOG_TAG, "new XMPPTCPConnection " + connectionSettings.getServerName());
         return new XMPPTCPConnection(builder.build());
@@ -141,22 +153,5 @@ class ConnectionBuilder {
         }
 
         return proxyInfo;
-    }
-
-    private static void setUpSasl() {
-        if (SettingsManager.connectionUsePlainTextAuth()) {
-            final Map<String, String> registeredSASLMechanisms = SASLAuthentication.getRegisterdSASLMechanisms();
-            for (String mechanism : registeredSASLMechanisms.values()) {
-                SASLAuthentication.blacklistSASLMechanism(mechanism);
-            }
-
-            SASLAuthentication.unBlacklistSASLMechanism(SASLPlainMechanism.NAME);
-
-        } else {
-            final Map<String, String> registeredSASLMechanisms = SASLAuthentication.getRegisterdSASLMechanisms();
-            for (String mechanism : registeredSASLMechanisms.values()) {
-                SASLAuthentication.unBlacklistSASLMechanism(mechanism);
-            }
-        }
     }
 }

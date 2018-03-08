@@ -18,39 +18,38 @@
     android:layout_height="match_parent"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="vertical"
-    android:id="@+id/root_view">
+    android:id="@+id/root_view"
+    android:elevation="24dp">
 
-    <android.support.v7.widget.Toolbar xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:app="http://schemas.android.com/apk/res-auto"
-        android:id="@+id/toolbar_default"
+    <android.support.v4.widget.SwipeRefreshLayout
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        android:id="@+id/swipeContainer"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-
-        android:background="?attr/colorPrimary"
-        android:elevation="8dp"
-        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
-        app:popupTheme="?attr/toolbar_popup_theme"
+        android:layout_height="match_parent"
+        android:layout_above="@+id/input_layout"
+        android:layout_below="@+id/toolbar_default"
         >
-
-        <include
-            android:id="@+id/contact_title"
-            layout="@layout/contact_title"
-            />
-
-    </android.support.v7.widget.Toolbar>
 
     <android.support.v7.widget.RecyclerView
         android:id="@+id/chat_messages_recycler_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_above="@+id/input_layout"
-
-        android:layout_below="@+id/toolbar_default"
         android:divider="@null"
         android:dividerHeight="0dp"
         android:listSelector="@android:color/transparent"
         android:scrollbars="vertical"
         tools:listitem="@layout/item_outgoing_message"
+        />
+
+    </android.support.v4.widget.SwipeRefreshLayout>
+
+    <ViewStub
+        android:id="@+id/stubNotify"
+        android:inflatedId="@+id/notifyLayout"
+        android:layout="@layout/layout_chat_notify"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_above="@+id/input_layout"
         />
 
     <LinearLayout
@@ -123,10 +122,19 @@
             android:background="?android:selectableItemBackground"
             android:contentDescription="@string/chat_send"
             android:padding="8dp"
-            android:src="@drawable/ic_send_black_24dp"
+            android:src="@drawable/ic_send"
             android:tint="?attr/chat_input_button_color"
             />
     </LinearLayout>
+
+    <ViewStub
+        android:id="@+id/stubJoin"
+        android:inflatedId="@+id/joinLayout"
+        android:layout="@layout/layout_chat_join"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        />
 
     <ProgressBar
         style="?android:attr/progressBarStyleHorizontal"
@@ -151,5 +159,15 @@
         android:visibility="gone"
         />
 
+    <LinearLayout
+        android:id="@+id/placeholder"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:focusable="true"
+        android:clickable="true"
+        android:elevation="8dp"
+        android:visibility="gone"
+        />
 
 </RelativeLayout>

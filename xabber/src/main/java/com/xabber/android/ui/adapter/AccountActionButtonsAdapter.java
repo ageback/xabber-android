@@ -7,15 +7,19 @@ import android.widget.LinearLayout;
 
 import com.melnykov.fab.FloatingActionButton;
 import com.xabber.android.R;
+import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.account.StatusMode;
 import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.extension.avatar.AvatarManager;
+import com.xabber.android.data.xaccount.XMPPAccountSettings;
+import com.xabber.android.data.xaccount.XabberAccountManager;
 import com.xabber.android.ui.color.AccountPainter;
 import com.xabber.android.ui.color.ColorManager;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 
 import de.hdodenhof.circleimageview.CircleImageView;
 
@@ -76,6 +80,8 @@ public class AccountActionButtonsAdapter implements UpdatableAdapter {
 
     @Override
     public void onChange() {
+        Collections.sort(accounts);
+
         for (int index = 0; index < accounts.size(); index++) {
             View view = linearLayout.getChildAt(index);
 
@@ -105,9 +111,13 @@ public class AccountActionButtonsAdapter implements UpdatableAdapter {
 
             view.findViewById(R.id.account_unselected_shadow).setVisibility(shadowVisibility);
 
-            StatusMode statusMode = AccountManager.getInstance().getAccount(account).getDisplayStatusMode();
             int offlineShadowVisibility;
-            if (statusMode == StatusMode.connection || statusMode == StatusMode.unavailable) {
+            AccountItem accountItem = AccountManager.getInstance().getAccount(account);
+            StatusMode statusMode = null;
+            if (accountItem != null) {
+                statusMode = accountItem.getDisplayStatusMode();
+            }
+            if (statusMode != null && (statusMode == StatusMode.connection || statusMode == StatusMode.unavailable)) {
                 offlineShadowVisibility = View.VISIBLE;
             } else {
                 offlineShadowVisibility = View.GONE;

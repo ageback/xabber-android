@@ -17,13 +17,16 @@ package com.xabber.android.data.message.chat;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Parcelable;
+import android.support.annotation.Nullable;
 
 import com.xabber.android.data.Application;
-import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.OnLoadListener;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.account.listeners.OnAccountRemovedListener;
+import com.xabber.android.data.database.RealmManager;
+import com.xabber.android.data.database.realm.ChatDataRealm;
+import com.xabber.android.data.database.realm.NotificationStateRealm;
 import com.xabber.android.data.database.sqlite.NotifyVisibleTable;
 import com.xabber.android.data.database.sqlite.PrivateChatTable;
 import com.xabber.android.data.database.sqlite.ShowTextTable;
@@ -34,12 +37,19 @@ import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.BaseEntity;
 import com.xabber.android.data.entity.NestedMap;
 import com.xabber.android.data.entity.UserJid;
+import com.xabber.android.data.log.LogManager;
+import com.xabber.android.data.message.AbstractChat;
+import com.xabber.android.data.message.ChatData;
+import com.xabber.android.data.message.NotificationState;
 import com.xabber.android.data.roster.RosterManager;
 
 import org.jxmpp.stringprep.XmppStringprepException;
 
 import java.util.HashSet;
 import java.util.Set;
+
+import io.realm.Realm;
+import io.realm.RealmObject;
 
 /**
  * Manage chat specific options.
@@ -372,6 +382,18 @@ public class ChatManager implements OnLoadListener, OnAccountRemovedListener {
         }
     }
 
+    public boolean isShowTextOnMuc(AccountJid account, UserJid user) {
+        switch (getShowText(account, user)) {
+            case show:
+                return true;
+            case hide:
+                return false;
+            case default_settings:
+            default:
+                return SettingsManager.eventsShowTextOnMuc();
+        }
+    }
+
     public ShowMessageTextInNotification getShowText(AccountJid account, UserJid user) {
         ShowMessageTextInNotification showMessageTextInNotification = showText.get(account.toString(), user.toString());
         if (showMessageTextInNotification == null) {
@@ -400,7 +422,7 @@ public class ChatManager implements OnLoadListener, OnAccountRemovedListener {
     public boolean isMakeVibro(AccountJid account, UserJid user) {
         Boolean value = makeVibro.get(account.toString(), user.toString());
         if (value == null) {
-            return SettingsManager.eventsVibro();
+            return true;
         }
         return value;
     }
@@ -421,9 +443,10 @@ public class ChatManager implements OnLoadListener, OnAccountRemovedListener {
      * @return Sound for notification. Common value if there is no user specific
      * value.
      */
-    public Uri getSound(AccountJid account, UserJid user) {
+    public Uri getSound(AccountJid account, UserJid user, boolean isMUC) {
         Uri value = sounds.get(account.toString(), user.toString());
         if (value == null) {
+            if (isMUC) return SettingsManager.eventsSoundMuc();
             return SettingsManager.eventsSound();
         }
         if (EMPTY_SOUND.equals(value)) {
@@ -476,5 +499,60 @@ public class ChatManager implements OnLoadListener, OnAccountRemovedListener {
 
     public void clearScrollStates() {
         scrollStates.clear();
+    }
+
+    public void saveOrUpdateChatDataToRealm(AbstractChat chat) {
+        String accountJid = chat.getAccount().toString();
+        String userJid = chat.getUser().toString();
+
+        ChatDataRealm chatRealm = new ChatDataRealm(accountJid, userJid);
+        chatRealm.setUnreadCount(chat.getUnreadMessageCount());
+        chatRealm.setArchived(chat.isArchived());
+
+        NotificationStateRealm notificationStateRealm = new NotificationStateRealm();
+        notificationStateRealm.setMode(chat.getNotificationState().getMode());
+        notificationStateRealm.setTimestamp(chat.getNotificationState().getTimestamp());
+        chatRealm.setNotificationState(notificationStateRealm);
+
+        Realm realm = RealmManager.getInstance().getNewRealm();
+        realm.beginTransaction();
+        RealmObject realmObject = realm.copyToRealmOrUpdate(chatRealm);
+        realm.commitTransaction();
+        realm.close();
+    }
+
+    @Nullable
+    public ChatData loadChatDataFromRealm(AbstractChat chat) {
+        String accountJid = chat.getAccount().toString();
+        String userJid = chat.getUser().toString();
+        ChatData chatData = null;
+
+        Realm realm = RealmManager.getInstance().getNewRealm();
+        ChatDataRealm realmChat = realm.where(ChatDataRealm.class)
+                .equalTo("accountJid", accountJid)
+                .equalTo("userJid", userJid)
+                .findFirst();
+
+        if (realmChat != null) {
+            NotificationState notificationState;
+            if (realmChat.getNotificationState() != null) {
+                 notificationState = new NotificationState(
+                        realmChat.getNotificationState().getMode(),
+                        realmChat.getNotificationState().getTimestamp()
+                );
+            } else notificationState =
+                    new NotificationState(NotificationState.NotificationMode.bydefault, 0);
+
+            chatData = new ChatData(
+                    realmChat.getSubject(),
+                    realmChat.getAccountJid(),
+                    realmChat.getUserJid(),
+                    realmChat.getUnreadCount(),
+                    realmChat.isArchived(),
+                    notificationState);
+        }
+
+        realm.close();
+        return chatData;
     }
 }

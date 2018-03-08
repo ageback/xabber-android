@@ -10,6 +10,8 @@
   <string name="chat_input_hint">Scrivi qui il tuo messaggio</string>
   <string name="chat_send">Invia</string>
   <string name="clear_history">Cancella cronologia</string>
+  <string name="clear_chat_history_dialog_button">Cancella</string>
+  <string name="clear_chat_history_dialog_message">Vuoi davvero cancellare tutta la cronologia della chat con %s?</string>
   <string name="contact_is_offline">Il destinatario è offline. I messaggi inviati saranno consegnati quando il destinatario tornerà online.</string>
   <string name="ENTRY_IS_NOT_AVAILABLE">Il contatto non è disponibile</string>
   <string name="FILE_NOT_FOUND">File non trovato</string>
@@ -90,7 +92,7 @@
   <string name="received_by">Ricevuto da %s</string>
   <string name="could_not_get_path_to_file">Impossibile ottenere il percorso del file</string>
   <string name="message_open_private_chat">Apri una chat privata</string>
-  <string name="http_file_upload_slot_error">Non puoi caricare il file. Troppo grande?</string>
+  <string name="http_file_upload_slot_error">Impossibile caricare il file. Troppo grande?</string>
   <string name="no_permission_to_read_files">Nessun permesso di lettura file</string>
   <string name="no_permission_to_write_files">Nessun permesso di scrittura di file</string>
 </resources>

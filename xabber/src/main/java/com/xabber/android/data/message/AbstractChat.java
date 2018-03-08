@@ -30,6 +30,7 @@ import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.carbons.CarbonManager;
 import com.xabber.android.data.extension.cs.ChatStateManager;
 import com.xabber.android.data.extension.file.FileManager;
+import com.xabber.android.data.extension.otr.OTRManager;
 import com.xabber.android.data.message.chat.ChatManager;
 import com.xabber.android.data.notification.NotificationManager;
 
@@ -46,6 +47,7 @@ import org.jxmpp.jid.parts.Resourcepart;
 
 import java.io.File;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 
 import io.realm.Realm;
@@ -83,6 +85,10 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
      */
     private String threadId;
 
+    private int unreadMessageCount;
+    private boolean archived;
+    protected NotificationState notificationState;
+
     private boolean isPrivateMucChat;
     private boolean isPrivateMucChatAccepted;
 
@@ -101,6 +107,7 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
         firstNotification = true;
         this.isPrivateMucChat = isPrivateMucChat;
         isPrivateMucChatAccepted = false;
+        notificationState = new NotificationState(NotificationState.NotificationMode.bydefault, 0);
 
         Application.getInstance().runOnUiThread(new Runnable() {
             @Override
@@ -207,8 +214,12 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
     /**
      * @return Whether user should be notified about incoming messages in chat.
      */
-    protected boolean notifyAboutMessage() {
-        return SettingsManager.eventsMessage() != SettingsManager.EventsMessage.none;
+    public boolean notifyAboutMessage() {
+        switch (notificationState.getMode()) {
+            case enabled: return true;
+            case disabled: return false;
+            default: return SettingsManager.eventsOnChat();
+        }
     }
 
     abstract protected MessageItem createNewMessageItem(String text);
@@ -233,15 +244,15 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
      * @param delayTimestamp Time when incoming message was sent or outgoing was created.
      * @param incoming       Incoming message.
      * @param notify         Notify user about this message when appropriated.
-     * @param unencrypted    Whether not encrypted message in OTR chat was received.
+     * @param encrypted      Whether encrypted message in OTR chat was received.
      * @param offline        Whether message was received from server side offline storage.
      * @return
      */
     protected void createAndSaveNewMessage(Resourcepart resource, String text,
                                            final ChatAction action, final Date delayTimestamp, final boolean incoming,
-                                           boolean notify, final boolean unencrypted, final boolean offline, final String stanzaId) {
+                                           boolean notify, final boolean encrypted, final boolean offline, final String stanzaId) {
         final MessageItem messageItem = createMessageItem(resource, text, action, delayTimestamp,
-                incoming, notify, unencrypted, offline, stanzaId);
+                incoming, notify, encrypted, offline, stanzaId);
         saveMessageItem(messageItem);
         EventBus.getDefault().post(new NewMessageEvent());
     }
@@ -258,7 +269,7 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
 
     protected MessageItem createMessageItem(Resourcepart resource, String text, ChatAction action,
                                             Date delayTimestamp, boolean incoming, boolean notify,
-                                            boolean unencrypted, boolean offline, String stanzaId) {
+                                            boolean encrypted, boolean offline, String stanzaId) {
         final boolean visible = MessageManager.getInstance().isVisibleChat(this);
         boolean read = incoming ? visible : true;
         boolean send = incoming;
@@ -266,7 +277,7 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
             throw new IllegalArgumentException();
         }
         if (text == null) {
-            text = "";
+            text = " ";
         }
         if (action != null) {
             read = true;
@@ -299,7 +310,10 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
 
         if (resource == null) {
             messageItem.setResource(Resourcepart.EMPTY);
+        } else {
+            messageItem.setResource(resource);
         }
+
         if (action != null) {
             messageItem.setAction(action.toString());
         }
@@ -311,20 +325,28 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
         messageItem.setIncoming(incoming);
         messageItem.setRead(read);
         messageItem.setSent(send);
-        messageItem.setUnencrypted(unencrypted);
+        messageItem.setEncrypted(encrypted);
         messageItem.setOffline(offline);
         messageItem.setStanzaId(stanzaId);
         FileManager.processFileMessage(messageItem);
 
-        if (notify && notifyAboutMessage()) {
-            if (visible) {
-                if (ChatManager.getInstance().isNotifyVisible(account, user)) {
-                    NotificationManager.getInstance().onMessageNotification(messageItem);
-                }
-            } else {
-                NotificationManager.getInstance().onMessageNotification(messageItem);
-            }
+        if (notify && notifyAboutMessage() && !visible) {
+            NotificationManager.getInstance().onMessageNotification(messageItem);
         }
+
+        // unread message count
+        if (!visible && action == null) {
+            if (incoming) increaseUnreadMessageCount();
+            else resetUnreadMessageCount();
+        }
+
+        // remove notifications if get outgoing message
+        if (!incoming)
+            NotificationManager.getInstance().removeMessageNotification(account, user);
+
+        // when getting new message, unarchive chat if chat not muted
+        if (this.notifyAboutMessage())
+            this.archived = false;
 
         return messageItem;
     }
@@ -373,7 +395,14 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
 
     private void updateLastMessage() {
         if (messages.isValid() && messages.isLoaded() && !messages.isEmpty()) {
-            lastMessage = MessageDatabaseManager.getInstance()
+            List<MessageItem> textMessages = MessageDatabaseManager.getInstance()
+                    .getRealmUiThread()
+                    .copyFromRealm(messages.where().isNull(MessageItem.Fields.ACTION).findAll());
+
+            if (!textMessages.isEmpty())
+                lastMessage = textMessages.get(textMessages.size() - 1);
+            else
+                lastMessage = MessageDatabaseManager.getInstance()
                     .getRealmUiThread()
                     .copyFromRealm(messages.last());
         } else {
@@ -441,9 +470,14 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
         });
     }
 
+    protected boolean canSendMessage() {
+        return true;
+    }
+
     @SuppressWarnings("WeakerAccess")
     boolean sendMessage(MessageItem messageItem) {
         String text = prepareText(messageItem.getText());
+        messageItem.setEncrypted(OTRManager.getInstance().isEncrypted(text));
         Long timestamp = messageItem.getTimestamp();
 
         Date currentTime = new Date(System.currentTimeMillis());
@@ -496,6 +530,7 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
 
         if (message == null) {
             messageItem.setError(true);
+            messageItem.setErrorDescription("Internal error: message is null");
         } else {
             messageItem.setStanzaId(message.getStanzaId());
         }
@@ -533,7 +568,7 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
      * @param packet
      * @return Whether packet was directed to this chat.
      */
-    protected boolean onPacket(UserJid userJid, Stanza packet) {
+    protected boolean onPacket(UserJid userJid, Stanza packet, boolean isCarbons) {
         return accept(userJid);
     }
 
@@ -564,5 +599,43 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
     @Override
     public void onChange(RealmResults<MessageItem> messageItems) {
         updateLastMessage();
+    }
+
+    public int getUnreadMessageCount() {
+        return unreadMessageCount;
+    }
+
+    public void increaseUnreadMessageCount() {
+        this.unreadMessageCount++;
+        ChatManager.getInstance().saveOrUpdateChatDataToRealm(this);
+    }
+
+    public void resetUnreadMessageCount() {
+        this.unreadMessageCount = 0;
+        ChatManager.getInstance().saveOrUpdateChatDataToRealm(this);
+    }
+
+    public void setUnreadMessageCount(int unreadMessageCount) {
+        this.unreadMessageCount = unreadMessageCount;
+    }
+
+    public boolean isArchived() {
+        return archived;
+    }
+
+    public void setArchived(boolean archived, boolean needSaveToRealm) {
+        this.archived = archived;
+        if (needSaveToRealm) ChatManager.getInstance().saveOrUpdateChatDataToRealm(this);
+    }
+
+    public NotificationState getNotificationState() {
+        return notificationState;
+    }
+
+    public void setNotificationState(NotificationState notificationState, boolean needSaveToRealm) {
+        this.notificationState = notificationState;
+        if (notificationState.getMode() == NotificationState.NotificationMode.disabled && needSaveToRealm)
+            NotificationManager.getInstance().removeMessageNotification(account, user);
+        if (needSaveToRealm) ChatManager.getInstance().saveOrUpdateChatDataToRealm(this);
     }
 }

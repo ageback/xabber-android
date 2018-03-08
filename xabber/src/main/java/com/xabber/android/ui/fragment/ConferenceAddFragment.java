@@ -7,17 +7,19 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.xabber.android.R;
-import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.avatar.AvatarManager;
+import com.xabber.android.data.extension.bookmarks.BookmarksManager;
 import com.xabber.android.data.extension.muc.MUCManager;
 import com.xabber.android.data.extension.muc.RoomInvite;
+import com.xabber.android.data.log.LogManager;
 import com.xabber.android.ui.activity.ChatActivity;
 
 import org.jxmpp.jid.EntityBareJid;
@@ -66,7 +68,7 @@ public class ConferenceAddFragment extends Fragment {
         int h = accountAvatar.getIntrinsicHeight();
         int w = accountAvatar.getIntrinsicWidth();
         accountAvatar.setBounds( 0, 0, w, h );
-        ((TextView) view.findViewById(R.id.muc_account_jid)).setCompoundDrawables(accountAvatar, null, null, null);
+        ((ImageView) view.findViewById(R.id.ivAvatar)).setImageDrawable(accountAvatar);
 
 
         nickView = (EditText) view.findViewById(R.id.muc_nick);
@@ -112,7 +114,7 @@ public class ConferenceAddFragment extends Fragment {
     public void addConference() {
         Resourcepart nick;
         try {
-            nick = Resourcepart.from(nickView.getText().toString());
+            nick = Resourcepart.from(nickView.getText().toString().trim());
         } catch (XmppStringprepException e) {
             LogManager.exception(this, e);
             Toast.makeText(getActivity(), getString(R.string.EMPTY_NICK_NAME), Toast.LENGTH_LONG).show();
@@ -122,6 +124,11 @@ public class ConferenceAddFragment extends Fragment {
         String password = passwordView.getText().toString();
         final boolean join = true;
         MUCManager.getInstance().createRoom(account, conferenceJid, nick, password, join);
+
+        // add conference to bookmarks
+        BookmarksManager.getInstance().addConferenceToBookmarks(account,
+                conferenceJid.getLocalpart().toString(), conferenceJid, nick);
+
         try {
             startActivity(ChatActivity.createSpecificChatIntent(getActivity(), account, UserJid.from(conferenceJid)));
         } catch (UserJid.UserJidCreateException e) {

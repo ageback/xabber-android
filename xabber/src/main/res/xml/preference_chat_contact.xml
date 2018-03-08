@@ -14,6 +14,12 @@
 -->
 <PreferenceScreen
     xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <CheckBoxPreference
+        android:key="@string/chat_notification_settings_key"
+        android:title="@string/chat_notification_settings_title"
+        />
+
     <CheckBoxPreference
         android:key="@string/chat_save_history_key"
         android:title="@string/save_history"
@@ -36,10 +42,10 @@
         android:key="@string/chat_events_vibro_key"
         android:title="@string/events_vibro"
         />
-    <CheckBoxPreference
-        android:key="@string/chat_events_visible_chat_key"
-        android:title="@string/events_visible_chat"
-        />
+    <!--<CheckBoxPreference-->
+        <!--android:key="@string/chat_events_visible_chat_key"-->
+        <!--android:title="@string/events_visible_chat"-->
+        <!--/>-->
     <CheckBoxPreference
             android:key="@string/chat_events_suppress_100_key"
             android:title="@string/events_suppress_100"

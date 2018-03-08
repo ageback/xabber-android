@@ -15,7 +15,9 @@
 package com.xabber.android.data.connection;
 
 import android.support.annotation.NonNull;
+import android.util.Log;
 
+import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.account.AccountErrorEvent;
 import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.log.AndroidLoggingHandler;
@@ -28,12 +30,13 @@ import org.jivesoftware.smack.XMPPException;
 import org.jivesoftware.smack.sasl.SASLErrorException;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.util.DNSUtil;
+import org.jivesoftware.smack.util.dns.dnsjava.DNSJavaResolver;
+import org.jivesoftware.smack.util.dns.minidns.MiniDnsResolver;
 
 import java.io.IOException;
 import java.util.logging.Level;
 
 import de.measite.minidns.AbstractDNSClient;
-import de.measite.minidns.DNSClient;
 
 class ConnectionThread {
 
@@ -62,7 +65,7 @@ class ConnectionThread {
                     LogManager.i(this, "No network connection");
                 }
             }
-        }, "Connection thread for " + connectionItem.getAccount());
+        });
         thread.setPriority(Thread.MIN_PRIORITY);
         thread.setDaemon(true);
     }
@@ -95,9 +98,29 @@ class ConnectionThread {
         java.util.logging.Logger.getLogger(AbstractXMPPConnection.class.getName()).setLevel(Level.FINEST);
         java.util.logging.Logger.getLogger(DNSUtil.class.getName()).setLevel(Level.FINEST);
 
-        // TODO: temp solution until MiniDnsClient and Smack will be updated
-        DNSClient.removeDNSServerLookupMechanism(de.measite.minidns.dnsserverlookup.AndroidUsingExec.INSTANCE);
-        DNSClient.addDnsServerLookupMechanism(AndroidUsingExec.INSTANCE);
+        if (connection.getConfiguration().getPassword().isEmpty()) {
+            AccountErrorEvent accountErrorEvent = new AccountErrorEvent(connectionItem.getAccount(),
+                    AccountErrorEvent.Type.PASS_REQUIRED, "");
+
+            //com.xabber.android.data.account.AccountManager.getInstance().addAccountError(accountErrorEvent);
+            com.xabber.android.data.account.AccountManager.getInstance().setEnabled(connectionItem.getAccount(), false);
+            EventBus.getDefault().postSticky(accountErrorEvent);
+            return;
+        }
+
+//        switch (SettingsManager.connectionDnsResolver()) {
+//            case dnsJavaResolver:
+//                LogManager.i(this, "Use DNS Java resolver");
+//                ExtDNSJavaResolver.setup();
+//                break;
+//            case miniDnsResolver:
+//                LogManager.i(this, "Use Mini DNS resolver");
+//                MiniDnsResolver.setup();
+//                break;
+//        }
+
+        LogManager.i(this, "Use DNS Java resolver");
+        ExtDNSJavaResolver.setup();
 
         try {
             LogManager.i(this, "Trying to connect and login...");
@@ -119,17 +142,20 @@ class ConnectionThread {
             AccountErrorEvent accountErrorEvent = new AccountErrorEvent(connectionItem.getAccount(),
                     AccountErrorEvent.Type.AUTHORIZATION, e.getMessage());
 
-            com.xabber.android.data.account.AccountManager.getInstance().addAccountError(accountErrorEvent);
+            //com.xabber.android.data.account.AccountManager.getInstance().addAccountError(accountErrorEvent);
             com.xabber.android.data.account.AccountManager.getInstance().setEnabled(connectionItem.getAccount(), false);
             EventBus.getDefault().postSticky(accountErrorEvent);
-        } catch (XMPPException | SmackException | IOException e) {
+
+            // catching RuntimeExceptions seems to be strange, but we got a lot of error coming from
+            // Smack or mini DSN client inside of Smack.
+        } catch (XMPPException | SmackException | IOException | RuntimeException e) {
             LogManager.exception(this, e);
 
             if (!((AccountItem)connectionItem).isSuccessfulConnectionHappened()) {
                 LogManager.i(this, "There was no successful connection, disabling account");
 
                 AccountErrorEvent accountErrorEvent = new AccountErrorEvent(connectionItem.getAccount(),
-                        AccountErrorEvent.Type.CONNECTION, e.getMessage());
+                        AccountErrorEvent.Type.CONNECTION, Log.getStackTraceString(e));
 
                 com.xabber.android.data.account.AccountManager.getInstance().addAccountError(accountErrorEvent);
                 com.xabber.android.data.account.AccountManager.getInstance().setEnabled(connectionItem.getAccount(), false);

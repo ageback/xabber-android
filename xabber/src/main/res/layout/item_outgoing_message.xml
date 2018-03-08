@@ -20,6 +20,7 @@
 
     <LinearLayout
         android:id="@+id/message_balloon"
+        android:orientation="vertical"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
 
@@ -43,11 +44,7 @@
         android:gravity="center_vertical"
         >
 
-        <include layout="@layout/item_message"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            />
+        <include layout="@layout/item_message" />
 
     </LinearLayout>
 
@@ -68,11 +65,23 @@
         />
 
     <ImageView
-        android:id="@+id/message_status_icon"
+        android:id="@+id/message_encrypted_icon"
         android:layout_width="14dp"
         android:layout_height="14dp"
         android:layout_alignBottom="@+id/message_time"
         android:layout_toLeftOf="@+id/message_time"
+        android:layout_toStartOf="@+id/message_time"
+        android:layout_marginRight="4dp"
+        android:layout_marginEnd="4dp"
+        android:src="@drawable/ic_lock"
+        />
+
+    <ImageView
+        android:id="@+id/message_status_icon"
+        android:layout_width="14dp"
+        android:layout_height="14dp"
+        android:layout_alignBottom="@+id/message_time"
+        android:layout_toLeftOf="@+id/message_encrypted_icon"
 
         android:src="@drawable/ic_message_delivered_14dp"
         android:layout_marginRight="4dp"

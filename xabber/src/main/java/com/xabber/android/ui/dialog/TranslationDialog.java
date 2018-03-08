@@ -9,6 +9,7 @@ import android.net.Uri;
 import android.os.Bundle;
 
 import com.xabber.android.R;
+import com.xabber.android.data.SettingsManager;
 
 public class TranslationDialog extends DialogFragment implements DialogInterface.OnClickListener {
     @Override
@@ -24,6 +25,8 @@ public class TranslationDialog extends DialogFragment implements DialogInterface
 
     @Override
     public void onClick(DialogInterface dialog, int which) {
+        SettingsManager.setTranslationSuggested();
+
         if (which == Dialog.BUTTON_POSITIVE) {
             Intent i = new Intent(Intent.ACTION_VIEW);
             i.setData(Uri.parse(getString(R.string.translation_url)));

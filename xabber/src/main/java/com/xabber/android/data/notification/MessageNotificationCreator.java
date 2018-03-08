@@ -1,7 +1,11 @@
 package com.xabber.android.data.notification;
 
+import android.app.ActivityManager;
 import android.app.PendingIntent;
+import android.content.Context;
 import android.content.Intent;
+import android.media.AudioManager;
+import android.os.Build;
 import android.support.v4.app.NotificationCompat;
 import android.text.Spannable;
 import android.text.SpannableString;
@@ -9,11 +13,13 @@ import android.text.style.StyleSpan;
 
 import com.xabber.android.R;
 import com.xabber.android.data.Application;
+import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.database.messagerealm.MessageItem;
 import com.xabber.android.data.extension.avatar.AvatarManager;
 import com.xabber.android.data.extension.muc.MUCManager;
 import com.xabber.android.data.message.chat.ChatManager;
 import com.xabber.android.data.roster.RosterManager;
+import com.xabber.android.receiver.NotificationCancelReceiver;
 import com.xabber.android.ui.activity.ChatActivity;
 import com.xabber.android.ui.activity.ContactListActivity;
 import com.xabber.android.ui.color.ColorManager;
@@ -48,9 +54,32 @@ public class MessageNotificationCreator {
 
         MessageNotification message = messageNotifications.get(messageNotifications.size() - 1);
 
-        boolean showText  = ChatManager.getInstance().isShowText(message.getAccount(), message.getUser());
+        boolean showText = true;
+        boolean isMUC = false;
 
-        NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(application);
+        // muc
+        if (MUCManager.getInstance().hasRoom(message.getAccount(), message.getUser().getJid().asEntityBareJidIfPossible())) {
+            isMUC = true;
+            showText = ChatManager.getInstance().isShowTextOnMuc(message.getAccount(), message.getUser());
+
+        } else { // chat
+            isMUC = false;
+            showText = ChatManager.getInstance().isShowText(message.getAccount(), message.getUser());
+        }
+
+        // in-app notifications
+        boolean isAppInForeground = isAppInForeground();
+        if (isAppInForeground) {
+            // disable message preview
+            if (!SettingsManager.eventsInAppPreview()) showText = false;
+        }
+
+        NotificationCompat.Builder notificationBuilder;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            notificationBuilder = new NotificationCompat.Builder(application,
+                NotificationManager.getInstance().createNotificationChannel());
+        else notificationBuilder = new NotificationCompat.Builder(application, "");
+
         notificationBuilder.setContentTitle(getTitle(message, messageCount));
         notificationBuilder.setContentText(getText(message, showText));
         notificationBuilder.setSubText(message.getAccount().toString());
@@ -69,7 +98,9 @@ public class MessageNotificationCreator {
         notificationBuilder.setCategory(NotificationCompat.CATEGORY_MESSAGE);
         notificationBuilder.setPriority(NotificationCompat.PRIORITY_HIGH);
 
-        NotificationManager.addEffects(notificationBuilder, messageItem);
+        notificationBuilder.setDeleteIntent(NotificationCancelReceiver.createPendingIntent());
+
+        NotificationManager.addEffects(notificationBuilder, messageItem, isMUC, checkVibrateMode(), isAppInForeground);
 
         return notificationBuilder.build();
     }
@@ -151,11 +182,13 @@ public class MessageNotificationCreator {
 
             return bigTextStyle;
         } else {
-            return getInboxStyle(messageCount, message.getAccount().toString());
+            if (MUCManager.getInstance().hasRoom(message.getAccount(), message.getUser().getJid().asEntityBareJidIfPossible()))
+                return getInboxStyle(messageCount, message.getAccount().toString(), true);
+            else return getInboxStyle(messageCount, message.getAccount().toString(), false);
         }
     }
 
-    private NotificationCompat.Style getInboxStyle(int messageCount, String accountName) {
+    private NotificationCompat.Style getInboxStyle(int messageCount, String accountName, boolean isMuc) {
         NotificationCompat.InboxStyle inboxStyle = new NotificationCompat.InboxStyle();
 
         inboxStyle.setBigContentTitle(getMultiContactTitle(messageCount));
@@ -165,6 +198,9 @@ public class MessageNotificationCreator {
 
             boolean showTextForThisContact
                     = ChatManager.getInstance().isShowText(messageNotification.getAccount(), messageNotification.getUser());
+            if (isMuc)
+                showTextForThisContact
+                        = ChatManager.getInstance().isShowTextOnMuc(messageNotification.getAccount(), messageNotification.getUser());
 
             inboxStyle.addLine(getContactNameAndMessage(messageNotification, showTextForThisContact));
         }
@@ -201,4 +237,23 @@ public class MessageNotificationCreator {
                 new Intent[]{backIntent, intent}, PendingIntent.FLAG_ONE_SHOT);
     }
 
+    private boolean checkVibrateMode() {
+        AudioManager am = (AudioManager) application.getSystemService(Context.AUDIO_SERVICE);
+        return am.getRingerMode() == AudioManager.RINGER_MODE_VIBRATE;
+    }
+
+    private boolean isAppInForeground() {
+        ActivityManager activityManager = (ActivityManager) application.getSystemService(Context.ACTIVITY_SERVICE);
+        List<ActivityManager.RunningAppProcessInfo> appProcesses = activityManager.getRunningAppProcesses();
+        if (appProcesses == null) {
+            return false;
+        }
+        final String packageName = application.getPackageName();
+        for (ActivityManager.RunningAppProcessInfo appProcess : appProcesses) {
+            if (appProcess.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND && appProcess.processName.equals(packageName)) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

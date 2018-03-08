@@ -5,6 +5,13 @@
 # Marshmallow removed Notification.setLatestEventInfo()
 -dontwarn android.app.Notification
 
+# RxJava
+-dontwarn rx.internal.util.**
+
+# google
+-keep class com.google.**
+-dontwarn com.google.**
+
 # realm
 -keep class io.realm.annotations.RealmModule
 -keep @io.realm.annotations.RealmModule class *
@@ -28,6 +35,13 @@
 -keep class org.jivesoftware.smack.** { *; }
 -keep class org.jivesoftware.smackx.** { *; }
 
+# This dnsjava class uses old Sun API
+-dontnote org.xbill.DNS.spi.DNSJavaNameServiceDescriptor
+-dontwarn org.xbill.DNS.spi.DNSJavaNameServiceDescriptor
+
+# See http://stackoverflow.com/questions/5701126, happens in dnsjava
+-optimizations !code/allocation/variable
+
 # OkHttp
 -keepattributes Signature
 -keepattributes *Annotation*
@@ -42,3 +56,16 @@
   **[] $VALUES;
   public *;
 }
+
+# Google API-Client
+-keepattributes Signature,RuntimeVisibleAnnotations,AnnotationDefault
+-keepclassmembers class * {
+  @com.google.api.client.util.Key <fields>;
+}
+-dontwarn com.google.api.client.extensions.android.**
+-dontwarn com.google.api.client.googleapis.extensions.android.**
+-dontwarn com.google.android.gms.**
+-dontnote java.nio.file.Files, java.nio.file.Path
+-dontnote **.ILicensingService
+-dontnote sun.misc.Unsafe
+-dontwarn sun.misc.Unsafe

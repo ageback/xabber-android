@@ -16,6 +16,7 @@ package com.xabber.android.data.connection;
 
 import com.xabber.android.data.OnCloseListener;
 import com.xabber.android.data.OnInitializedListener;
+import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.log.LogManager;
@@ -54,6 +55,17 @@ public class ConnectionManager implements OnInitializedListener, OnCloseListener
         LogManager.i(LOG_TAG, "ConnectionManager");
         org.jivesoftware.smackx.ping.PingManager.setDefaultPingInterval(PING_INTERVAL_SECONDS);
         SmackConfiguration.setDefaultReplyTimeout(PACKET_REPLY_TIMEOUT);
+        /*
+            Fix working with Nimbuzz.com
+            Smack have error - ServiceDiscoveryManager: Exception while discovering info for
+                                feature urn:xmpp:http:upload:0 of  conference....com node: null
+
+            That exception shows that HttpFileUploadManager was unable to discover an service
+            So disabling HttpFileUploadManager by default fixed this error
+
+            HttpFileUploadManager will enabled later in ConnectionListener.authenticated() if server support it
+         */
+        SmackConfiguration.addDisabledSmackClass("org.jivesoftware.smackx.httpfileupload.HttpFileUploadManager");
     }
 
     @Override
@@ -66,7 +78,10 @@ public class ConnectionManager implements OnInitializedListener, OnCloseListener
     public void onClose() {
         LogManager.i(LOG_TAG, "onClose");
         for (AccountJid accountJid : AccountManager.getInstance().getEnabledAccounts()) {
-            AccountManager.getInstance().getAccount(accountJid).disconnect();
+            AccountItem accountItem = AccountManager.getInstance().getAccount(accountJid);
+            if (accountItem != null) {
+                accountItem.disconnect();
+            }
         }
     }
 

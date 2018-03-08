@@ -21,26 +21,28 @@ import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 import android.net.Uri;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
+import android.support.annotation.NonNull;
 import android.text.TextUtils;
 
+import com.xabber.android.BuildConfig;
 import com.xabber.android.R;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.account.StatusMode;
-import com.xabber.android.data.connection.NetworkManager;
 import com.xabber.android.data.connection.WakeLockManager;
 import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.extension.attention.AttentionManager;
+import com.xabber.android.data.extension.carbons.CarbonManager;
 import com.xabber.android.data.extension.otr.OTRManager;
 import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.message.MessageManager;
 import com.xabber.android.data.notification.NotificationManager;
 import com.xabber.android.data.roster.AbstractContact;
+import com.xabber.android.data.xaccount.XabberAccountManager;
 import com.xabber.android.service.XabberService;
 import com.xabber.android.ui.adapter.ComparatorByName;
 import com.xabber.android.ui.adapter.ComparatorByStatus;
 import com.xabber.android.ui.color.ColorManager;
 import com.xabber.android.utils.Emoticons;
-import com.xabber.android.data.extension.carbons.CarbonManager;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -80,6 +82,16 @@ public class SettingsManager implements OnInitializedListener,
         } catch (NumberFormatException e) {
             return Integer.parseInt(Application.getInstance().getString(def));
         }
+    }
+
+    private static int getInteger(int key, int def) {
+        return getSharedPreferences().getInt(Application.getInstance().getString(key), def);
+    }
+
+    private static void setInt(int key, int value) {
+        Editor editor = getSharedPreferences().edit();
+        editor.putInt(Application.getInstance().getString(key), value);
+        editor.commit();
     }
 
     private static boolean getBoolean(int key, boolean def) {
@@ -136,6 +148,11 @@ public class SettingsManager implements OnInitializedListener,
                 R.bool.contacts_show_avatars_default);
     }
 
+    public static boolean contactsShowMessages() {
+        return getBoolean(R.string.contacts_show_messages_key,
+                R.bool.contacts_show_messages_default);
+    }
+
     public static boolean contactsShowOffline() {
         return getBoolean(R.string.contacts_show_offline_key,
                 R.bool.contacts_show_offline_default);
@@ -155,16 +172,6 @@ public class SettingsManager implements OnInitializedListener,
                 R.bool.contacts_show_empty_groups_default);
     }
 
-    public static boolean contactsShowActiveChats() {
-        return getBoolean(R.string.contacts_show_active_chats_key,
-                R.bool.contacts_show_active_chats_default);
-    }
-
-    public static boolean contactsStayActiveChats() {
-        return getBoolean(R.string.contacts_stay_active_chats_key,
-                R.bool.contacts_stay_active_chats_default);
-    }
-
     public static boolean contactsShowAccounts() {
         return getBoolean(R.string.contacts_show_accounts_key,
                 R.bool.contacts_show_accounts_default);
@@ -182,11 +189,6 @@ public class SettingsManager implements OnInitializedListener,
             return ComparatorByStatus.COMPARATOR_BY_STATUS;
         else
             throw new IllegalStateException();
-    }
-
-    public static boolean contactsShowPanel() {
-        return getBoolean(R.string.contacts_show_panel_key,
-                R.bool.contacts_show_panel_default);
     }
 
     public static boolean contactsEnableShowAccounts() {
@@ -232,9 +234,44 @@ public class SettingsManager implements OnInitializedListener,
                 R.string.events_sound_default);
     }
 
-    public static boolean eventsVibro() {
-        return getBoolean(R.string.events_vibro_key,
-                R.bool.events_vibro_default);
+    public static Uri eventsSoundMuc() {
+        return getSound(R.string.events_sound_muc_key,
+                Settings.System.DEFAULT_NOTIFICATION_URI,
+                R.string.events_sound_default);
+    }
+
+    public static VibroMode eventsVibroChat() {
+        String value = getString(R.string.events_vibro_chat_key, R.string.events_vibro_bydefault);
+        if (Application.getInstance().getString(R.string.events_vibro_disable).equals(value)) {
+            return VibroMode.disabled;
+        } else if (Application.getInstance().getString(R.string.events_vibro_bydefault).equals(value)) {
+            return VibroMode.defaultvibro;
+        } else if (Application.getInstance().getString(R.string.events_vibro_short).equals(value)) {
+            return VibroMode.shortvibro;
+        } else if (Application.getInstance().getString(R.string.events_vibro_long).equals(value)) {
+            return VibroMode.longvibro;
+        } else if (Application.getInstance().getString(R.string.events_vibro_if_silent).equals(value)) {
+            return VibroMode.onlyifsilent;
+        } else {
+            throw new IllegalStateException();
+        }
+    }
+
+    public static VibroMode eventsVibroMuc() {
+        String value = getString(R.string.events_vibro_muc_key, R.string.events_vibro_bydefault);
+        if (Application.getInstance().getString(R.string.events_vibro_disable).equals(value)) {
+            return VibroMode.disabled;
+        } else if (Application.getInstance().getString(R.string.events_vibro_bydefault).equals(value)) {
+            return VibroMode.defaultvibro;
+        } else if (Application.getInstance().getString(R.string.events_vibro_short).equals(value)) {
+            return VibroMode.shortvibro;
+        } else if (Application.getInstance().getString(R.string.events_vibro_long).equals(value)) {
+            return VibroMode.longvibro;
+        } else if (Application.getInstance().getString(R.string.events_vibro_if_silent).equals(value)) {
+            return VibroMode.onlyifsilent;
+        } else {
+            throw new IllegalStateException();
+        }
     }
 
     public static boolean eventsSuppress100() {
@@ -242,13 +279,18 @@ public class SettingsManager implements OnInitializedListener,
                 R.bool.chat_events_suppress_100_default);
     }
 
-    public static boolean eventsIgnoreSystemVibro() {
-        return getBoolean(R.string.events_ignore_system_vibro_key,
-                R.bool.events_ignore_system_vibro_default);
-    }
+//    public static boolean eventsIgnoreSystemVibro() {
+//        return getBoolean(R.string.events_ignore_system_vibro_key,
+//                R.bool.events_ignore_system_vibro_default);
+//    }
 
     public static boolean eventsLightning() {
         return getBoolean(R.string.events_lightning_key,
+                R.bool.events_lightning_default);
+    }
+
+    public static boolean eventsLightningForMuc() {
+        return getBoolean(R.string.events_lightning_muc_key,
                 R.bool.events_lightning_default);
     }
 
@@ -262,21 +304,39 @@ public class SettingsManager implements OnInitializedListener,
                 R.bool.events_show_text_default);
     }
 
-    public static EventsMessage eventsMessage() {
-        String value = getString(R.string.events_message_key,
-                R.string.events_message_default);
-        if (Application.getInstance()
-                .getString(R.string.events_message_none_value).equals(value))
-            return EventsMessage.none;
-        else if (Application.getInstance()
-                .getString(R.string.events_message_chat_value).equals(value))
-            return EventsMessage.chat;
-        else if (Application.getInstance()
-                .getString(R.string.events_message_chat_and_muc_value)
-                .equals(value))
-            return EventsMessage.chatAndMuc;
-        else
-            throw new IllegalStateException();
+    public static boolean eventsShowTextOnMuc() {
+        return getBoolean(R.string.events_show_text_muc_key,
+                R.bool.events_show_text_default);
+    }
+
+    public static boolean eventsOnChat() {
+        return getBoolean(R.string.events_on_chat_key,
+                R.bool.events_on_chat_default);
+    }
+
+    public static boolean eventsOnMuc() {
+        return getBoolean(R.string.events_on_muc_key,
+                R.bool.events_on_muc_default);
+    }
+
+    public static boolean eventsInAppSounds() {
+        return getBoolean(R.string.events_in_app_sounds_key,
+                R.bool.events_in_app_sounds_default);
+    }
+
+    public static boolean eventsInAppVibrate() {
+        return getBoolean(R.string.events_in_app_vibrate_key,
+                R.bool.events_in_app_vibrate_default);
+    }
+
+    public static boolean eventsInAppPreview() {
+        return getBoolean(R.string.events_in_app_preview_key,
+                R.bool.events_in_app_preview_default);
+    }
+
+    public static boolean eventsInChatSounds() {
+        return getBoolean(R.string.events_in_chat_sounds_key,
+                R.bool.events_in_chat_sounds_default);
     }
 
     public static boolean eventsVisibleChat() {
@@ -427,6 +487,23 @@ public class SettingsManager implements OnInitializedListener,
                 R.bool.connection_use_carbons_default);
     }
 
+    public static DnsResolverType connectionDnsResolver() {
+        String value = getString(R.string.connection_dns_resolver_type_key,
+                R.string.connection_dns_resolver_type_default);
+        return getDnsResolverType(value);
+    }
+
+    @NonNull
+    public static DnsResolverType getDnsResolverType(String value) {
+        if (Application.getInstance().getString(R.string.connection_dns_resolver_type_dns_java_resolver_value).equals(value)) {
+            return DnsResolverType.dnsJavaResolver;
+        } else if (Application.getInstance().getString(R.string.connection_dns_resolver_type_mini_dns_resolver_value).equals(value)) {
+            return DnsResolverType.miniDnsResolver;
+        } else {
+            throw new IllegalStateException("Unknown preference value for DNS resolver type");
+        }
+    }
+
     public static boolean connectionUsePlainTextAuth() {
         return getBoolean(R.string.connection_use_plain_text_auth_key,
                 R.bool.connection_use_plain_text_auth_default);
@@ -476,6 +553,21 @@ public class SettingsManager implements OnInitializedListener,
 
     public static boolean sendCrashReports() {
         return getBoolean(R.string.debug_crash_reports_key, R.bool.debug_crash_reports_default);
+    }
+
+    public static boolean isCrashReportsSupported() {
+        return BuildConfig.FLAVOR.equals("beta")
+                || BuildConfig.FLAVOR.equals("vip")
+                || BuildConfig.FLAVOR.equals("prod");
+
+    }
+
+    public static boolean isCrashReportsDialogShown() {
+        return getBoolean(R.string.debug_crash_reports_dialog_key, false);
+    }
+
+    public static void setCrashReportsDialogShown() {
+        setBoolean(R.string.debug_crash_reports_dialog_key, true);
     }
 
     public static InterfaceTheme interfaceTheme() {
@@ -529,6 +621,24 @@ public class SettingsManager implements OnInitializedListener,
             throw new IllegalStateException();
     }
 
+    public static SpamFilterMode spamFilterMode() {
+        String value = getString(R.string.spam_filter_key, R.string.spam_filter_default);
+
+        if (Application.getInstance().getString(R.string.spam_filter_1_value).equals(value))
+            return SpamFilterMode.disabled;
+
+        else if (Application.getInstance().getString(R.string.spam_filter_2_value).equals(value))
+            return SpamFilterMode.onlyRoster;
+
+        else if (Application.getInstance().getString(R.string.spam_filter_3_value).equals(value))
+            return SpamFilterMode.authCaptcha;
+
+        else if (Application.getInstance().getString(R.string.spam_filter_4_value).equals(value))
+            return SpamFilterMode.noAuth;
+
+        else throw new IllegalStateException();
+    }
+
     public static boolean securityOtrHistory() {
         return getBoolean(R.string.security_otr_history_key,
                 R.bool.security_otr_history_default);
@@ -554,6 +664,22 @@ public class SettingsManager implements OnInitializedListener,
 
     public static void setStartAtBootSuggested() {
         setBoolean(R.string.start_at_boot_suggested_key, true);
+    }
+
+    public static boolean chatShowcaseSuggested() {
+        return getBoolean(R.string.chat_showcase_suggested_key, false);
+    }
+
+    public static void setChatShowcaseSuggested() {
+        setBoolean(R.string.chat_showcase_suggested_key, true);
+    }
+
+    public static boolean contactShowcaseSuggested() {
+        return getBoolean(R.string.contact_showcase_suggested_key, false);
+    }
+
+    public static void setContactShowcaseSuggested() {
+        setBoolean(R.string.contact_showcase_suggested_key, true);
     }
 
     public static boolean contactIntegrationSuggested() {
@@ -615,6 +741,40 @@ public class SettingsManager implements OnInitializedListener,
 
     public static void setStatusText(String statusText) {
         setString(R.string.status_text_key, statusText);
+    }
+
+    public static void setLastSyncDate(String lastSyncDate) {
+        setString(R.string.last_sync_date_key, lastSyncDate);
+    }
+
+    public static String getLastSyncDate() {
+        return getString(R.string.last_sync_date_key, R.string.last_sync_date_default);
+    }
+
+    public static void setSyncAllAccounts(boolean syncAll) {
+        setBoolean(R.string.sync_all_key, syncAll);
+        if (syncAll) XabberAccountManager.getInstance().setAllExistingAccountSync(true);
+    }
+
+    public static boolean isSyncAllAccounts() {
+        if (AccountManager.getInstance().haveNotAllowedSyncAccounts()) return false;
+        return getBoolean(R.string.sync_all_key, true);
+    }
+
+    public static void setLastOrderChangeTimestamp(int lastOrderChange) {
+        setInt(R.string.order_last_timestamp_key, lastOrderChange);
+    }
+
+    public static int getLastOrderChangeTimestamp() {
+        return getInteger(R.string.order_last_timestamp_key, 1);
+    }
+
+    public static void setLastPatreonLoadTimestamp(int timestamp) {
+        setInt(R.string.patreon_last_load_timestamp_key, timestamp);
+    }
+
+    public static int getLastPatreonLoadTimestamp() {
+        return getInteger(R.string.patreon_last_load_timestamp_key, 1);
     }
 
     @Override
@@ -741,6 +901,20 @@ public class SettingsManager implements OnInitializedListener,
 
     }
 
+    public enum DnsResolverType {
+        /**
+         * Use DNS resolver based on dnsjava
+         * http://dnsjava.org/
+         */
+        dnsJavaResolver,
+
+        /**
+         * Use DNS resolver based on MiniDNS - experimental
+         * https://github.com/rtreffer/minidns
+         */
+        miniDnsResolver
+    }
+
     public enum EventsMessage {
 
         /**
@@ -819,6 +993,57 @@ public class SettingsManager implements OnInitializedListener,
          */
         required
 
+    }
+
+    public enum SpamFilterMode {
+        /**
+         * Spam filter is disabled.
+         */
+        disabled,
+
+        /**
+         * Receiving messages only from roster.
+         */
+        onlyRoster,
+
+        /**
+         * Receiving messages only from roster.
+         * Auth requests only with captcha.
+         */
+        authCaptcha,
+
+        /**
+         * Receiving messages only from roster.
+         * No auth requests.
+         */
+        noAuth
+    }
+
+    public enum VibroMode {
+        /**
+         * Vibrate is disabled.
+         */
+        disabled,
+
+        /**
+         * Default vibration
+         */
+        defaultvibro,
+
+        /**
+         * Short vibration
+         */
+        shortvibro,
+
+        /**
+         * Long vibration
+         */
+        longvibro,
+
+        /**
+         * Vibration only in silent mode
+         */
+        onlyifsilent
     }
 
 }

@@ -3,12 +3,14 @@ package com.xabber.android.ui.fragment;
 import android.app.Activity;
 import android.app.Fragment;
 import android.os.Bundle;
+import android.text.method.LinkMovementMethod;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.xabber.android.R;
@@ -16,6 +18,8 @@ import com.xabber.android.data.Application;
 import com.xabber.android.data.NetworkException;
 import com.xabber.android.data.account.AccountManager;
 import com.xabber.android.data.entity.AccountJid;
+import com.xabber.android.data.xaccount.XabberAccount;
+import com.xabber.android.data.xaccount.XabberAccountManager;
 import com.xabber.android.ui.activity.AccountAddActivity;
 import com.xabber.android.ui.activity.AccountActivity;
 import com.xabber.android.ui.dialog.OrbotInstallerDialog;
@@ -28,6 +32,7 @@ import cn.net.wesoft.android.utils.MD5;
 public class AccountAddFragment extends Fragment implements View.OnClickListener {
 
     private CheckBox storePasswordView;
+    private CheckBox chkSync;
     private CheckBox storePasswordMd5EncryptView;
     private CheckBox useOrbotView;
     private CheckBox createAccountCheckBox;
@@ -46,6 +51,12 @@ public class AccountAddFragment extends Fragment implements View.OnClickListener
 
         storePasswordView = (CheckBox) view.findViewById(R.id.store_password);
         storePasswordMd5EncryptView = (CheckBox) view.findViewById(R.id.store_password_md5_encrypt);
+        chkSync = (CheckBox) view.findViewById(R.id.chkSync);
+        if (XabberAccountManager.getInstance().getAccount() == null) {
+            chkSync.setVisibility(View.GONE);
+            chkSync.setChecked(false);
+        }
+
         useOrbotView = (CheckBox) view.findViewById(R.id.use_orbot);
         createAccountCheckBox = (CheckBox) view.findViewById(R.id.register_account);
         createAccountCheckBox.setOnClickListener(this);
@@ -55,6 +66,9 @@ public class AccountAddFragment extends Fragment implements View.OnClickListener
         passwordConfirmEditText = (EditText) view.findViewById(R.id.confirm_password);
 
         passwordConfirmView = (LinearLayout) view.findViewById(R.id.confirm_password_layout);
+
+        ((TextView) view.findViewById(R.id.account_help))
+                .setMovementMethod(LinkMovementMethod.getInstance());
 
         return view;
     }
@@ -88,17 +102,21 @@ public class AccountAddFragment extends Fragment implements View.OnClickListener
         AccountJid account;
         try {
             account = AccountManager.getInstance().addAccount(
-                    userView.getText().toString(),
+                    userView.getText().toString().trim(),
                     storePasswordMd5EncryptView.isChecked() ? MD5.MD5(passwordView.getText().toString()):passwordView.getText().toString(),
-                    accountType,
+                    "",
                     false,
                     storePasswordView.isChecked(),
+                    chkSync.isChecked(),
                     useOrbotView.isChecked(),
-                    createAccountCheckBox.isChecked());
+                    createAccountCheckBox.isChecked(), true);
         } catch (NetworkException e) {
             Application.getInstance().onError(e);
             return;
         }
+
+        // update remote settings
+        if (chkSync.isChecked()) XabberAccountManager.getInstance().updateSettingsWithSaveLastAccount(account);
 
         getActivity().setResult(Activity.RESULT_OK, AccountAddActivity.createAuthenticatorResult(account));
         startActivity(AccountActivity.createIntent(getActivity(), account));

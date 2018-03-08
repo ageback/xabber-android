@@ -3,8 +3,12 @@ android:
   components:
     - platform-tools
     - tools
+    - build-tools-27.0.3
+    - build-tools-26.0.2
     - build-tools-25.0.2
     - build-tools-25.0.0
+    - android-27
+    - android-26
     - android-25
     - android-23
     - extra-android-m2repository
@@ -13,6 +17,9 @@ android:
   licenses:
     - '.+'
 
+before_install:
+- yes | sdkmanager "platforms;android-27"
+
 install:
   # Check install section: http://docs.travis-ci.com/user/build-configuration/#install
   # If you'd like to skip the install stage entirely, set it to true and nothing will be run.
@@ -20,7 +27,7 @@ install:
 
 script:
   # By default Travis-ci executes './gradlew build connectedCheck' if no 'script:' section found.
-  - ./gradlew build
+  - ./gradlew clean build -Pbuild=dev
 
 
 env:

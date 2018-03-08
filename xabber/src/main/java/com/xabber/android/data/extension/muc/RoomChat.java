@@ -25,6 +25,7 @@ import com.xabber.android.data.database.MessageDatabaseManager;
 import com.xabber.android.data.database.messagerealm.MessageItem;
 import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.UserJid;
+import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.message.AbstractChat;
 import com.xabber.android.data.message.ChatAction;
 import com.xabber.android.data.message.chat.ChatManager;
@@ -49,6 +50,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.UUID;
 
 import io.realm.Realm;
 
@@ -116,7 +118,7 @@ public class RoomChat extends AbstractChat {
         return user.getJid().asEntityBareJidIfPossible();
     }
 
-    Resourcepart getNickname() {
+    public Resourcepart getNickname() {
         return nickname;
     }
 
@@ -182,25 +184,30 @@ public class RoomChat extends AbstractChat {
     }
 
     @Override
-    protected boolean notifyAboutMessage() {
-        return SettingsManager.eventsMessage() == SettingsManager.EventsMessage.chatAndMuc;
+    public boolean notifyAboutMessage() {
+        switch (notificationState.getMode()) {
+            case enabled: return true;
+            case disabled: return false;
+            default: return SettingsManager.eventsOnMuc();
+        }
     }
 
     @Override
-    protected boolean onPacket(UserJid bareAddress, Stanza stanza) {
-        if (!super.onPacket(bareAddress, stanza)) {
+    protected boolean onPacket(UserJid bareAddress, Stanza stanza, boolean isCarbons) {
+        if (!super.onPacket(bareAddress, stanza, isCarbons)) {
             return false;
         }
 
-        MUCUser mucUserExtension = MUCUser.from(stanza);
-        if (mucUserExtension != null && mucUserExtension.getInvite() != null) {
-            return false;
-        }
+//        MUCUser mucUserExtension = MUCUser.from(stanza);
+//        if (mucUserExtension != null && mucUserExtension.getInvite() != null) {
+//            return false;
+//        }
 
         final org.jxmpp.jid.Jid from = stanza.getFrom();
         final Resourcepart resource = from.getResourceOrNull();
         if (stanza instanceof Message) {
             final Message message = (Message) stanza;
+
             if (message.getType() == Message.Type.error) {
                 UserJid invite = invites.remove(message.getStanzaId());
                 if (invite != null) {
@@ -233,6 +240,9 @@ public class RoomChat extends AbstractChat {
             } else {
                 boolean notify = true;
                 String stanzaId = message.getStanzaId();
+                // disabling because new messages without stanza will be repeated
+                //if (stanzaId == null) stanzaId = UUID.randomUUID().toString();
+
                 DelayInformation delayInformation = DelayInformation.from(message);
                 Date delay = null;
                 if (delayInformation != null) {
@@ -243,22 +253,18 @@ public class RoomChat extends AbstractChat {
                     notify = false;
                 }
 
-                Realm realm = MessageDatabaseManager.getInstance().getNewBackgroundRealm();
+                Realm realm = MessageDatabaseManager.getInstance().getRealmUiThread();
                 final MessageItem sameMessage = realm
                         .where(MessageItem.class)
                         .equalTo(MessageItem.Fields.STANZA_ID, stanzaId)
                         .findFirst();
 
-                try {
-                    // Server send our own message back
-                    if (sameMessage != null) {
-                        realm.beginTransaction();
-                        sameMessage.setDelivered(true);
-                        realm.commitTransaction();
-                        return true;
-                    }
-                } finally {
-                    realm.close();
+                // Server send our own message back
+                if (sameMessage != null) {
+                    realm.beginTransaction();
+                    sameMessage.setDelivered(true);
+                    realm.commitTransaction();
+                    return true;
                 }
 
                 if (isSelf(resource)) { // Own message from other client
@@ -266,13 +272,14 @@ public class RoomChat extends AbstractChat {
                 }
 
                 updateThreadId(message.getThread());
-                createAndSaveNewMessage(resource, text, null, delay, true, notify, false, false, message.getStanzaId());
+                createAndSaveNewMessage(resource, text, null, delay, true, notify, false, false, stanzaId);
             }
         } else if (stanza instanceof Presence) {
             Presence presence = (Presence) stanza;
             if (presence.getType() == Presence.Type.available) {
                 Occupant oldOccupant = occupants.get(resource);
                 Occupant newOccupant = createOccupant(resource, presence);
+                newOccupant.setJid(from);
                 occupants.put(resource, newOccupant);
                 if (oldOccupant == null) {
                     onAvailable(resource);
@@ -336,7 +343,7 @@ public class RoomChat extends AbstractChat {
      * @param resource
      */
     private boolean isSelf(Resourcepart resource) {
-        return nickname.equals(resource);
+        return nickname != null && resource != null && nickname.equals(resource);
     }
 
     /**
@@ -448,7 +455,8 @@ public class RoomChat extends AbstractChat {
      */
     private void onKick(Resourcepart resource, org.jxmpp.jid.Jid actor) {
         if (showStatusChange()) {
-            newAction(resource, actor.toString(), ChatAction.kick);
+            if (actor != null) newAction(resource, actor.toString(), ChatAction.kick);
+            else newAction(resource, "", ChatAction.kick);
         }
         if (isSelf(resource)) {
             MUCManager.getInstance().leaveRoom(account, getRoom());

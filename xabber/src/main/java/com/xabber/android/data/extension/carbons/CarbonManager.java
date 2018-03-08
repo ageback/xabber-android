@@ -15,6 +15,7 @@ import org.jivesoftware.smack.SmackException;
 import org.jivesoftware.smack.XMPPException;
 import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smackx.carbons.packet.CarbonExtension;
+import org.jivesoftware.smackx.hints.element.NoStoreHint;
 
 import java.util.Collection;
 import java.util.Map;
@@ -133,13 +134,23 @@ public class CarbonManager {
 
         SecurityLevel securityLevel = OTRManager.getInstance().getSecurityLevel(abstractChat.getAccount(), abstractChat.getUser());
 
-        if (securityLevel == SecurityLevel.plain) {
+        if (securityLevel == SecurityLevel.plain || securityLevel == SecurityLevel.finished) {
             return;
         }
 
-        if (isCarbonsEnabledForConnection(AccountManager.getInstance().getAccount(abstractChat.getAccount()))) {
-            return;
-        }
+//        if (isCarbonsEnabledForConnection(AccountManager.getInstance().getAccount(abstractChat.getAccount()))) {
+//            return;
+//        }
         CarbonExtension.Private.addTo(message);
+    }
+
+    /**
+     * Marks the message as non-carbon-copied
+     * Should used for establishing OTR-session
+     * @param message      the <tt>Message</tt> to be sent
+     */
+    public void setMessageToIgnoreCarbons(Message message) {
+        CarbonExtension.Private.addTo(message);
+        NoStoreHint.set(message);
     }
 }
