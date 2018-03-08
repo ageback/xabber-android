@@ -29,8 +29,8 @@ import cn.net.wesoft.android.utils.MD5;
 public class AccountAddFragment extends Fragment implements View.OnClickListener {
 
     private CheckBox storePasswordView;
-    private CheckBox storePasswordMd5EncryptView;
     private CheckBox chkSync;
+    private CheckBox storePasswordMd5EncryptView;
     private CheckBox useOrbotView;
     private CheckBox createAccountCheckBox;
     private LinearLayout passwordConfirmView;
@@ -47,13 +47,12 @@ public class AccountAddFragment extends Fragment implements View.OnClickListener
         View view = inflater.inflate(R.layout.fragment_account_add, container, false);
 
         storePasswordView = (CheckBox) view.findViewById(R.id.store_password);
-        storePasswordMd5EncryptView = (CheckBox) view.findViewById(R.id.store_password_md5_encrypt);
         chkSync = (CheckBox) view.findViewById(R.id.chkSync);
         if (XabberAccountManager.getInstance().getAccount() == null) {
             chkSync.setVisibility(View.GONE);
             chkSync.setChecked(false);
         }
-
+        storePasswordMd5EncryptView = (CheckBox) view.findViewById(R.id.store_password_md5_encrypt);
         useOrbotView = (CheckBox) view.findViewById(R.id.use_orbot);
         createAccountCheckBox = (CheckBox) view.findViewById(R.id.register_account);
         createAccountCheckBox.setOnClickListener(this);

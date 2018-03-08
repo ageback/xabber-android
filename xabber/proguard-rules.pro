@@ -57,7 +57,6 @@
   public *;
 }
 
--dontwarn com.xabber.**
 # Google API-Client
 -keepattributes Signature,RuntimeVisibleAnnotations,AnnotationDefault
 -keepclassmembers class * {
@@ -70,3 +69,5 @@
 -dontnote **.ILicensingService
 -dontnote sun.misc.Unsafe
 -dontwarn sun.misc.Unsafe
+
+-dontwarn com.xabber.**
