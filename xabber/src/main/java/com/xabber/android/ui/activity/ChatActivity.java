@@ -34,6 +34,7 @@ import android.view.WindowManager;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 
@@ -64,6 +65,7 @@ import com.xabber.android.data.message.RegularChat;
 import com.xabber.android.data.message.chat.ChatManager;
 import com.xabber.android.data.notification.NotificationManager;
 import com.xabber.android.data.roster.AbstractContact;
+import com.xabber.android.data.roster.OnChatStateListener;
 import com.xabber.android.data.roster.OnContactChangedListener;
 import com.xabber.android.data.roster.PresenceManager;
 import com.xabber.android.data.roster.RosterContact;
@@ -97,7 +99,7 @@ import static com.xabber.android.ui.adapter.ChatViewerAdapter.PAGE_POSITION_RECE
  * @author alexander.ivanov
  */
 public class ChatActivity extends ManagedActivity implements OnContactChangedListener,
-        OnAccountChangedListener, ViewPager.OnPageChangeListener,
+        OnAccountChangedListener, OnChatStateListener, ViewPager.OnPageChangeListener,
         ChatFragment.ChatViewerFragmentListener, OnBlockedListChangedListener,
         RecentChatFragment.Listener, ChatViewerAdapter.FinishUpdateListener,
         ContactVcardViewerFragment.Listener, Toolbar.OnMenuItemClickListener {
@@ -148,6 +150,8 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
 
     private Toolbar toolbar;
     private View contactTitleView;
+    private View showcaseView;
+    private Button btnShowcaseGotIt;
 
     boolean showArchived = false;
 
@@ -264,6 +268,7 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
         LogManager.i(LOG_TAG, "onCreate " + savedInstanceState);
 
         setContentView(R.layout.activity_chat);
+        getWindow().setBackgroundDrawable(null);
 
         contactTitleView = findViewById(R.id.contact_title);
         contactTitleView.setOnClickListener(new View.OnClickListener() {
@@ -282,6 +287,8 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
                 NavUtils.navigateUpFromSameTask(ChatActivity.this);
             }
         });
+
+        showcaseView = findViewById(R.id.showcaseView);
 
         statusBarPainter = new StatusBarPainter(this);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN);
@@ -319,6 +326,7 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
 
         isVisible = true;
 
+        Application.getInstance().addUIListener(OnChatStateListener.class, this);
         Application.getInstance().addUIListener(OnContactChangedListener.class, this);
         Application.getInstance().addUIListener(OnAccountChangedListener.class, this);
         Application.getInstance().addUIListener(OnBlockedListChangedListener.class, this);
@@ -351,6 +359,11 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
         if (intent.getBooleanExtra(EXTRA_OTR_REQUEST, false) ||
                 intent.getBooleanExtra(EXTRA_OTR_PROGRESS, false)) {
             handleOtrIntent(intent);
+        }
+
+        //showcase
+        if (!SettingsManager.chatShowcaseSuggested()) {
+            showShowcase(true);
         }
     }
 
@@ -474,6 +487,7 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
     @Override
     protected void onPause() {
         super.onPause();
+        Application.getInstance().removeUIListener(OnChatStateListener.class, this);
         Application.getInstance().removeUIListener(OnContactChangedListener.class, this);
         Application.getInstance().removeUIListener(OnAccountChangedListener.class, this);
         Application.getInstance().removeUIListener(OnBlockedListChangedListener.class, this);
@@ -532,6 +546,11 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
     }
 
     @Override
+    public void onChatStateChanged(Collection<RosterContact> entities) {
+        updateToolbar();
+    }
+
+    @Override
     public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
         hideKeyboard(this);
     }
@@ -564,6 +583,11 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
         NewContactTitleInflater.updateTitle(contactTitleView, this,
                 RosterManager.getInstance().getBestContact(account, user), getNotifMode());
         toolbar.setBackgroundColor(ColorManager.getInstance().getAccountPainter().getAccountMainColor(account));
+        if (selectedPagePosition == 1)
+            toolbar.setOverflowIcon(getResources().getDrawable(R.drawable.ic_overflow_menu_white_24dp));
+        else if (selectedPagePosition == 2)
+            toolbar.setOverflowIcon(getResources().getDrawable(R.drawable.ic_settings_white_24dp));
+
         setUpOptionsMenu(toolbar.getMenu());
     }
 
@@ -604,8 +628,8 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
     }
 
     @Override
-    public void onChatSelected(BaseEntity chat) {
-        selectChat(chat.getAccount(), chat.getUser());
+    public void onChatSelected(AccountJid accountJid, UserJid userJid) {
+        selectChat(accountJid, userJid);
     }
 
     @Override
@@ -703,19 +727,32 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
         menu.findItem(R.id.action_unmute_chat).setVisible(!abstractChat.notifyAboutMessage());
     }
 
-    private void setUpMUCMenu(Menu menu, AbstractChat abstractChat) {
-
+    private void setUpMUCInfoMenu(Menu menu, AbstractChat abstractChat) {
         RoomState chatState = ((RoomChat) abstractChat).getState();
         if (chatState == RoomState.unavailable)
             menu.findItem(R.id.action_join_conference).setVisible(true);
         else {
             menu.findItem(R.id.action_invite_to_chat).setVisible(true);
 
-            if (chatState == RoomState.error) {
-                menu.findItem(R.id.action_authorization_settings).setVisible(true);
-            } else {
+            if (chatState != RoomState.error) {
                 menu.findItem(R.id.action_leave_conference).setVisible(true);
             }
+        }
+
+        menu.findItem(R.id.action_remove_contact).setVisible(false);
+        menu.findItem(R.id.action_delete_conference).setVisible(true);
+
+        menu.findItem(R.id.action_send_contact).setVisible(false);
+        menu.findItem(R.id.action_edit_alias).setVisible(false);
+        menu.findItem(R.id.action_edit_groups).setVisible(false);
+        menu.findItem(R.id.action_block_contact).setVisible(false);
+    }
+
+    private void setUpMUCMenu(Menu menu, AbstractChat abstractChat) {
+
+        RoomState chatState = ((RoomChat) abstractChat).getState();
+        if (chatState == RoomState.error) {
+            menu.findItem(R.id.action_authorization_settings).setVisible(true);
         }
 
         setUpRegularChatMenu(menu, abstractChat);
@@ -742,6 +779,8 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
             if (selectedPagePosition == PAGE_POSITION_CHAT_INFO) {
                 inflater.inflate(R.menu.toolbar_contact, menu);
                 setUpContactInfoMenu(menu, abstractChat);
+                if (abstractChat instanceof RoomChat)
+                    setUpMUCInfoMenu(menu, abstractChat);
                 return;
             }
             if (abstractChat instanceof RoomChat) {
@@ -792,6 +831,10 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
                 return true;
 
             /* regular chat options menu */
+
+            case R.id.action_send_contact:
+                sendContact();
+                return true;
 
             case R.id.action_view_contact:
                 if (chatFragment != null)
@@ -863,7 +906,7 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
             /* conference specific options menu */
 
             case R.id.action_join_conference:
-                MUCManager.getInstance().joinRoom(account, user.getJid().asEntityBareJidIfPossible(), true);
+                onJoinConferenceClick();
                 return true;
 
             case R.id.action_invite_to_chat:
@@ -897,6 +940,11 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
                 return true;
 
             case R.id.action_remove_contact:
+                ContactDeleteDialogFragment.newInstance(account, user)
+                        .show(getFragmentManager(), "CONTACT_DELETE");
+                return true;
+
+            case R.id.action_delete_conference:
                 ContactDeleteDialogFragment.newInstance(account, user)
                         .show(getFragmentManager(), "CONTACT_DELETE");
                 return true;
@@ -954,5 +1002,34 @@ public class ChatActivity extends ManagedActivity implements OnContactChangedLis
         });
 
         builder.show();
+    }
+
+    private void sendContact() {
+        RosterContact rosterContact = RosterManager.getInstance().getRosterContact(account, user);
+        String text = rosterContact != null ? rosterContact.getName() + "\nxmpp:" + user.toString() : "xmpp:" + user.toString();
+
+        Intent sendIntent = new Intent();
+        sendIntent.setAction(Intent.ACTION_SEND);
+        sendIntent.putExtra(Intent.EXTRA_TEXT, text);
+        sendIntent.setType("text/plain");
+        startActivity(Intent.createChooser(sendIntent, getResources().getText(R.string.send_to)));
+    }
+
+    public void onJoinConferenceClick() {
+        MUCManager.getInstance().joinRoom(account, user.getJid().asEntityBareJidIfPossible(), true);
+    }
+
+    public void showShowcase(boolean show) {
+        showcaseView.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (show) {
+            btnShowcaseGotIt = (Button) findViewById(R.id.btnGotIt);
+            btnShowcaseGotIt.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    SettingsManager.setChatShowcaseSuggested();
+                    showShowcase(false);
+                }
+            });
+        }
     }
 }

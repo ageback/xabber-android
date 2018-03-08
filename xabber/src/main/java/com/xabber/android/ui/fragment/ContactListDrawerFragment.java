@@ -2,7 +2,7 @@ package com.xabber.android.ui.fragment;
 
 
 import android.app.Activity;
-import android.app.Fragment;
+import android.support.v4.app.Fragment;
 import android.content.pm.PackageManager;
 import android.content.res.TypedArray;
 import android.os.Build;
@@ -227,7 +227,7 @@ public class ContactListDrawerFragment extends Fragment implements View.OnClickL
             if (XabberAccount.STATUS_REGISTERED.equals(account.getAccountStatus())) {
 
                 tvAccountName.setText(accountName);
-                tvAccountEmail.setText(getString(R.string.username, account.getUsername()));
+                tvAccountEmail.setText(account.getUsername());
             }
         } else {
             llAccountInfo.setVisibility(View.GONE);

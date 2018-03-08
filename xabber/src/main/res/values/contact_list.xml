@@ -13,6 +13,7 @@
     <string name="application_state_empty">You don\'t have any accounts</string>
     <string name="application_state_no_contacts">You have no contacts</string>
     <string name="application_state_no_online">Nobody online</string>
+    <string name="application_state_nobody_by_filter">No contacts found</string>
     <string name="application_state_offline">No online accounts</string>
     <string name="application_state_roster">Connected.</string>
     <string name="application_state_starting">Launching application…</string>
@@ -116,11 +117,10 @@
     <string name="all_chats">All chats</string>
     <string name="no_messages">No messages</string>
     <string name="show_all_chats">Show all chats</string>
-
+    <string name="category_title_contacts">Contacts</string>
     <string name="SOCIAL_AUTH_FACEBOOK_KEY">Facebook Key</string>
     <string name="SOCIAL_AUTH_FACEBOOK_SCHEME">Facebook Scheme</string>
 
-    <string name="SOCIAL_AUTH_GOOGLE_SECRET">SOCIAL_AUTH_GOOGLE_SECRET</string>
     <string name="SOCIAL_AUTH_GOOGLE_KEY">SOCIAL_AUTH_GOOGLE_KEY</string>
 
     <string name="SOCIAL_AUTH_TWITTER_SECRET">SOCIAL_AUTH_TWITTER_SECRET</string>

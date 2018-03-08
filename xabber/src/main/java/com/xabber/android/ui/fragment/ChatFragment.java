@@ -26,11 +26,13 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewStub;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.PopupWindow;
 import android.widget.RelativeLayout;
@@ -62,6 +64,8 @@ import com.xabber.android.data.extension.mam.MamManager;
 import com.xabber.android.data.extension.mam.PreviousHistoryLoadFinishedEvent;
 import com.xabber.android.data.extension.mam.PreviousHistoryLoadStartedEvent;
 import com.xabber.android.data.extension.muc.MUCManager;
+import com.xabber.android.data.extension.muc.RoomChat;
+import com.xabber.android.data.extension.muc.RoomState;
 import com.xabber.android.data.extension.otr.AuthAskEvent;
 import com.xabber.android.data.extension.otr.OTRManager;
 import com.xabber.android.data.extension.otr.SecurityLevel;
@@ -138,6 +142,7 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     private View lastHistoryProgressBar;
     private View previousHistoryProgressBar;
 
+    private ViewStub stubNotify;
     private RelativeLayout notifyLayout;
     private TextView tvNotifyTitle;
     private TextView tvNotifyAction;
@@ -147,6 +152,10 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     private LinearLayoutManager layoutManager;
     private SwipeRefreshLayout swipeContainer;
     private View placeholder;
+    private LinearLayout inputLayout;
+    private ViewStub stubJoin;
+    private LinearLayout joinLayout;
+    private LinearLayout actionJoin;
 
     boolean isInputEmpty = true;
     private boolean skipOnTextChanges = false;
@@ -240,7 +249,8 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         });
 
         // to avoid strange bug on some 4.x androids
-        view.findViewById(R.id.input_layout).setBackgroundColor(ColorManager.getInstance().getChatInputBackgroundColor());
+        inputLayout = (LinearLayout) view.findViewById(R.id.input_layout);
+        inputLayout.setBackgroundColor(ColorManager.getInstance().getChatInputBackgroundColor());
 
         view.findViewById(R.id.button_send_message).setOnClickListener(
                 new View.OnClickListener() {
@@ -292,24 +302,16 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
             }
         });
 
-        tvNotifyTitle = (TextView) view.findViewById(R.id.tvNotifyTitle);
-        tvNotifyAction = (TextView) view.findViewById(R.id.tvNotifyAction);
-        notifyLayout = (RelativeLayout) view.findViewById(R.id.notifyLayout);
-        notifyLayout.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (notifyIntent != null) startActivity(notifyIntent);
-                notifyLayout.setVisibility(View.GONE);
-            }
-        });
+        stubNotify = (ViewStub) view.findViewById(R.id.stubNotify);
+        stubJoin = (ViewStub) view.findViewById(R.id.stubJoin);
 
         setChat(account, user);
 
         if (SettingsManager.chatsShowBackground()) {
             if (SettingsManager.interfaceTheme() == SettingsManager.InterfaceTheme.dark) {
-                view.setBackgroundDrawable(getResources().getDrawable(R.drawable.chat_background_repeat_dark));
+                view.setBackgroundResource(R.drawable.chat_background_repeat_dark);
             } else {
-                view.setBackgroundDrawable(getResources().getDrawable(R.drawable.chat_background_repeat));
+                view.setBackgroundResource(R.drawable.chat_background_repeat);
             }
         } else {
             view.setBackgroundColor(ColorManager.getInstance().getChatBackgroundColor());
@@ -376,6 +378,8 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
 
         AbstractChat chat = getChat();
         if (chat != null) chat.resetUnreadMessageCount();
+
+        showJoinButtonIfNeed();
     }
 
     @Override
@@ -1071,6 +1075,10 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         if (v.getId() == R.id.placeholder) {
             ((ChatActivity)getActivity()).selectPage(1, true);
         }
+        if (v.getId() == R.id.actionJoin) {
+            ((ChatActivity)getActivity()).onJoinConferenceClick();
+            showJoinButtonIfNeed();
+        }
     }
 
     public void showContactInfo() {
@@ -1323,20 +1331,67 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         if (chat != null && chat instanceof RegularChat) {
             notifyIntent = ((RegularChat)chat).getIntent();
             if (notifyIntent != null) {
-                if (notifyIntent.getBooleanExtra(QuestionActivity.EXTRA_FIELD_CANCEL, false)) {
-                    tvNotifyTitle.setText(R.string.otr_verification_progress_title);
-                    tvNotifyAction.setText(R.string.otr_verification_notify_button_cancel);
-                } else {
-                    tvNotifyTitle.setText(R.string.otr_verification_notify_title);
-                    tvNotifyAction.setText(R.string.otr_verification_notify_button);
-                }
-                notifyLayout.setVisibility(View.VISIBLE);
-            } else notifyLayout.setVisibility(View.GONE);
+                setupNotifyLayout(notifyIntent);
+            } else if (notifyLayout != null)
+                notifyLayout.setVisibility(View.GONE);
         }
     }
 
     public void showPlaceholder(boolean show) {
         if (show) placeholder.setVisibility(View.VISIBLE);
         else placeholder.setVisibility(View.GONE);
+    }
+
+    private void inflateJoinLayout() {
+        View view = stubJoin.inflate();
+        joinLayout = (LinearLayout) view.findViewById(R.id.joinLayout);
+        actionJoin = (LinearLayout) view.findViewById(R.id.actionJoin);
+        actionJoin.setOnClickListener(this);
+    }
+
+    public void showJoinButtonIfNeed() {
+        AbstractChat chat = getChat();
+        if (chat != null && chat instanceof RoomChat) {
+            RoomState chatState = ((RoomChat) chat).getState();
+            if (chatState == RoomState.unavailable) {
+                if (joinLayout == null)
+                    inflateJoinLayout();
+                joinLayout.setVisibility(View.VISIBLE);
+                inputView.setVisibility(View.GONE);
+            } else {
+                if (joinLayout != null)
+                    joinLayout.setVisibility(View.GONE);
+                inputView.setVisibility(View.VISIBLE);
+            }
+        }
+    }
+
+    private void setupNotifyLayout(Intent notifyIntent) {
+        if (notifyLayout == null || tvNotifyTitle == null || tvNotifyAction == null) {
+            inflateNotifyLayout();
+        }
+
+        if (notifyIntent.getBooleanExtra(QuestionActivity.EXTRA_FIELD_CANCEL, false)) {
+            tvNotifyTitle.setText(R.string.otr_verification_progress_title);
+            tvNotifyAction.setText(R.string.otr_verification_notify_button_cancel);
+        } else {
+            tvNotifyTitle.setText(R.string.otr_verification_notify_title);
+            tvNotifyAction.setText(R.string.otr_verification_notify_button);
+        }
+        notifyLayout.setVisibility(View.VISIBLE);
+    }
+
+    private void inflateNotifyLayout() {
+        View view = stubNotify.inflate();
+        tvNotifyTitle = (TextView) view.findViewById(R.id.tvNotifyTitle);
+        tvNotifyAction = (TextView) view.findViewById(R.id.tvNotifyAction);
+        notifyLayout = (RelativeLayout) view.findViewById(R.id.notifyLayout);
+        notifyLayout.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (notifyIntent != null) startActivity(notifyIntent);
+                notifyLayout.setVisibility(View.GONE);
+            }
+        });
     }
 }

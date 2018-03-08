@@ -26,7 +26,7 @@
         android:id="@+id/swipeContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_above="@+id/notifyLayout"
+        android:layout_above="@+id/input_layout"
         android:layout_below="@+id/toolbar_default"
         >
 
@@ -43,44 +43,14 @@
 
     </android.support.v4.widget.SwipeRefreshLayout>
 
-    <RelativeLayout
-        android:id="@+id/notifyLayout"
-        android:layout_width="match_parent"
+    <ViewStub
+        android:id="@+id/stubNotify"
+        android:inflatedId="@+id/notifyLayout"
+        android:layout="@layout/layout_chat_notify"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:background="?attr/message_status_item_background_color"
         android:layout_above="@+id/input_layout"
-        android:visibility="gone"
-        android:elevation="8dp"
-        >
-
-        <TextView
-            android:id="@+id/tvNotifyTitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="8dp"
-            android:layout_marginLeft="16dp"
-            android:layout_marginStart="16dp"
-            android:layout_centerVertical="true"
-            android:text="@string/otr_verification_notify_title"
-            android:textSize="16sp"
-            android:layout_toLeftOf="@id/tvNotifyAction"
-            />
-
-        <TextView
-            android:id="@+id/tvNotifyAction"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginRight="16dp"
-            android:layout_marginEnd="16dp"
-            android:layout_centerVertical="true"
-            android:layout_alignParentEnd="true"
-            android:layout_alignParentRight="true"
-            android:textSize="16sp"
-            android:text="@string/otr_verification_notify_button"
-            />
-
-    </RelativeLayout>
+        />
 
     <LinearLayout
         android:id="@+id/input_layout"
@@ -156,6 +126,15 @@
             android:tint="?attr/chat_input_button_color"
             />
     </LinearLayout>
+
+    <ViewStub
+        android:id="@+id/stubJoin"
+        android:inflatedId="@+id/joinLayout"
+        android:layout="@layout/layout_chat_join"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        />
 
     <ProgressBar
         style="?android:attr/progressBarStyleHorizontal"

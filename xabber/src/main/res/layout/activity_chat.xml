@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 
-<LinearLayout
+<RelativeLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/white"
     >
 
     <android.support.v7.widget.Toolbar xmlns:android="http://schemas.android.com/apk/res/android"
@@ -37,6 +36,15 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:overScrollMode="never"
+        android:layout_below="@id/toolbar_default"
     />
 
-</LinearLayout>
+    <ViewStub
+        android:id="@+id/showcaseView"
+        android:inflatedId="@+id/showcaseView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout="@layout/showcase_chat_screen"
+        />
+
+</RelativeLayout>

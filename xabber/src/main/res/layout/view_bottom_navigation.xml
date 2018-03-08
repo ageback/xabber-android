@@ -95,7 +95,7 @@
                     android:layout_toRightOf="@+id/ivSearch"
                     android:textSize="18sp"
                     android:textColor="?attr/contact_list_account_group_second_line_text_color"
-                    android:text="Search"
+                    android:text="@string/search"
                     />
 
             </RelativeLayout>
@@ -133,14 +133,14 @@
             android:id="@+id/expandSearchLayout"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_toRightOf="@+id/recentButtonView"
-            android:layout_toLeftOf="@+id/btnMenu"
+            android:background="?attr/bottom_navigation_background"
             android:visibility="gone">
 
             <SearchView
                 android:id="@+id/searchView"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:layout_marginBottom="2dp"
                 android:textSize="18sp"
                 android:queryBackground="@android:color/transparent"
                 />
