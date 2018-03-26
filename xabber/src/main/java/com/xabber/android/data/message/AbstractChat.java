@@ -31,6 +31,7 @@ import com.xabber.android.data.extension.carbons.CarbonManager;
 import com.xabber.android.data.extension.cs.ChatStateManager;
 import com.xabber.android.data.extension.file.FileManager;
 import com.xabber.android.data.extension.otr.OTRManager;
+import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.message.chat.ChatManager;
 import com.xabber.android.data.notification.NotificationManager;
 
@@ -49,6 +50,8 @@ import java.io.File;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
+
+import javax.annotation.Nonnull;
 
 import io.realm.Realm;
 import io.realm.RealmChangeListener;
@@ -258,11 +261,15 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
     }
 
     public void saveMessageItem(final MessageItem messageItem) {
+        final long startTime = System.currentTimeMillis();
+        // TODO: 12.03.18 ANR - WRITE (переписать без UI)
         MessageDatabaseManager.getInstance().getRealmUiThread()
                 .executeTransaction(new Realm.Transaction() {
             @Override
             public void execute(Realm realm) {
                 realm.copyToRealm(messageItem);
+                LogManager.d("REALM", Thread.currentThread().getName()
+                        + " save message item: " + (System.currentTimeMillis() - startTime));
             }
         });
     }
@@ -371,6 +378,7 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
                 messageItem.setError(false);
                 messageItem.setIncoming(false);
                 messageItem.setInProgress(true);
+                messageItem.setStanzaId(UUID.randomUUID().toString());
                 realm.copyToRealm(messageItem);
             }
         });
@@ -420,6 +428,12 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
         } else {
             return null;
         }
+    }
+
+    public Message createMessagePacket(String body, String stanzaId) {
+        Message message = createMessagePacket(body);
+        if (stanzaId != null) message.setStanzaId(stanzaId);
+        return message;
     }
 
     /**
@@ -491,7 +505,7 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
 
         Message message = null;
         if (text != null) {
-            message = createMessagePacket(text);
+            message = createMessagePacket(text, messageItem.getStanzaId());
         }
 
         if (message != null) {
@@ -531,8 +545,6 @@ public abstract class AbstractChat extends BaseEntity implements RealmChangeList
         if (message == null) {
             messageItem.setError(true);
             messageItem.setErrorDescription("Internal error: message is null");
-        } else {
-            messageItem.setStanzaId(message.getStanzaId());
         }
 
         if (delayTimestamp != null) {

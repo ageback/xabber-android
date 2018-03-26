@@ -18,7 +18,7 @@ Xabber uses Gradle build system. The only specific thing is git submodule for ge
  
 **2. Build**
 
-You need to copy the file: `xabber-android/xabber/src/dev/google-services.json` to the `xabber-android/xabber` folder and copy the file `xabber-android/xabber/src/dev/res/values/social_keys.xml` to the folder `xabber-android/xabber/src/main/res/values/`.
+To build Xabber use **"dev"** productFlavour. Other flavours like "beta", "prod", "ru" and "vip" requare api keys that not represent in this repository.
 
 ## Translations [![Crowdin](https://d322cqt584bo4o.cloudfront.net/xabber/localized.svg)](https://crowdin.com/project/xabber)
 
@@ -32,6 +32,8 @@ Please don't create pull requests with translation fixes as any changes will be 
 If you want to support Xabber development you can buy [Xabber VIP](https://play.google.com/store/apps/details?id=com.xabber.androidvip) (it is the same as regular stable version of Xabber except for gold coin on logo) or send payment via Paypal or Bitcoin `1Dvexs9YQ2bab1ZNk2eSuvHxyZ2QUedzug`
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=G9AYTUSXCWRVL)
+
+[![Patreon](https://c5.patreon.com/external/logo/become_a_patron_button.png)](https://www.patreon.com/xabber)
 
 ## Feedback
 

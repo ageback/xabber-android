@@ -26,8 +26,8 @@ android {
     defaultConfig {
         minSdkVersion 15
         targetSdkVersion 27
-        versionCode 465
-        versionName '2.2.1(465)'
+        versionCode 469
+        versionName '2.3(469)'
     }
 
     lintOptions {
@@ -144,14 +144,7 @@ def initFabricPropertiesIfNeeded() {
 
 def build_param = "${build}";
 
-if (build_param != "dev") {
-    //exclude dev
-    android.variantFilter { variant ->
-        if (variant.getFlavors().get(0).name.equals('dev')) {
-            variant.setIgnore(true);
-        }
-    }
-} else {
+if (build_param == "dev") {
     //exclude all but dev
     android.variantFilter { variant ->
         if (!variant.getFlavors().get(0).name.equals('dev')) {
@@ -216,6 +209,15 @@ dependencies {
     }
 
     implementation group: 'org.bouncycastle', name: 'bcpkix-jdk15on', version: '1.58'
+
+    // leak canary
+    debugImplementation 'com.squareup.leakcanary:leakcanary-android:1.5.4'
+    releaseImplementation 'com.squareup.leakcanary:leakcanary-android-no-op:1.5.4'
+
+    // block canary
+    debugImplementation 'com.github.markzhai:blockcanary-android:1.5.0'
+    releaseCompile 'com.github.markzhai:blockcanary-no-op:1.5.0'
+
 }
 apply plugin: 'com.google.gms.google-services'
 
