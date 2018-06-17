@@ -9,6 +9,10 @@ public class ExtendedFormField extends FormField {
 
     private Media media;
 
+    public ExtendedFormField() {
+        super();
+    }
+
     public ExtendedFormField(String variable) {
         super(variable);
     }
@@ -40,7 +44,10 @@ public class ExtendedFormField extends FormField {
         for (Option option : getOptions()) {
             buf.append(option.toXML());
         }
-        buf.append(getMedia().toXML());
+
+        if (media != null)
+            buf.append(media.toXML());
+
         buf.closeElement(this);
         return buf;
     }
@@ -51,10 +58,28 @@ public class ExtendedFormField extends FormField {
 
         private String type;
         private String uri;
+        private long size;
+        private long duration;
 
         public Uri(String type, String uri) {
             this.type = type;
             this.uri = uri;
+        }
+
+        public long getSize() {
+            return size;
+        }
+
+        public void setSize(long size) {
+            this.size = size;
+        }
+
+        public long getDuration() {
+            return duration;
+        }
+
+        public void setDuration(long duration) {
+            this.duration = duration;
         }
 
         public String getType() {
@@ -75,6 +100,8 @@ public class ExtendedFormField extends FormField {
             XmlStringBuilder xml = new XmlStringBuilder(this);
             // Add attribute
             xml.optAttribute("type", getType());
+            xml.optAttribute("size", String.valueOf(getSize()));
+            xml.optAttribute("duration", String.valueOf(getDuration()));
             xml.rightAngleBracket();
 
             xml.append(getUri());
@@ -130,7 +157,8 @@ public class ExtendedFormField extends FormField {
             xml.rightAngleBracket();
 
             // Add element
-            xml.append(getUri().toXML());
+            if (uri != null)
+                xml.append(uri.toXML());
 
             xml.closeElement(this);
             return xml;
