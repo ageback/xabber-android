@@ -545,6 +545,8 @@
                 <data android:scheme="@string/SOCIAL_AUTH_FACEBOOK_SCHEME" />
             </intent-filter>
         </activity>
+        <meta-data
+            android:name="io.fabric.ApiKey"
+            android:value="0d90bddb4ed7eb764eee9fad3fc9e67830763f3e" />
     </application>
-
 </manifest>
