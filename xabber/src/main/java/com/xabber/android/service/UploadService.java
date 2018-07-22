@@ -33,6 +33,7 @@ import java.io.IOException;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -82,8 +83,9 @@ public class UploadService extends IntentService {
         UserJid user = intent.getParcelableExtra(KEY_USER_JID);
         List<String> filePaths = intent.getStringArrayListExtra(KEY_FILE_PATHS);
         CharSequence uploadServerUrl = intent.getCharSequenceExtra(KEY_UPLOAD_SERVER_URL);
+        String existMessageId = intent.getStringExtra(KEY_MESSAGE_ID);
 
-        startWork(account, user, filePaths, uploadServerUrl);
+        startWork(account, user, filePaths, uploadServerUrl, existMessageId);
     }
 
     @Override
@@ -92,7 +94,8 @@ public class UploadService extends IntentService {
         needStop = true;
     }
 
-    private void startWork(AccountJid account, UserJid user, List<String> filePaths, CharSequence uploadServerUrl) {
+    private void startWork(AccountJid account, UserJid user, List<String> filePaths,
+                           CharSequence uploadServerUrl, String existMessageId) {
 
         // get account item
         AccountItem accountItem = AccountManager.getInstance().getAccount(account);
@@ -110,14 +113,19 @@ public class UploadService extends IntentService {
             return;
         }
 
-        // create fileMessage with files
-        List<File> files = new ArrayList<>();
-        for (String filePath : filePaths) {
-            files.add(new File(filePath));
-        }
-        final String fileMessageId = MessageManager.getInstance().createFileMessage(account, user, files);
+        final String fileMessageId;
+        if (existMessageId == null) { // create fileMessage with files
+            List<File> files = new ArrayList<>();
+            for (String filePath : filePaths) {
+                files.add(new File(filePath));
+            }
+            fileMessageId = MessageManager.getInstance().createFileMessage(account, user, files);
+        } else fileMessageId = existMessageId; // use existing fileMessage
 
-        List<String> uploadedFilesUrls = new ArrayList<>();
+        HashMap<String, String> uploadedFilesUrls = new HashMap<>();
+        List<String> notUploadedFilesPaths = new ArrayList<>();
+        List<File> notUploadedFiles = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
         for (String filePath : filePaths) {
             if (needStop) {
                 stopWork(fileMessageId);
@@ -143,11 +151,13 @@ public class UploadService extends IntentService {
                 // upload file
                 Response response = uploadFileToSlot(account, (Slot) slot, file);
                 if (response.isSuccessful())
-                    uploadedFilesUrls.add(((Slot) slot).getGetUrl());
+                    uploadedFilesUrls.put(filePath, ((Slot) slot).getGetUrl());
                 else throw new Exception("Upload failed: " + response.message());
 
             } catch (Exception e) {
-                publishError(fileMessageId, e.toString());
+                notUploadedFilesPaths.add(filePath);
+                notUploadedFiles.add(new File(filePath));
+                errors.add(e.toString());
             }
 
             publishProgress(fileMessageId, uploadedFilesUrls.size(), filePaths.size());
@@ -157,15 +167,21 @@ public class UploadService extends IntentService {
 
         // check that files are uploaded
         if (uploadedFilesUrls.size() == 0) {
-            String error = "Could not upload any files";
-            setErrorForMessage(fileMessageId, error);
-            publishError(fileMessageId, error);
+            setErrorForMessage(fileMessageId, generateErrorDescriptionForFiles(notUploadedFilesPaths, errors));
+            publishError(fileMessageId, "Could not upload any files");
             return;
         }
 
         // save results to Realm and send message
-        MessageManager.getInstance().updateFileMessage(account, user, fileMessageId, uploadedFilesUrls);
+        MessageManager.getInstance().updateFileMessage(account, user, fileMessageId,
+                uploadedFilesUrls, notUploadedFilesPaths);
         publishCompleted(fileMessageId);
+
+        // if some files have errors move its to separate message
+        if (notUploadedFilesPaths.size() > 0) {
+            String messageId = MessageManager.getInstance().createFileMessage(account, user, notUploadedFiles);
+            setErrorForMessage(messageId, generateErrorDescriptionForFiles(notUploadedFilesPaths, errors));
+        }
     }
 
     private void removeTempDirectory() {
@@ -258,5 +274,18 @@ public class UploadService extends IntentService {
     private static String getCompressedDirPath() {
         return Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getPath()
                 + File.separator + XABBER_COMPRESSED_DIR;
+    }
+
+    private String generateErrorDescriptionForFiles(List<String> files, List<String> errors) {
+        StringBuilder stringBuilder = new StringBuilder();
+        int i = 0;
+        for (String file : files) {
+            stringBuilder.append(file.substring(file.lastIndexOf("/")).substring(1));
+            stringBuilder.append(":\n");
+            stringBuilder.append(errors.size() > i ? errors.get(i) : "no description");
+            stringBuilder.append("\n\n");
+            i++;
+        }
+        return stringBuilder.toString();
     }
 }

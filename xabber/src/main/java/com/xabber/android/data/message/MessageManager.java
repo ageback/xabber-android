@@ -74,7 +74,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import io.realm.Realm;
 import io.realm.RealmList;
@@ -277,7 +279,8 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
         return chat.newFileMessage(files);
     }
 
-    public void updateFileMessage(AccountJid account, UserJid user, final String messageId, final List<String> urls) {
+    public void updateFileMessage(AccountJid account, UserJid user, final String messageId,
+                                  final HashMap<String, String> urls, final List<String> notUploadedFilesUrls) {
         final AbstractChat chat = getChat(account, user);
         if (chat == null) {
             return;
@@ -294,21 +297,32 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
 
                 if (messageItem != null) {
                     RealmList<Attachment> attachments = messageItem.getAttachments();
-                    int i = 0;
+
+                    // remove attachments that not uploaded
+                    for (String file : notUploadedFilesUrls) {
+                        for (Attachment attachment : attachments) {
+                            if (file.equals(attachment.getFilePath())) {
+                                attachments.remove(attachment);
+                                break;
+                            }
+                        }
+                    }
+
                     for (Attachment attachment : attachments) {
-                        attachment.setFileUrl(urls.get(i));
-                        i++;
+                        attachment.setFileUrl(urls.get(attachment.getFilePath()));
                     }
 
                     StringBuilder strBuilder = new StringBuilder();
-                    for (String url : urls) {
-                        strBuilder.append(url);
-                        strBuilder.append(" ");
+                    for (Map.Entry<String, String> entry : urls.entrySet()) {
+                        if (strBuilder.length() > 0) strBuilder.append("\n");
+                        strBuilder.append(entry.getValue());
                     }
 
                     messageItem.setText(strBuilder.toString());
                     messageItem.setSent(false);
                     messageItem.setInProgress(false);
+                    messageItem.setError(false);
+                    messageItem.setErrorDescription("");
                 }
             }
         });
@@ -347,6 +361,32 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
             messageItem.setErrorDescription(errorDescription);
             messageItem.setInProgress(false);
         }
+    }
+
+    public void removeErrorAndResendMessage(AccountJid account, UserJid user, final String messageId) {
+        final AbstractChat chat = getChat(account, user);
+        if (chat == null) {
+            return;
+        }
+
+        Realm realm = MessageDatabaseManager.getInstance().getNewBackgroundRealm();
+        realm.executeTransaction(new Realm.Transaction() {
+            @Override
+            public void execute(Realm realm) {
+                MessageItem messageItem = realm.where(MessageItem.class)
+                        .equalTo(MessageItem.Fields.UNIQUE_ID, messageId)
+                        .findFirst();
+
+                if (messageItem != null) {
+                    messageItem.setError(false);
+                    messageItem.setSent(false);
+                    messageItem.setErrorDescription("");
+                }
+            }
+        });
+
+        realm.close();
+        chat.sendMessages();
     }
 
     /**
