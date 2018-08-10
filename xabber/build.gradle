@@ -1,19 +1,4 @@
-
-buildscript {
-    repositories {
-        maven { url 'https://maven.fabric.io/public' }
-    }
-
-    dependencies {
-        classpath 'io.fabric.tools:gradle:1.+'
-    }
-}
 apply plugin: 'com.android.application'
-
-repositories {
-    maven { url 'https://maven.fabric.io/public' }
-}
-
 apply plugin: 'realm-android'
 apply plugin: 'com.frogermcs.androiddevmetrics'
 apply plugin: 'io.fabric'
@@ -25,8 +10,8 @@ android {
     defaultConfig {
         minSdkVersion 15
         targetSdkVersion 27
-        versionCode 495
-        versionName '2.4(495)'
+        versionCode 501
+        versionName '2.4.1(501)'
     }
 
     lintOptions {

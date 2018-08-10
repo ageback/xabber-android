@@ -43,6 +43,7 @@ import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.captcha.Captcha;
 import com.xabber.android.data.extension.captcha.CaptchaManager;
 import com.xabber.android.data.extension.carbons.CarbonManager;
+import com.xabber.android.data.extension.file.FileManager;
 import com.xabber.android.data.extension.httpfileupload.HttpFileUploadManager;
 import com.xabber.android.data.extension.muc.MUCManager;
 import com.xabber.android.data.extension.muc.RoomChat;
@@ -74,7 +75,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import io.realm.Realm;
 import io.realm.RealmList;
@@ -277,7 +280,8 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
         return chat.newFileMessage(files);
     }
 
-    public void updateFileMessage(AccountJid account, UserJid user, final String messageId, final List<String> urls) {
+    public void updateFileMessage(AccountJid account, UserJid user, final String messageId,
+                                  final HashMap<String, String> urls, final List<String> notUploadedFilesUrls) {
         final AbstractChat chat = getChat(account, user);
         if (chat == null) {
             return;
@@ -294,27 +298,72 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
 
                 if (messageItem != null) {
                     RealmList<Attachment> attachments = messageItem.getAttachments();
-                    int i = 0;
+
+                    // remove attachments that not uploaded
+                    for (String file : notUploadedFilesUrls) {
+                        for (Attachment attachment : attachments) {
+                            if (file.equals(attachment.getFilePath())) {
+                                attachments.remove(attachment);
+                                break;
+                            }
+                        }
+                    }
+
                     for (Attachment attachment : attachments) {
-                        attachment.setFileUrl(urls.get(i));
-                        i++;
+                        attachment.setFileUrl(urls.get(attachment.getFilePath()));
                     }
 
                     StringBuilder strBuilder = new StringBuilder();
-                    for (String url : urls) {
-                        strBuilder.append(url);
-                        strBuilder.append(" ");
+                    for (Map.Entry<String, String> entry : urls.entrySet()) {
+                        if (strBuilder.length() > 0) strBuilder.append("\n");
+                        strBuilder.append(entry.getValue());
                     }
 
                     messageItem.setText(strBuilder.toString());
                     messageItem.setSent(false);
                     messageItem.setInProgress(false);
+                    messageItem.setError(false);
+                    messageItem.setErrorDescription("");
                 }
             }
         });
 
         realm.close();
         chat.sendMessages();
+    }
+
+    public void updateMessageWithNewAttachments(final String messageId, final List<File> files) {
+        Realm realm = MessageDatabaseManager.getInstance().getNewBackgroundRealm();
+        realm.executeTransaction(new Realm.Transaction() {
+            @Override
+            public void execute(Realm realm) {
+                MessageItem messageItem = realm.where(MessageItem.class)
+                        .equalTo(MessageItem.Fields.UNIQUE_ID, messageId)
+                        .findFirst();
+
+                if (messageItem != null) {
+                    RealmList<Attachment> attachments = messageItem.getAttachments();
+
+                    for (File file : files) {
+                        Attachment attachment = new Attachment();
+                        attachment.setFilePath(file.getPath());
+                        attachment.setFileSize(file.length());
+                        attachment.setTitle(file.getName());
+                        attachment.setIsImage(FileManager.fileIsImage(file));
+                        attachment.setMimeType(HttpFileUploadManager.getMimeType(file.getPath()));
+                        attachment.setDuration((long) 0);
+
+                        if (attachment.isImage()) {
+                            HttpFileUploadManager.ImageSize imageSize =
+                                    HttpFileUploadManager.getImageSizes(file.getPath());
+                            attachment.setImageHeight(imageSize.getHeight());
+                            attachment.setImageWidth(imageSize.getWidth());
+                        }
+                        attachments.add(attachment);
+                    }
+                }
+            }
+        });
     }
 
     public void updateMessageWithError(final String messageId, final String errorDescription) {
@@ -347,6 +396,32 @@ public class MessageManager implements OnLoadListener, OnPacketListener, OnDisco
             messageItem.setErrorDescription(errorDescription);
             messageItem.setInProgress(false);
         }
+    }
+
+    public void removeErrorAndResendMessage(AccountJid account, UserJid user, final String messageId) {
+        final AbstractChat chat = getChat(account, user);
+        if (chat == null) {
+            return;
+        }
+
+        Realm realm = MessageDatabaseManager.getInstance().getNewBackgroundRealm();
+        realm.executeTransaction(new Realm.Transaction() {
+            @Override
+            public void execute(Realm realm) {
+                MessageItem messageItem = realm.where(MessageItem.class)
+                        .equalTo(MessageItem.Fields.UNIQUE_ID, messageId)
+                        .findFirst();
+
+                if (messageItem != null) {
+                    messageItem.setError(false);
+                    messageItem.setSent(false);
+                    messageItem.setErrorDescription("");
+                }
+            }
+        });
+
+        realm.close();
+        chat.sendMessages();
     }
 
     /**

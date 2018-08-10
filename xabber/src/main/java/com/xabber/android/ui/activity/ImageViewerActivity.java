@@ -26,12 +26,16 @@ import com.xabber.android.data.database.MessageDatabaseManager;
 import com.xabber.android.data.database.messagerealm.Attachment;
 import com.xabber.android.data.database.messagerealm.MessageItem;
 import com.xabber.android.data.entity.AccountJid;
+import com.xabber.android.data.extension.file.FileManager;
 import com.xabber.android.data.filedownload.DownloadManager;
 import com.xabber.android.ui.fragment.ImageViewerFragment;
 import com.xabber.android.ui.helper.PermissionsRequester;
 
+import java.io.File;
+
 import io.realm.Realm;
 import io.realm.RealmList;
+import rx.Observable;
 import rx.functions.Action1;
 import rx.subscriptions.CompositeSubscription;
 
@@ -41,6 +45,7 @@ public class ImageViewerActivity extends AppCompatActivity implements Toolbar.On
     private static final String MESSAGE_ID = "MESSAGE_ID";
     private static final String ATTACHMENT_POSITION = "ATTACHMENT_POSITION";
     private static final int PERMISSIONS_REQUEST_DOWNLOAD_FILE = 24;
+    public static final int SHARE_ACTIVITY_REQUEST_CODE = 25;
 
     private AccountJid accountJid;
     private RealmList<Attachment> imageAttachments = new RealmList<>();
@@ -50,6 +55,8 @@ public class ImageViewerActivity extends AppCompatActivity implements Toolbar.On
     private ImageView ivCancelDownload;
 
     private CompositeSubscription subscriptions = new CompositeSubscription();
+    private CompositeSubscription attachmentStateSubscription = new CompositeSubscription();
+    private boolean waitForSharing;
 
     @NonNull
     public static Intent createIntent(Context context, String id, int position) {
@@ -154,11 +161,14 @@ public class ImageViewerActivity extends AppCompatActivity implements Toolbar.On
             @Override
             public void onPageSelected(int position) {
                 updateToolbar();
+                unsubscribeAttachmentState();
+                subscribeForAttachment(imageAttachments.get(position));
             }
 
             @Override
             public void onPageScrollStateChanged(int state) { }
         });
+        if (imageAttachments.size() > imagePosition) subscribeForAttachment(imageAttachments.get(imagePosition));
     }
 
     @Override
@@ -184,6 +194,10 @@ public class ImageViewerActivity extends AppCompatActivity implements Toolbar.On
 
             case R.id.action_copy_link:
                 onCopyLinkClick();
+                break;
+
+            case R.id.action_share:
+                onShareClick();
                 break;
         }
         return true;
@@ -219,6 +233,25 @@ public class ImageViewerActivity extends AppCompatActivity implements Toolbar.On
         Long size = attachment.getFileSize();
         menu.findItem(R.id.action_download_image).setVisible(filePath == null && size != null);
         menu.findItem(R.id.action_done).setVisible(filePath != null);
+        menu.findItem(R.id.action_share).setVisible(size != null);
+    }
+
+    private void onShareClick() {
+        int position = viewPager.getCurrentItem();
+        Attachment attachment = imageAttachments.get(position);
+        String path = attachment.getFilePath();
+
+        if (path != null) {
+            File file = new File(path);
+            if (file.exists()) {
+                startActivityForResult(FileManager.getIntentForShareFile(file),
+                        SHARE_ACTIVITY_REQUEST_CODE);
+                return;
+            } else Toast.makeText(this, R.string.FILE_NOT_FOUND, Toast.LENGTH_SHORT).show();
+        } else {
+            waitForSharing = true;
+            onImageDownloadClick();
+        }
     }
 
     private void onCopyLinkClick() {
@@ -248,6 +281,7 @@ public class ImageViewerActivity extends AppCompatActivity implements Toolbar.On
 
     private void unsubscribeAll() {
         subscriptions.clear();
+        unsubscribeAttachmentState();
     }
 
     private void subscribeForDownloadProgress() {
@@ -294,5 +328,31 @@ public class ImageViewerActivity extends AppCompatActivity implements Toolbar.On
 
     private void onNoWritePermissionError() {
         Toast.makeText(this, R.string.no_permission_to_write_files, Toast.LENGTH_SHORT).show();
+    }
+
+    private void subscribeForAttachment(Attachment attachment) {
+        if (attachment == null) return;
+        Realm realm = MessageDatabaseManager.getInstance().getRealmUiThread();
+        Attachment attachmentForSubscribe = realm.where(Attachment.class)
+                .equalTo(Attachment.Fields.UNIQUE_ID, attachment.getUniqueId())
+                .findFirst();
+
+        if (attachmentForSubscribe == null) return;
+        Observable<Attachment> observable = attachmentForSubscribe.asObservable();
+
+        attachmentStateSubscription.add(observable.doOnNext(new Action1<Attachment>() {
+            @Override
+            public void call(Attachment attachment) {
+                updateToolbar();
+                if (waitForSharing) {
+                    waitForSharing = false;
+                    onShareClick();
+                }
+            }
+        }).subscribe());
+    }
+
+    private void unsubscribeAttachmentState() {
+        attachmentStateSubscription.clear();
     }
 }

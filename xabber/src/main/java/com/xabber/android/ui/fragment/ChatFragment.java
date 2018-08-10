@@ -60,7 +60,6 @@ import com.xabber.android.data.extension.capability.CapabilitiesManager;
 import com.xabber.android.data.extension.capability.ClientInfo;
 import com.xabber.android.data.extension.cs.ChatStateManager;
 import com.xabber.android.data.extension.file.FileManager;
-import com.xabber.android.data.extension.file.FileUtils;
 import com.xabber.android.data.extension.httpfileupload.HttpFileUploadManager;
 import com.xabber.android.data.extension.httpfileupload.HttpUploadListener;
 import com.xabber.android.data.extension.mam.LastHistoryLoadFinishedEvent;
@@ -145,6 +144,7 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
 
     public static final int FILE_SELECT_ACTIVITY_REQUEST_CODE = 11;
     private static final int REQUEST_IMAGE_CAPTURE = 12;
+    public static final int SHARE_ACTIVITY_REQUEST_CODE = 25;
 
     private static final int PERMISSIONS_REQUEST_ATTACH_FILE = 21;
     private static final int PERMISSIONS_REQUEST_EXPORT_CHAT = 22;
@@ -814,30 +814,29 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
                     clipData = result.getClipData();
                 }
 
-                final List<String> paths = new ArrayList<>();
+                final List<Uri> uris = new ArrayList<>();
                 if (clipData != null) {
                     for (int i = 0; i < clipData.getItemCount(); i++) {
                         ClipData.Item item = clipData.getItemAt(i);
                         Uri uri = item.getUri();
-                        paths.add(FileUtils.getPath(getActivity(), uri));
+                        uris.add(uri);
                     }
                 } else {
                     Uri fileUri = result.getData();
-                    String path = FileUtils.getPath(getActivity(), fileUri);
-                    if (path != null) paths.add(path);
+                    uris.add(fileUri);
                 }
 
-                if (paths.size() == 0) {
+                if (uris.size() == 0) {
                     Toast.makeText(getActivity(), R.string.could_not_get_path_to_file, Toast.LENGTH_SHORT).show();
                     return;
                 }
 
-                if (paths.size() > 10) {
+                if (uris.size() > 10) {
                     Toast.makeText(getActivity(), R.string.too_many_files_at_once, Toast.LENGTH_SHORT).show();
                     return;
                 }
 
-                uploadFiles(paths);
+                HttpFileUploadManager.getInstance().uploadFileViaUri(account, user, uris, getActivity());
                 break;
         }
     }
@@ -1346,8 +1345,9 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
 
             switch (menuItem.get(CustomMessageMenuAdapter.KEY_ID)) {
                 case "action_message_repeat":
-                    if (MessageItem.isUploadFileMessage(clickedMessageItem)) {
-                        uploadFile(clickedMessageItem.getFilePath());
+                    if (clickedMessageItem.haveAttachments()) {
+                        HttpFileUploadManager.getInstance()
+                                .retrySendFileMessage(clickedMessageItem, getActivity());
                     } else {
                         sendMessage(clickedMessageItem.getText());
                     }
@@ -1358,7 +1358,7 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
                             .setPrimaryClip(ClipData.newPlainText(spannable, spannable));
                     break;
                 case "action_message_appeal":
-                    setInputTextAtCursor(clickedMessageItem.getResource().toString() + ", ");
+                    mentionUser(clickedMessageItem.getResource().toString());
                     break;
                 case "action_message_quote":
                     setInputTextAtCursor("> " + clickedMessageItem.getText() + "\n");
@@ -1398,6 +1398,10 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         menuItems = null;
     }
 
+    public void mentionUser(String username) {
+        setInputTextAtCursor(username + ", ");
+    }
+
     private void showError(String message) {
         AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
         builder.setTitle(R.string.error_description_title)
@@ -1422,7 +1426,7 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     }
 
     @Override
-    public void onFileLongClick(final int messagePosition, final int attachmentPosition, View caller) {
+    public void onFileLongClick(final Attachment attachment, View caller) {
         PopupMenu popupMenu = new PopupMenu(getActivity(), caller);
         popupMenu.inflate(R.menu.menu_file_attachment);
         popupMenu.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
@@ -1430,7 +1434,11 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
             public boolean onMenuItemClick(MenuItem item) {
                 switch (item.getItemId()) {
                     case R.id.action_copy_link:
-                        onCopyFileLink(messagePosition, attachmentPosition);
+                        onCopyFileLink(attachment);
+                        break;
+                    case R.id.action_share:
+                        onShareClick(attachment);
+                        break;
                 }
                 return true;
             }
@@ -1438,16 +1446,22 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         popupMenu.show();
     }
 
-    private void onCopyFileLink(int messagePosition, int attachmentPosition) {
-        MessageItem messageItem = chatMessageAdapter.getMessageItem(messagePosition);
-        if (messageItem == null) return;
+    private void onShareClick(Attachment attachment) {
+        if (attachment == null) return;
+        String path = attachment.getFilePath();
 
-        RealmList<Attachment> fileAttachments = new RealmList<>();
-        for (Attachment attachment : messageItem.getAttachments()) {
-            if (!attachment.isImage()) fileAttachments.add(attachment);
+        if (path != null) {
+            File file = new File(path);
+            if (file.exists()) {
+                startActivityForResult(FileManager.getIntentForShareFile(file),
+                        SHARE_ACTIVITY_REQUEST_CODE);
+                return;
+            }
         }
+        Toast.makeText(getActivity(), R.string.FILE_NOT_FOUND, Toast.LENGTH_SHORT).show();
+    }
 
-        Attachment attachment = fileAttachments.get(attachmentPosition);
+    private void onCopyFileLink(Attachment attachment) {
         if (attachment == null) return;
         String url = attachment.getFileUrl();
 
