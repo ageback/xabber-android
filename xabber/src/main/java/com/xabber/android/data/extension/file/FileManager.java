@@ -8,6 +8,7 @@ import android.media.ExifInterface;
 import android.net.Uri;
 import android.support.annotation.Nullable;
 import android.support.v4.content.FileProvider;
+import android.util.Log;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 
@@ -19,6 +20,8 @@ import com.xabber.android.data.database.messagerealm.MessageItem;
 import com.xabber.android.data.extension.httpfileupload.HttpFileUploadManager;
 import com.xabber.android.data.log.LogManager;
 
+import org.apache.commons.io.FilenameUtils;
+
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -28,6 +31,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Arrays;
+import java.util.UUID;
 
 public class FileManager {
 
@@ -273,6 +277,37 @@ public class FileManager {
         intent.setType(HttpFileUploadManager.getMimeType(file.getPath()));
         intent.putExtra(Intent.EXTRA_TEXT, file.getName());
         return intent;
+    }
+
+    /** For java 6 */
+    public static void deleteDirectoryRecursion(File file) {
+        if (file.isDirectory()) {
+            File[] entries = file.listFiles();
+            if (entries != null) {
+                for (File entry : entries) {
+                    deleteDirectoryRecursion(entry);
+                }
+            }
+        }
+        if (!file.delete()) {
+            Log.d(LOG_TAG, "Failed to delete " + file);
+        }
+    }
+
+    public static String generateUniqueNameForFile(String path, String sourceName) {
+        String extension = FilenameUtils.getExtension(sourceName);
+        String baseName =  FilenameUtils.getBaseName(sourceName);
+        int i = 0;
+        String newName;
+        File file;
+        do {
+            // limitation to prevent infinite loop
+            if (i > 200) return UUID.randomUUID().toString() + "." + extension;
+            i++;
+            newName = baseName + "(" + i + ")." + extension;
+            file = new File(path + newName);
+        } while (file.exists());
+        return newName;
     }
 
 }
