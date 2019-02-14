@@ -369,7 +369,7 @@
 
     <color name="contact_list_active_chat_background_dark">#242424</color>
 
-    <color name="persistent_notification_color">@color/red_500</color>
+    <color name="persistent_notification_color">@color/red_700</color>
 
     <color name="color_primary_light">@color/grey_200</color>
 
@@ -391,12 +391,15 @@
     <color name="contact_list_background">#FFE8EBEE</color>
 
     <color name="patreon_coral">#F96854</color>
+    <color name="android_default_accent_color">#FF019284</color>
 
-    <color name="unread_messages_background">#66cfd8dc</color>
+    <color name="unread_messages_background">#66bdbdbd</color>
 
     <color name="bottom_navigation_background">#eeeeee</color>
     <color name="status_color_in_contact_list_online">#FF388E3C</color>
     <color name="status_color_in_contact_list">#96616161</color>
+
+    <color name="forwarded_background_color">#007aff</color>
 
     <item name="contact_list_contact_small_right_icon_alpha_light" format="float" type="dimen">0.2</item>
     <item name="contact_list_contact_small_right_icon_alpha_dark" format="float" type="dimen">0.2</item>

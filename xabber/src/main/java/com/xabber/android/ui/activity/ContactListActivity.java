@@ -50,15 +50,16 @@ import com.xabber.android.data.entity.BaseEntity;
 import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.avatar.AvatarManager;
 import com.xabber.android.data.extension.muc.MUCManager;
+import com.xabber.android.data.http.CrowdfundingManager;
 import com.xabber.android.data.intent.EntityIntentBuilder;
 import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.message.AbstractChat;
 import com.xabber.android.data.message.MessageManager;
+import com.xabber.android.data.notification.MessageNotificationManager;
 import com.xabber.android.data.roster.AbstractContact;
 import com.xabber.android.data.roster.RosterContact;
 import com.xabber.android.data.roster.RosterManager;
 import com.xabber.android.data.xaccount.XMPPAccountSettings;
-import com.xabber.android.data.xaccount.XabberAccount;
 import com.xabber.android.data.xaccount.XabberAccountManager;
 import com.xabber.android.presentation.mvp.contactlist.ContactListPresenter;
 import com.xabber.android.presentation.ui.contactlist.ContactListFragment;
@@ -83,6 +84,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 
+import rx.subscriptions.CompositeSubscription;
+
 /**
  * Main application activity.
  *
@@ -90,8 +93,7 @@ import java.util.Locale;
  */
 public class ContactListActivity extends ManagedActivity implements OnAccountChangedListener,
         View.OnClickListener, OnChooseListener, ContactListFragment.ContactListFragmentListener,
-        ContactListDrawerFragment.ContactListDrawerListener,
-        BottomMenu.OnClickListener {
+        ContactListDrawerFragment.ContactListDrawerListener, BottomMenu.OnClickListener {
 
     /**
      * Select contact to be invited to the room was requested.
@@ -128,6 +130,8 @@ public class ContactListActivity extends ManagedActivity implements OnAccountCha
 
     private View showcaseView;
     private Button btnShowcaseGotIt;
+
+    private CompositeSubscription compositeSubscription = new CompositeSubscription();
 
     public static Intent createPersistentIntent(Context context) {
         Intent intent = new Intent(context, ContactListActivity.class);
@@ -222,6 +226,12 @@ public class ContactListActivity extends ManagedActivity implements OnAccountCha
     }
 
     @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        compositeSubscription.clear();
+    }
+
+    @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
@@ -307,12 +317,13 @@ public class ContactListActivity extends ManagedActivity implements OnAccountCha
         super.onResume();
 
         if (!AccountManager.getInstance().hasAccounts() && XabberAccountManager.getInstance().getAccount() == null) {
-            startActivity(IntroActivity.createIntent(this));
+            startActivity(TutorialActivity.createIntent(this));
             finish();
             return;
         }
 
         rebuildAccountToggle();
+        setStatusBarColor();
         Application.getInstance().addUIListener(OnAccountChangedListener.class, this);
 
         if (action != null) {
@@ -387,58 +398,30 @@ public class ContactListActivity extends ManagedActivity implements OnAccountCha
                     action = null;
                     showMucInviteDialog();
                     break;
-
             }
         }
 
         if (Application.getInstance().doNotify()) {
-            // не ограничивать расход батареи (системное)
-
-//            if (BatteryHelper.isOptimizingBattery()
-//                    && !SettingsManager.isBatteryOptimizationDisableSuggested()) {
-//                BatteryOptimizationDisableDialog.newInstance().show(getFragmentManager(),
-//                        BatteryOptimizationDisableDialog.class.getSimpleName());
-//            }
-
             if (!SettingsManager.isTranslationSuggested()) {
                 Locale currentLocale = getResources().getConfiguration().locale;
                 if (!currentLocale.getLanguage().equals("en") && !getResources().getBoolean(R.bool.is_translated)) {
                     new TranslationDialog().show(getFragmentManager(), "TRANSLATION_DIALOG");
                 }
             }
-
-            // сбор диагностич. информации
-
-//            if (SettingsManager.isCrashReportsSupported()
-//                    && !SettingsManager.isCrashReportsDialogShown()) {
-//                CrashReportDialog.newInstance().show(getFragmentManager(), CrashReportDialog.class.getSimpleName());
-//            }
-
-            // представление темной темы
-
-//            if (SettingsManager.interfaceTheme() != SettingsManager.InterfaceTheme.dark) {
-//                if (!SettingsManager.isDarkThemeSuggested() && SettingsManager.bootCount() > 1) {
-//                    new DarkThemeIntroduceDialog().show(getFragmentManager(), DarkThemeIntroduceDialog.class.getSimpleName());
-//                }
-//            } else {
-//                SettingsManager.setDarkThemeSuggested();
-//            }
-
-            // запускать Xabber при старте устройства
-
-//            if (SettingsManager.bootCount() > 2 && !SettingsManager.connectionStartAtBoot()
-//                    && !SettingsManager.startAtBootSuggested()) {
-//                StartAtBootDialogFragment.newInstance().show(getFragmentManager(), "START_AT_BOOT");
-//            }
         }
 
-        //XabberAccountManager.getInstance().createLocalAccountIfNotExist();
         showPassDialogs();
 
         //showcase
         if (!SettingsManager.contactShowcaseSuggested()) {
             showShowcase(true);
         }
+
+        // update crowdfunding info
+        CrowdfundingManager.getInstance().onLoad();
+
+        // remove all message notifications
+        MessageNotificationManager.getInstance().removeAllMessageNotifications();
     }
 
     @Override
@@ -457,7 +440,9 @@ public class ContactListActivity extends ManagedActivity implements OnAccountCha
                             // create account if exist token
                             try {
                                 AccountJid accountJid = AccountManager.getInstance().addAccount(item.getJid(),
-                                        "", item.getToken(), false, true, true, false, false, true);
+                                        "", item.getToken(), false, true,
+                                        true, false, false,
+                                        true, false);
                                 AccountManager.getInstance().setColor(accountJid, ColorManager.getInstance().convertColorNameToIndex(item.getColor()));
                                 AccountManager.getInstance().setOrder(accountJid, item.getOrder());
                                 AccountManager.getInstance().setTimestamp(accountJid, item.getTimestamp());
@@ -637,6 +622,10 @@ public class ContactListActivity extends ManagedActivity implements OnAccountCha
                 finish();
                 break;
             }
+            case ChatActivity.ACTION_FORWARD: {
+                forwardMessages(abstractContact, getIntent());
+                break;
+            }
             default:
                 startActivityForResult(ChatActivity.createSpecificChatIntent(this, abstractContact.getAccount(),
                         abstractContact.getUser()), CODE_OPEN_CHAT);
@@ -669,9 +658,17 @@ public class ContactListActivity extends ManagedActivity implements OnAccountCha
         setResult(RESULT_OK, intent);
     }
 
+    private void forwardMessages(AbstractContact abstractContact, Intent intent) {
+        ArrayList<String> messages = intent.getStringArrayListExtra(ChatActivity.KEY_MESSAGES_ID);
+        if (messages != null)
+            startActivity(ChatActivity.createForwardIntent(this,
+                    abstractContact.getAccount(), abstractContact.getUser(), messages));
+    }
+
     @Override
     public void onAccountsChanged(Collection<AccountJid> accounts) {
         rebuildAccountToggle();
+        setStatusBarColor();
     }
 
     @Override
@@ -701,10 +698,7 @@ public class ContactListActivity extends ManagedActivity implements OnAccountCha
                 startActivity(PreferenceEditor.createIntent(this));
                 break;
             case R.id.drawer_header_action_xabber_account:
-                XabberAccount account = XabberAccountManager.getInstance().getAccount();
-                if (account != null)
-                    startActivity(XabberAccountInfoActivity.createIntent(this));
-                else startActivity(TutorialActivity.createIntent(this));
+                onXabberAccountClick();
                 break;
             case R.id.drawer_action_patreon:
                 startActivity(PatreonAppealActivity.createIntent(this));
@@ -753,6 +747,10 @@ public class ContactListActivity extends ManagedActivity implements OnAccountCha
         if (contentFragment != null && contentFragment instanceof ContactListFragment) {
             ((ContactListFragment) contentFragment).closeSnackbar();
         } else showContactListFragment(null);
+    }
+
+    private void onXabberAccountClick() {
+        startActivity(XabberAccountActivity.createIntent(this));
     }
 
     private void showBottomNavigation() {

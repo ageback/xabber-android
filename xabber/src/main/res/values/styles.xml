@@ -13,6 +13,11 @@
      along with this program. If not, see http://www.gnu.org/licenses/.
 -->
 <resources>
+
+    <style name="OverflowButtonStyle" parent="Widget.AppCompat.ActionButton.Overflow">
+        <item name="android:tint">#000</item>
+    </style>
+
     <style name="ChatHeader" parent="@android:style/TextAppearance">
         <item name="android:textSize">12sp</item>
     </style>
@@ -89,6 +94,10 @@
 
     <style name="WhiteButton" parent="ThemeOverlay.AppCompat">
         <item name="colorAccent">@color/white</item>
+    </style>
+
+    <style name="CoralButton" parent="ThemeOverlay.AppCompat">
+        <item name="colorAccent">@color/patreon_coral</item>
     </style>
 
     <style name="TextAppearence.App.TextInputLayout" parent="Widget.Design.TextInputLayout">

@@ -7,6 +7,22 @@
 
 # RxJava
 -dontwarn rx.internal.util.**
+-dontwarn sun.misc.**
+
+-keepclassmembers class rx.internal.util.unsafe.*ArrayQueue*Field* {
+   long producerIndex;
+   long consumerIndex;
+}
+
+-keepclassmembers class rx.internal.util.unsafe.BaseLinkedQueueProducerNodeRef {
+    rx.internal.util.atomic.LinkedQueueNode producerNode;
+}
+
+-keepclassmembers class rx.internal.util.unsafe.BaseLinkedQueueConsumerNodeRef {
+    rx.internal.util.atomic.LinkedQueueNode consumerNode;
+}
+
+-dontnote rx.internal.util.PlatformDependent
 
 # google
 -keep class com.google.**
@@ -19,6 +35,9 @@
 -keep @io.realm.internal.Keep class * { *; }
 -dontwarn javax.**
 -dontwarn io.realm.**
+-keepnames public class * extends io.realm.RealmObject
+-keep public class * extends io.realm.RealmObject { *; }
+-keep class io.realm.** { *; }
 
 # EbentBus
 -keepattributes *Annotation*

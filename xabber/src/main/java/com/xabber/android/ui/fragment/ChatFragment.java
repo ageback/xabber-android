@@ -1,20 +1,18 @@
 package com.xabber.android.ui.fragment;
 
 import android.app.Activity;
-import android.app.Fragment;
-import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.media.AudioAttributes;
+import android.media.AudioManager;
 import android.media.MediaPlayer;
-import android.net.Uri;
 import android.os.Bundle;
-import android.os.Environment;
-import android.provider.MediaStore;
 import android.support.annotation.Nullable;
-import android.support.v4.content.FileProvider;
+import android.support.v4.app.FragmentManager;
+import android.support.v4.app.FragmentTransaction;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.LinearLayoutManager;
@@ -22,7 +20,6 @@ import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.Toolbar;
 import android.text.Editable;
 import android.text.Spannable;
-import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -49,7 +46,7 @@ import com.xabber.android.data.NetworkException;
 import com.xabber.android.data.SettingsManager;
 import com.xabber.android.data.account.AccountItem;
 import com.xabber.android.data.account.AccountManager;
-import com.xabber.android.data.database.messagerealm.Attachment;
+import com.xabber.android.data.account.listeners.OnAccountChangedListener;
 import com.xabber.android.data.database.messagerealm.MessageItem;
 import com.xabber.android.data.database.messagerealm.SyncInfo;
 import com.xabber.android.data.entity.AccountJid;
@@ -59,9 +56,7 @@ import com.xabber.android.data.extension.attention.AttentionManager;
 import com.xabber.android.data.extension.capability.CapabilitiesManager;
 import com.xabber.android.data.extension.capability.ClientInfo;
 import com.xabber.android.data.extension.cs.ChatStateManager;
-import com.xabber.android.data.extension.file.FileManager;
 import com.xabber.android.data.extension.httpfileupload.HttpFileUploadManager;
-import com.xabber.android.data.extension.httpfileupload.HttpUploadListener;
 import com.xabber.android.data.extension.mam.LastHistoryLoadFinishedEvent;
 import com.xabber.android.data.extension.mam.LastHistoryLoadStartedEvent;
 import com.xabber.android.data.extension.mam.LoadHistorySettings;
@@ -74,9 +69,10 @@ import com.xabber.android.data.extension.muc.RoomState;
 import com.xabber.android.data.extension.otr.AuthAskEvent;
 import com.xabber.android.data.extension.otr.OTRManager;
 import com.xabber.android.data.extension.otr.SecurityLevel;
-import com.xabber.android.data.filedownload.DownloadManager;
 import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.message.AbstractChat;
+import com.xabber.android.data.message.ClipManager;
+import com.xabber.android.data.message.ForwardManager;
 import com.xabber.android.data.message.MessageManager;
 import com.xabber.android.data.message.MessageUpdateEvent;
 import com.xabber.android.data.message.NewIncomingMessageEvent;
@@ -87,17 +83,18 @@ import com.xabber.android.data.roster.RosterManager;
 import com.xabber.android.ui.activity.ChatActivity;
 import com.xabber.android.ui.activity.ContactActivity;
 import com.xabber.android.ui.activity.ContactEditActivity;
-import com.xabber.android.ui.activity.ImageViewerActivity;
 import com.xabber.android.ui.activity.QuestionActivity;
-import com.xabber.android.ui.adapter.ChatMessageAdapter;
 import com.xabber.android.ui.adapter.CustomMessageMenuAdapter;
 import com.xabber.android.ui.adapter.ResourceAdapter;
+import com.xabber.android.ui.adapter.chat.MessageVH;
+import com.xabber.android.ui.adapter.chat.MessagesAdapter;
 import com.xabber.android.ui.color.ColorManager;
-import com.xabber.android.ui.dialog.AttachDialog;
 import com.xabber.android.ui.dialog.ChatExportDialogFragment;
 import com.xabber.android.ui.dialog.ChatHistoryClearDialog;
 import com.xabber.android.ui.helper.PermissionsRequester;
 import com.xabber.android.ui.widget.CustomMessageMenu;
+import com.xabber.android.ui.widget.ForwardPanel;
+import com.xabber.android.utils.StringUtils;
 
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
@@ -108,13 +105,10 @@ import org.jxmpp.jid.impl.JidCreate;
 import org.jxmpp.jid.parts.Resourcepart;
 import org.jxmpp.stringprep.XmppStringprepException;
 
-import java.io.File;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -122,37 +116,19 @@ import java.util.TimerTask;
 import github.ankushsachdeva.emojicon.EmojiconGridView;
 import github.ankushsachdeva.emojicon.EmojiconsPopup;
 import github.ankushsachdeva.emojicon.emoji.Emojicon;
-import io.realm.RealmList;
 import io.realm.RealmResults;
 import io.realm.Sort;
 
-public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickListener,
-        View.OnClickListener, Toolbar.OnMenuItemClickListener,
-        ChatMessageAdapter.Message.MessageClickListener, HttpUploadListener,
-        ChatMessageAdapter.Listener, AdapterView.OnItemClickListener, PopupWindow.OnDismissListener,
-        AttachDialog.Listener {
+public class ChatFragment extends FileInteractionFragment implements PopupMenu.OnMenuItemClickListener,
+        View.OnClickListener, Toolbar.OnMenuItemClickListener, MessageVH.MessageClickListener,
+        MessagesAdapter.Listener, AdapterView.OnItemClickListener, PopupWindow.OnDismissListener,
+        OnAccountChangedListener, ForwardPanel.OnCloseListener, MessagesAdapter.AnchorHolder {
 
     public static final String ARGUMENT_ACCOUNT = "ARGUMENT_ACCOUNT";
     public static final String ARGUMENT_USER = "ARGUMENT_USER";
-
-    private static final String SAVE_ACCOUNT = "com.xabber.android.ui.fragment.ARGUMENT_ACCOUNT";
-    private static final String SAVE_USER = "com.xabber.android.ui.fragment.ARGUMENT_USER";
-    private static final String SAVE_CURRENT_PICTURE_PATH = "com.xabber.android.ui.fragment.ARGUMENT_CURRENT_PICTURE_PATH";
     private static final String LOG_TAG = ChatFragment.class.getSimpleName();
-
     private final long STOP_TYPING_DELAY = 4000; // in ms
-
-    public static final int FILE_SELECT_ACTIVITY_REQUEST_CODE = 11;
-    private static final int REQUEST_IMAGE_CAPTURE = 12;
-    public static final int SHARE_ACTIVITY_REQUEST_CODE = 25;
-
-    private static final int PERMISSIONS_REQUEST_ATTACH_FILE = 21;
     private static final int PERMISSIONS_REQUEST_EXPORT_CHAT = 22;
-    private static final int PERMISSIONS_REQUEST_CAMERA = 23;
-    private static final int PERMISSIONS_REQUEST_DOWNLOAD_FILE = 24;
-
-    private AccountJid account;
-    private UserJid user;
 
     private EditText inputView;
     private ImageButton sendButton;
@@ -167,7 +143,7 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     private TextView tvNotifyAction;
 
     private RecyclerView realmRecyclerView;
-    private ChatMessageAdapter chatMessageAdapter;
+    private MessagesAdapter chatMessageAdapter;
     private LinearLayoutManager layoutManager;
     private SwipeRefreshLayout swipeContainer;
     private View placeholder;
@@ -177,6 +153,14 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     private LinearLayout actionJoin;
     private RelativeLayout btnScrollDown;
     private TextView tvNewReceivedCount;
+    private View interactionView;
+    private TextView tvCount;
+    private ImageView ivClose;
+    private ImageView ivReply;
+    private ImageView ivForward;
+    private ImageView ivDelete;
+    private ImageView ivCopy;
+    private TextView tvTopDate;
 
     boolean isInputEmpty = true;
     private boolean skipOnTextChanges = false;
@@ -199,10 +183,9 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     private int checkedResource; // use only for alert dialog
 
     private Intent notifyIntent;
-    private String currentPicturePath;
 
-    private int clickedAttachmentPos;
-    private int clickedMessagePos;
+    private ForwardPanel forwardPanel;
+    private List<String> forwardIds = new ArrayList<>();
 
     public static ChatFragment newInstance(AccountJid account, UserJid user) {
         ChatFragment fragment = new ChatFragment();
@@ -234,12 +217,6 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         Bundle args = getArguments();
         account = args.getParcelable(ARGUMENT_ACCOUNT);
         user = args.getParcelable(ARGUMENT_USER);
-
-        if (savedInstanceState != null) {
-            account = savedInstanceState.getParcelable(SAVE_ACCOUNT);
-            user = savedInstanceState.getParcelable(SAVE_USER);
-            currentPicturePath = savedInstanceState.getString(SAVE_CURRENT_PICTURE_PATH);
-        }
 
         LogManager.i(this, "onCreate " + user);
     }
@@ -282,6 +259,52 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         inputLayout = (LinearLayout) view.findViewById(R.id.input_layout);
         inputLayout.setBackgroundColor(ColorManager.getInstance().getChatInputBackgroundColor());
 
+        // interaction view
+        interactionView = view.findViewById(R.id.interactionView);
+        tvCount = view.findViewById(R.id.tvCount);
+        ivClose = view.findViewById(R.id.ivClose);
+        ivClose.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                closeInteractionPanel();
+            }
+        });
+        ivReply = view.findViewById(R.id.ivReply);
+        ivReply.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                forwardIds = new ArrayList<>(chatMessageAdapter.getCheckedItemIds());
+                showForwardPanel(forwardIds);
+                closeInteractionPanel();
+            }
+        });
+        ivForward = view.findViewById(R.id.ivForward);
+        ivForward.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                forwardIds = new ArrayList<>(chatMessageAdapter.getCheckedItemIds());
+                closeInteractionPanel();
+                openChooserForForward((ArrayList<String>) forwardIds);
+            }
+        });
+        ivDelete = view.findViewById(R.id.ivDelete);
+        ivDelete.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                MessageManager.getInstance()
+                        .removeMessage(new ArrayList<>(chatMessageAdapter.getCheckedItemIds()));
+                closeInteractionPanel();
+            }
+        });
+        ivCopy = view.findViewById(R.id.ivCopy);
+        ivCopy.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                ClipManager.copyMessagesToClipboard(new ArrayList<>(chatMessageAdapter.getCheckedItemIds()));
+                closeInteractionPanel();
+            }
+        });
+
         view.findViewById(R.id.button_send_message).setOnClickListener(
                 new View.OnClickListener() {
                     @Override
@@ -317,6 +340,11 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
 
                 showScrollDownButtonIfNeed();
                 hideUnreadMessageCountIfNeed();
+
+                /** Necessary for
+                 *  @see MessageVH#bind ()
+                 *  and set DATE alpha */
+                updateTopDateIfNeed();
             }
         });
 
@@ -353,6 +381,8 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         placeholder = view.findViewById(R.id.placeholder);
         placeholder.setOnClickListener(this);
 
+        tvTopDate = view.findViewById(R.id.tvTopDate);
+
         return view;
     }
 
@@ -361,17 +391,15 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         this.user = userJid;
 
         AbstractChat abstractChat = getChat();
-
-        if (!(abstractChat instanceof RegularChat)) {
-            securityButton.setVisibility(View.GONE);
-        }
+        showSecurityButton(true);
 
         if (abstractChat != null) {
             messageItems = abstractChat.getMessages();
             syncInfoResults = abstractChat.getSyncInfo();
         }
 
-        chatMessageAdapter = new ChatMessageAdapter(getActivity(), messageItems, abstractChat, this);
+        chatMessageAdapter = new MessagesAdapter(getActivity(), messageItems, abstractChat,
+                this, this, this, this, this);
         realmRecyclerView.setAdapter(chatMessageAdapter);
 
         restoreInputState();
@@ -404,11 +432,13 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
 
         updateContact();
         restoreInputState();
-        restoreScrollState();
+        restoreScrollState(((ChatActivity)getActivity()).needScrollToUnread());
 
         showHideNotifyIfNeed();
 
         showJoinButtonIfNeed();
+
+        Application.getInstance().addUIListener(OnAccountChangedListener.class, this);
     }
 
     @Override
@@ -419,23 +449,14 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
 
         saveInputState();
         saveScrollState();
+
+        Application.getInstance().removeUIListener(OnAccountChangedListener.class, this);
     }
 
     @Override
     public void onStop() {
         super.onStop();
         EventBus.getDefault().unregister(this);
-    }
-
-    @Override
-    public void onSaveInstanceState(Bundle outState) {
-        super.onSaveInstanceState(outState);
-
-        outState.putParcelable(SAVE_ACCOUNT, account);
-        outState.putParcelable(SAVE_USER, user);
-        if (!TextUtils.isEmpty(currentPicturePath)) {
-            outState.putString(SAVE_CURRENT_PICTURE_PATH, currentPicturePath);
-        }
     }
 
     @Override
@@ -452,8 +473,6 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
             listener = null;
         }
     }
-
-
 
     private void setUpInputView(View view) {
         inputView = (EditText) view.findViewById(R.id.chat_input);
@@ -719,7 +738,7 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     public void onEvent(NewIncomingMessageEvent event) {
         if (event.getAccount().equals(account) && event.getUser().equals(user)) {
             listener.playIncomingAnimation();
-            playIncomingSound();
+            //playIncomingSound();
             increaseUnreadMessageCountIfNeed();
             chatMessageAdapter.setUnreadCount(chatMessageAdapter.getUnreadCount() + 1);
         }
@@ -732,209 +751,16 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         }
     }
 
-    private void onAttachButtonPressed() {
-        if (!HttpFileUploadManager.getInstance().isFileUploadSupported(account)) {
-            // show notification
-            AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
-            builder.setMessage(R.string.error_file_upload_not_support)
-                    .setTitle(getString(R.string.error_sending_file, ""))
-                    .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
-                            dialog.dismiss();
-                        }
-                    });
-            AlertDialog dialog = builder.create();
-            dialog.show();
-            return;
-        }
-
-        if (PermissionsRequester.requestFileReadPermissionIfNeeded(this, PERMISSIONS_REQUEST_ATTACH_FILE)) {
-            ((ChatActivity)getActivity()).showAttachDialog();
-        }
-    }
-
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
         switch (requestCode) {
-            case PERMISSIONS_REQUEST_ATTACH_FILE:
-                if (PermissionsRequester.isPermissionGranted(grantResults))
-                    ((ChatActivity)getActivity()).showAttachDialog();
-                else onNoReadPermissionError();
-                break;
-
             case PERMISSIONS_REQUEST_EXPORT_CHAT:
                 if (PermissionsRequester.isPermissionGranted(grantResults)) showExportChatDialog();
-                else onNoWritePermissionError();
-                break;
-
-            case PERMISSIONS_REQUEST_CAMERA:
-                if (PermissionsRequester.isPermissionGranted(grantResults))
-                    startCamera();
-                else onNoCameraPermissionError();
-                break;
-
-            case PERMISSIONS_REQUEST_DOWNLOAD_FILE:
-                if (PermissionsRequester.isPermissionGranted(grantResults))
-                    openFileOrDownload(clickedMessagePos, clickedAttachmentPos);
-                else onNoWritePermissionError();
+                else Toast.makeText(getActivity(), R.string.no_permission_to_write_files, Toast.LENGTH_SHORT).show();
                 break;
         }
-    }
-
-    private void onNoWritePermissionError() {
-        Toast.makeText(getActivity(), R.string.no_permission_to_write_files, Toast.LENGTH_SHORT).show();
-    }
-
-    private void onNoReadPermissionError() {
-        Toast.makeText(getActivity(), R.string.no_permission_to_read_files, Toast.LENGTH_SHORT).show();
-    }
-
-    private void onNoCameraPermissionError() {
-        Toast.makeText(getActivity(), R.string.no_permission_to_camera, Toast.LENGTH_SHORT).show();
-    }
-
-    @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent result) {
-        if (resultCode != Activity.RESULT_OK) {
-            return;
-        }
-
-        switch (requestCode) {
-            case REQUEST_IMAGE_CAPTURE:
-                addMediaToGallery(currentPicturePath);
-                uploadFile(currentPicturePath);
-                break;
-
-            case FILE_SELECT_ACTIVITY_REQUEST_CODE:
-                ClipData clipData = null;
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.JELLY_BEAN) {
-                    clipData = result.getClipData();
-                }
-
-                final List<Uri> uris = new ArrayList<>();
-                if (clipData != null) {
-                    for (int i = 0; i < clipData.getItemCount(); i++) {
-                        ClipData.Item item = clipData.getItemAt(i);
-                        Uri uri = item.getUri();
-                        uris.add(uri);
-                    }
-                } else {
-                    Uri fileUri = result.getData();
-                    uris.add(fileUri);
-                }
-
-                if (uris.size() == 0) {
-                    Toast.makeText(getActivity(), R.string.could_not_get_path_to_file, Toast.LENGTH_SHORT).show();
-                    return;
-                }
-
-                if (uris.size() > 10) {
-                    Toast.makeText(getActivity(), R.string.too_many_files_at_once, Toast.LENGTH_SHORT).show();
-                    return;
-                }
-
-                HttpFileUploadManager.getInstance().uploadFileViaUri(account, user, uris, getActivity());
-                break;
-        }
-    }
-
-    @Override
-    public void onRecentPhotosSend(List<String> paths) {
-        uploadFiles(paths);
-    }
-
-    @Override
-    public void onGalleryClick() {
-        Intent intent = (new Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE));
-        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-        startActivityForResult(intent, FILE_SELECT_ACTIVITY_REQUEST_CODE);
-    }
-
-    @Override
-    public void onFilesClick() {
-        Intent intent = (new Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE));
-        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-        startActivityForResult(intent, FILE_SELECT_ACTIVITY_REQUEST_CODE);
-    }
-
-    @Override
-    public void onCameraClick() {
-        if (PermissionsRequester.requestCameraPermissionIfNeeded(this,
-                PERMISSIONS_REQUEST_CAMERA)) startCamera();
-    }
-
-    private void startCamera() {
-        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        File image = generatePicturePath();
-        if (image != null) {
-            takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, FileManager.getFileUri(image));
-            currentPicturePath = image.getAbsolutePath();
-        }
-        startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
-    }
-
-    private static File generatePicturePath() {
-        try {
-            File storageDir = getAlbumDir();
-            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
-            return new File(storageDir, "IMG_" + timeStamp + ".jpg");
-        } catch (Exception e) {
-            LogManager.exception(LOG_TAG, e);
-        }
-        return null;
-    }
-
-    private static File getAlbumDir() {
-        File storageDir = null;
-        if (Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState())) {
-            storageDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
-                    Application.getInstance().getString(R.string.application_title_short));
-            if (!storageDir.mkdirs()) {
-                if (!storageDir.exists()){
-                    LogManager.w(LOG_TAG, "failed to create directory");
-                    return null;
-                }
-            }
-        } else {
-            LogManager.w(LOG_TAG, "External storage is not mounted READ/WRITE.");
-        }
-
-        return storageDir;
-    }
-
-    private static void addMediaToGallery(String fromPath) {
-        if (fromPath == null) {
-            return;
-        }
-        File f = new File(fromPath);
-        Uri contentUri = Uri.fromFile(f);
-        addMediaToGallery(contentUri);
-    }
-
-    private static void addMediaToGallery(Uri uri) {
-        if (uri == null) {
-            return;
-        }
-        try {
-            Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
-            mediaScanIntent.setData(uri);
-            Application.getInstance().sendBroadcast(mediaScanIntent);
-        } catch (Exception e) {
-            LogManager.exception(LOG_TAG, e);
-        }
-    }
-
-    private void uploadFile(String path) {
-        List<String> paths = new ArrayList<>();
-        paths.add(path);
-        HttpFileUploadManager.getInstance().uploadFile(account, user, paths, getActivity());
-    }
-
-    private void uploadFiles(List<String> paths) {
-        HttpFileUploadManager.getInstance().uploadFile(account, user, paths, getActivity());
     }
 
     private void changeEmojiKeyboardIcon(ImageView iconToBeChanged, int drawableResourceId){
@@ -969,6 +795,7 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
 
     private void setUpInputViewButtons() {
         boolean empty = inputView.getText().toString().trim().isEmpty();
+        if (empty) empty = forwardIds.isEmpty();
 
         if (empty != isInputEmpty) {
             isInputEmpty = empty;
@@ -977,12 +804,12 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         if (isInputEmpty) {
             sendButton.setColorFilter(ColorManager.getInstance().getAccountPainter().getGreyMain());
             sendButton.setEnabled(false);
-            securityButton.setVisibility(View.VISIBLE);
+            showSecurityButton(true);
             attachButton.setVisibility(View.VISIBLE);
         } else {
             sendButton.setEnabled(true);
             sendButton.setColorFilter(ColorManager.getInstance().getAccountPainter().getAccountSendButtonColor(account));
-            securityButton.setVisibility(View.GONE);
+            showSecurityButton(false);
             attachButton.setVisibility(View.GONE);
         }
     }
@@ -1010,14 +837,15 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
 
     private void sendMessage() {
         String text = inputView.getText().toString().trim();
-
-        if (text.isEmpty()) {
-            return;
-        }
-
         clearInputText();
 
-        sendMessage(text);
+        if (forwardIds != null && !forwardIds.isEmpty()) {
+            sendForwardMessage(forwardIds, text);
+        } else if (!text.isEmpty()) {
+            sendMessage(text);
+        } else {
+            return;
+        }
 
         listener.onMessageSent();
 
@@ -1057,6 +885,12 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
             // strange null ptr happens
             securityButton.setImageLevel(securityLevel.getImageLevel());
         }
+    }
+
+    private void showSecurityButton(boolean show) {
+        boolean isRoom = getChat() instanceof RoomChat;
+        if (isRoom) securityButton.setVisibility(View.GONE);
+        else securityButton.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     private void updateSendButtonSecurityLevel() {
@@ -1205,9 +1039,9 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
                     dialog.dismiss();
                     checkedResource = adapter.getCheckedItem();
                     try {
-                        RegularChat chat = (RegularChat) getChat();
-                        if (chat != null) {
-                            chat.setOTRresource(Resourcepart.from(items.get(checkedResource).get(ResourceAdapter.KEY_RESOURCE)));
+                        AbstractChat chat = getChat();
+                        if (chat instanceof RegularChat) {
+                            ((RegularChat)chat).setOTRresource(Resourcepart.from(items.get(checkedResource).get(ResourceAdapter.KEY_RESOURCE)));
                             if (restartSession) restartEncryption(account, user);
                             else startEncryption(account, user);
                         } else {
@@ -1282,8 +1116,10 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     public void onMessageClick(View caller, int position) {
         int itemViewType = chatMessageAdapter.getItemViewType(position);
 
-        if (itemViewType == ChatMessageAdapter.VIEW_TYPE_INCOMING_MESSAGE
-                || itemViewType == ChatMessageAdapter.VIEW_TYPE_OUTGOING_MESSAGE) {
+        if (itemViewType == MessagesAdapter.VIEW_TYPE_INCOMING_MESSAGE
+                || itemViewType == MessagesAdapter.VIEW_TYPE_OUTGOING_MESSAGE
+                || itemViewType == MessagesAdapter.VIEW_TYPE_INCOMING_MESSAGE_NOFLEX
+                || itemViewType== MessagesAdapter.VIEW_TYPE_OUTGOING_MESSAGE_NOFLEX) {
 
             clickedMessageItem = chatMessageAdapter.getMessageItem(position);
             if (clickedMessageItem == null) {
@@ -1292,6 +1128,14 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
             }
             showCustomMenu(caller);
         }
+    }
+
+    @Override
+    public void onChangeCheckedItems(int checkedItems) {
+        if (checkedItems > 0) {
+            interactionView.setVisibility(View.VISIBLE);
+            tvCount.setText(String.valueOf(checkedItems));
+        } else interactionView.setVisibility(View.GONE);
     }
 
     public void showCustomMenu(View anchor) {
@@ -1411,147 +1255,24 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
     }
 
     @Override
-    public void onDownloadCancel() {
-        DownloadManager.getInstance().cancelDownload(getActivity());
-    }
-
-    @Override
-    public void onUploadCancel() {
-        HttpFileUploadManager.getInstance().cancelUpload(getActivity());
-    }
-
-    @Override
-    public void onDownloadError(String error) {
-        Toast.makeText(getActivity(), error, Toast.LENGTH_SHORT).show();
-    }
-
-    @Override
-    public void onFileLongClick(final Attachment attachment, View caller) {
-        PopupMenu popupMenu = new PopupMenu(getActivity(), caller);
-        popupMenu.inflate(R.menu.menu_file_attachment);
-        popupMenu.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
-            @Override
-            public boolean onMenuItemClick(MenuItem item) {
-                switch (item.getItemId()) {
-                    case R.id.action_copy_link:
-                        onCopyFileLink(attachment);
-                        break;
-                    case R.id.action_share:
-                        onShareClick(attachment);
-                        break;
-                }
-                return true;
-            }
-        });
-        popupMenu.show();
-    }
-
-    private void onShareClick(Attachment attachment) {
-        if (attachment == null) return;
-        String path = attachment.getFilePath();
-
-        if (path != null) {
-            File file = new File(path);
-            if (file.exists()) {
-                startActivityForResult(FileManager.getIntentForShareFile(file),
-                        SHARE_ACTIVITY_REQUEST_CODE);
-                return;
-            }
-        }
-        Toast.makeText(getActivity(), R.string.FILE_NOT_FOUND, Toast.LENGTH_SHORT).show();
-    }
-
-    private void onCopyFileLink(Attachment attachment) {
-        if (attachment == null) return;
-        String url = attachment.getFileUrl();
-
-        ClipboardManager clipboardManager = ((ClipboardManager)
-                getActivity().getSystemService(Context.CLIPBOARD_SERVICE));
-        if (clipboardManager != null)
-            clipboardManager.setPrimaryClip(ClipData.newPlainText(url, url));
-        Toast.makeText(getActivity(), R.string.toast_link_copied, Toast.LENGTH_SHORT).show();
-    }
-
-    @Override
-    public void onFileClick(int messagePosition, int attachmentPosition) {
-        clickedAttachmentPos = attachmentPosition;
-        clickedMessagePos = messagePosition;
-        if (PermissionsRequester.requestFileWritePermissionIfNeeded(
-                this, PERMISSIONS_REQUEST_DOWNLOAD_FILE))
-            openFileOrDownload(messagePosition, attachmentPosition);
-    }
-
-    private void openFileOrDownload(int messagePosition, int attachmentPosition) {
-        MessageItem messageItem = chatMessageAdapter.getMessageItem(messagePosition);
-        if (messageItem == null) {
-            LogManager.w(LOG_TAG, "onMessageFileClick: null message item. Position: " + messagePosition);
-            return;
-        }
-
-        if (messageItem.haveAttachments()) {
-            RealmList<Attachment> fileAttachments = new RealmList<>();
-            for (Attachment attachment : messageItem.getAttachments()) {
-                if (!attachment.isImage()) fileAttachments.add(attachment);
-            }
-
-            Attachment attachment = fileAttachments.get(attachmentPosition);
-            if (attachment == null) return;
-
-            if (attachment.getFilePath() != null) {
-                File file = new File(attachment.getFilePath());
-                if (!file.exists()) {
-                    MessageManager.setAttachmentLocalPathToNull(attachment.getUniqueId());
-                    return;
-                }
-
-                Intent i = new Intent(Intent.ACTION_VIEW);
-                String path = attachment.getFilePath();
-                i.setDataAndType(FileProvider.getUriForFile(getActivity(),
-                        getActivity().getApplicationContext().getPackageName()
-                                + ".provider", new File(path)), attachment.getMimeType());
-                i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
-                try {
-                    startActivity(i);
-                } catch (ActivityNotFoundException e) {
-                    LogManager.exception(LOG_TAG, e);
-                    Toast.makeText(getActivity(), R.string.toast_could_not_open_file, Toast.LENGTH_SHORT).show();
-                }
-
-            } else DownloadManager.getInstance().downloadFile(attachment, getAccount(), getActivity());
-        }
-    }
-
-    @Override
-    public void onImageClick(int messagePosition, int attachmentPosition) {
-        MessageItem messageItem = chatMessageAdapter.getMessageItem(messagePosition);
-        if (messageItem == null) {
-            LogManager.w(LOG_TAG, "onMessageFileClick: null message item. Position: " + messagePosition);
-            return;
-        }
-
-        if (messageItem.haveAttachments()) {
-            try {
-                startActivity(ImageViewerActivity.createIntent(getActivity(),
-                        messageItem.getUniqueId(), attachmentPosition));
-                // possible if image was not sent and don't have URL yet.
-            } catch (ActivityNotFoundException e) {
-                LogManager.exception(LOG_TAG, e);
-            }
-        } else {
-            try {
-                startActivity(ImageViewerActivity.createIntent(getActivity(),
-                        messageItem.getUniqueId(), messageItem.getText()));
-                // possible if image was not sent and don't have URL yet.
-            } catch (ActivityNotFoundException e) {
-                LogManager.exception(LOG_TAG, e);
-            }
-        }
+    public void onAccountsChanged(Collection<AccountJid> accounts) {
+        chatMessageAdapter.notifyDataSetChanged();
     }
 
     public void playIncomingSound() {
         if (SettingsManager.eventsInChatSounds()) {
-            final MediaPlayer mp = MediaPlayer.create(getActivity(), SettingsManager.eventsSound());
+            final MediaPlayer mp;
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                AudioAttributes attr = new AudioAttributes.Builder()
+                        .setContentType(AudioAttributes.CONTENT_TYPE_UNKNOWN)
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT).build();
+                mp = MediaPlayer.create(getActivity(), SettingsManager.eventsSound(),
+                        null, attr, AudioManager.AUDIO_SESSION_ID_GENERATE);
+            } else {
+                mp = MediaPlayer.create(getActivity(), SettingsManager.eventsSound());
+                mp.setAudioStreamType(AudioManager.STREAM_NOTIFICATION);
+            }
+
             mp.start();
             mp.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
                 @Override
@@ -1560,10 +1281,6 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
                 }
             });
         }
-    }
-
-    @Override
-    public void onSuccessfullUpload(String getUrl) {
     }
 
     @Override
@@ -1585,14 +1302,14 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         if (chat != null) chat.saveLastPosition(position);
     }
 
-    public void restoreScrollState() {
+    public void restoreScrollState(boolean fromNotification) {
         AbstractChat chat = getChat();
         int position;
         int unread;
         if (chat != null) {
             position = chat.getLastPosition();
             unread = chat.getUnreadMessageCount();
-            if (position == 0 && unread > 0)
+            if ((position == 0 || fromNotification) && unread > 0)
                 scrollToFirstUnread(unread);
             else if (position > 0) {
                 layoutManager.scrollToPosition(position);
@@ -1711,6 +1428,13 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
         });
     }
 
+    private void updateTopDateIfNeed() {
+        int position = layoutManager.findFirstVisibleItemPosition();
+        MessageItem message = chatMessageAdapter.getMessageItem(position);
+        if (message != null)
+            tvTopDate.setText(StringUtils.getDateStringForMessage(message.getTimestamp()));
+    }
+
     private void showScrollDownButtonIfNeed() {
         int pastVisibleItems = layoutManager.findLastVisibleItemPosition();
         boolean isBottom = pastVisibleItems >= chatMessageAdapter.getItemCount() - 1;
@@ -1768,5 +1492,66 @@ public class ChatFragment extends Fragment implements PopupMenu.OnMenuItemClickL
                 }
             });
         }
+    }
+
+    private void closeInteractionPanel() {
+        chatMessageAdapter.resetCheckedItems();
+        setUpInputViewButtons();
+    }
+
+    /** Forward Panel */
+
+    @Override
+    public void onClose() {
+        hideForwardPanel();
+    }
+
+    private void hideForwardPanel() {
+        forwardIds.clear();
+        setUpInputViewButtons();
+
+        Activity activity = getActivity();
+        if (activity != null && !activity.isFinishing()) {
+            FragmentManager fragmentManager = getChildFragmentManager();
+            FragmentTransaction fTrans = fragmentManager.beginTransaction();
+            fTrans.remove(forwardPanel);
+            fTrans.commit();
+        }
+    }
+
+    public void setForwardIds(List<String> forwardIds) {
+        this.forwardIds = forwardIds;
+        setUpInputViewButtons();
+        showForwardPanel(forwardIds);
+    }
+
+    private void showForwardPanel(List<String> forwardIds) {
+        List<String> ids = new ArrayList<>(forwardIds);
+        Activity activity = getActivity();
+        if (activity != null && !activity.isFinishing()) {
+            FragmentManager fragmentManager = getChildFragmentManager();
+            forwardPanel = ForwardPanel.newInstance(ids);
+            FragmentTransaction fTrans = fragmentManager.beginTransaction();
+            fTrans.replace(R.id.secondBottomPanel, forwardPanel);
+            fTrans.commit();
+        }
+    }
+
+    private void sendForwardMessage(List<String> messages, String text) {
+        ForwardManager.forwardMessage(messages, account, user, text);
+        hideForwardPanel();
+        hideUnreadMessageBackground();
+        scrollDown();
+    }
+
+    private void openChooserForForward(ArrayList<String> forwardIds) {
+        ((ChatActivity)getActivity()).forwardMessages(forwardIds);
+    }
+
+    /** Anchor Holder */
+
+    @Override
+    public View getAnchor() {
+        return tvTopDate;
     }
 }

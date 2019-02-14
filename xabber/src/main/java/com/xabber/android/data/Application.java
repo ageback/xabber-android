@@ -48,6 +48,7 @@ import com.xabber.android.data.extension.muc.MUCManager;
 import com.xabber.android.data.extension.otr.OTRManager;
 import com.xabber.android.data.extension.ssn.SSNManager;
 import com.xabber.android.data.extension.vcard.VCardManager;
+import com.xabber.android.data.http.CrowdfundingManager;
 import com.xabber.android.data.http.PatreonManager;
 import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.message.MessageManager;
@@ -58,6 +59,7 @@ import com.xabber.android.data.notification.NotificationManager;
 import com.xabber.android.data.roster.GroupManager;
 import com.xabber.android.data.roster.PresenceManager;
 import com.xabber.android.data.roster.RosterManager;
+import com.xabber.android.data.xaccount.XMPPAuthManager;
 import com.xabber.android.data.xaccount.XabberAccountManager;
 import com.xabber.android.service.XabberService;
 import com.xabber.android.utils.AppBlockCanaryContext;
@@ -333,22 +335,14 @@ public class Application extends android.app.Application {
         }
 
         /** Crashlytics */
-        // Set up Crashlytics, disabled for debug builds
-        Crashlytics crashlyticsKit = new Crashlytics.Builder()
-                .core(new CrashlyticsCore.Builder().disabled(BuildConfig.DEBUG).build())
+        CrashlyticsCore crashlyticsCore = new CrashlyticsCore.Builder()
+                .disabled(BuildConfig.DEBUG || BuildConfig.FLAVOR == "open")
                 .build();
-
-        // Initialize Fabric with the debug-disabled crashlytics.
-        if (BuildConfig.USE_CRASHLYTICS) {
-            Fabric.with(this, crashlyticsKit, new Crashlytics());
-        }
+        Fabric.with(this, new Crashlytics.Builder().core(crashlyticsCore).build());
 
         Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
-
         addManagers();
-
         DatabaseManager.getInstance().addTables();
-
         LogManager.i(this, "onCreate finished...");
     }
 
@@ -363,6 +357,7 @@ public class Application extends android.app.Application {
         addManager(AccountManager.getInstance());
         addManager(XabberAccountManager.getInstance());
         addManager(PatreonManager.getInstance());
+        addManager(CrowdfundingManager.getInstance());
         addManager(MUCManager.getInstance());
         addManager(MessageManager.getInstance());
         addManager(ChatManager.getInstance());
@@ -386,6 +381,7 @@ public class Application extends android.app.Application {
         addManager(BlockingManager.getInstance());
         addManager(MamManager.getInstance());
         addManager(CertificateManager.getInstance());
+        addManager(XMPPAuthManager.getInstance());
     }
 
     /**
