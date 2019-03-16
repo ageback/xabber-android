@@ -23,6 +23,7 @@ import com.xabber.android.data.entity.AccountJid;
 import com.xabber.android.data.entity.UserJid;
 import com.xabber.android.data.extension.avatar.AvatarManager;
 import com.xabber.android.data.extension.muc.MUCManager;
+import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.message.AbstractChat;
 import com.xabber.android.data.message.MessageManager;
 import com.xabber.android.data.message.chat.ChatManager;
@@ -82,8 +83,10 @@ public class MessageNotificationCreator {
                     .setContentText(createMessageLine(chat.getLastMessage(), chat.isGroupChat(), showText))
                     .setStyle(createInboxStyle(chat, showText))
                     .setAutoCancel(true);
-            if (alert) addEffects(builder, chat.getLastMessage().getMessageText().toString(), chat, context);
         }
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O && alert)
+            addEffects(builder, chat.getLastMessage().getMessageText().toString(), chat, context);
 
         builder.addAction(createMarkAsReadAction(chat.getNotificationId()))
                 .addAction(createMuteAction(chat.getNotificationId()));
@@ -120,8 +123,11 @@ public class MessageNotificationCreator {
                     .setOnlyAlertOnce(!alert)
                     .setStyle(createInboxStyleForBundle(sortedChats))
                     .setContentText(createSummarizedContentForBundle(sortedChats));
+        }
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O && alert) {
             MessageNotificationManager.Message lastMessage = lastChat != null ? lastChat.getLastMessage() : null;
-            if (lastMessage != null && alert)
+            if (lastMessage != null)
                 addEffects(builder, lastMessage.getMessageText().toString(), lastChat, context);
         }
 
@@ -141,7 +147,14 @@ public class MessageNotificationCreator {
     }
 
     private void sendNotification(NotificationCompat.Builder builder, int notificationId) {
-        notificationManager.notify(notificationId, builder.build());
+        try {
+            notificationManager.notify(notificationId, builder.build());
+        } catch (SecurityException e) {
+            LogManager.exception(this, e);
+            // If no access to ringtone - reset channel to default
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                NotificationChannelUtils.resetNotificationChannel(notificationManager, builder.getNotification().getChannelId());
+        }
     }
 
     /** UTILS */
