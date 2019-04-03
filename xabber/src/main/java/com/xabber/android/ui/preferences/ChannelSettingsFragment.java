@@ -145,6 +145,3 @@ public class ChannelSettingsFragment extends BaseSoundPrefFragment<ChannelRingto
                 Uri.parse(ringtoneHolder.uri), null, null);
     }
 }
-
-
-
