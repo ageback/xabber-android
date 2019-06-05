@@ -571,8 +571,15 @@
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value="com.xabber.android.ui.activity.ChatActivity" />
         </activity>
-        <meta-data
+        <activity android:name=".ui.activity.AccountPushActivity" />
+        <activity android:name=".ui.activity.PushLogActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="com.xabber.android.ui.preferences.DebugSettings"/>
+        </activity>
+	<meta-data
 	    android:name="io.fabric.ApiKey"
 	    android:value="0d90bddb4ed7eb764eee9fad3fc9e67830763f3e" />
     </application>
+
 </manifest>

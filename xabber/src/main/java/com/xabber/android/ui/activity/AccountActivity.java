@@ -147,7 +147,7 @@ public class AccountActivity extends ManagedActivity implements AccountOptionsAd
         RecyclerView recyclerView = (RecyclerView) findViewById(R.id.account_options_recycler_view);
 
 
-        accountOptionsAdapter = new AccountOptionsAdapter(AccountOption.values(), this, accountItem);
+        accountOptionsAdapter = new AccountOptionsAdapter(AccountOption.getValues(), this, accountItem);
 
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(accountOptionsAdapter);
@@ -166,6 +166,9 @@ public class AccountActivity extends ManagedActivity implements AccountOptionsAd
         AccountOption.SYNCHRONIZATION.setDescription(getString(R.string.account_sync_summary));
 
         AccountOption.CONNECTION_SETTINGS.setDescription(account.getFullJid().asBareJid().toString());
+
+        AccountOption.PUSH_NOTIFICATIONS.setDescription(getString(accountItem.isPushWasEnabled()
+                ? R.string.account_push_state_enabled : R.string.account_push_state_disabled));
 
         AccountOption.COLOR.setDescription(ColorManager.getInstance().getAccountPainter().getAccountColorName(account));
 
@@ -245,6 +248,9 @@ public class AccountActivity extends ManagedActivity implements AccountOptionsAd
         switch (option) {
             case CONNECTION_SETTINGS:
                 startAccountSettingsActivity();
+                break;
+            case PUSH_NOTIFICATIONS:
+                startActivity(AccountPushActivity.createIntent(this, account));
                 break;
             case COLOR:
                 AccountColorDialog.newInstance(account).show(getFragmentManager(),
