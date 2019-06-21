@@ -17,6 +17,7 @@ package com.xabber.android.data.message;
 import android.content.Intent;
 import android.support.annotation.NonNull;
 import android.text.TextUtils;
+import android.util.Pair;
 
 import com.xabber.android.data.NetworkException;
 import com.xabber.android.data.SettingsManager;
@@ -30,6 +31,7 @@ import com.xabber.android.data.extension.muc.MUCManager;
 import com.xabber.android.data.extension.otr.OTRManager;
 import com.xabber.android.data.extension.otr.OTRUnencryptedException;
 import com.xabber.android.data.extension.otr.SecurityLevel;
+import com.xabber.android.data.extension.references.ReferencesManager;
 import com.xabber.android.data.log.LogManager;
 import com.xabber.android.data.xaccount.XMPPAuthManager;
 
@@ -142,7 +144,7 @@ public class RegularChat extends AbstractChat {
 
     @Override
     protected MessageItem createNewMessageItem(String text) {
-        return createMessageItem(null, text, null, null, false,
+        return createMessageItem(null, text, null, null, null, false,
                 false, false, false, UUID.randomUUID().toString(),
                 null, null, null,
                 account.getFullJid().toString(), null, false);
@@ -218,6 +220,8 @@ public class RegularChat extends AbstractChat {
             RealmList<ForwardId> forwardIds = parseForwardedMessage(true, packet, uid);
             String originalStanza = packet.toXML().toString();
             String originalFrom = packet.getFrom().toString();
+
+            // forward comment (to support previous forwarded xep)
             String forwardComment = ForwardManager.parseForwardComment(packet);
             if (forwardComment != null) text = forwardComment;
 
@@ -225,16 +229,21 @@ public class RegularChat extends AbstractChat {
             if ((text == null || text.trim().equals("")) && (forwardIds == null || forwardIds.isEmpty()))
                 return true;
 
+            // modify body with references
+            Pair<String, String> bodies = ReferencesManager.modifyBodyWithReferences(message, text);
+            text = bodies.first;
+            String markupText = bodies.second;
+
             // create message with file-attachments
             if (attachments.size() > 0)
-                createAndSaveFileMessage(true, uid, resource, text, null, getDelayStamp(message),
+                createAndSaveFileMessage(true, uid, resource, text, markupText, null, getDelayStamp(message),
                         true, true, encrypted,
                         isOfflineMessage(account.getFullJid().getDomain(), packet),
                         getStanzaId(message), attachments, originalStanza, null,
                         originalFrom, false, false);
 
                 // create message without attachments
-            else createAndSaveNewMessage(true, uid, resource, text, null, getDelayStamp(message),
+            else createAndSaveNewMessage(true, uid, resource, text, markupText, null, getDelayStamp(message),
                     true, true, encrypted,
                     isOfflineMessage(account.getFullJid().getDomain(), packet),
                     getStanzaId(message), originalStanza, null,
@@ -268,18 +277,24 @@ public class RegularChat extends AbstractChat {
         String originalFrom = "";
         if (fromJid != null) originalFrom = fromJid.toString();
         boolean fromMuc = message.getType().equals(Type.groupchat);
+
+        // forward comment (to support previous forwarded xep)
         String forwardComment = ForwardManager.parseForwardComment(message);
-        if (forwardComment != null && !forwardComment.isEmpty())
-            text = forwardComment;
+        if (forwardComment != null && !forwardComment.isEmpty()) text = forwardComment;
+
+        // modify body with references
+        Pair<String, String> bodies = ReferencesManager.modifyBodyWithReferences(message, text);
+        text = bodies.first;
+        String markupText = bodies.second;
 
         // create message with file-attachments
         if (attachments.size() > 0)
-            createAndSaveFileMessage(ui, uid, resource, text, null, null, true,
+            createAndSaveFileMessage(ui, uid, resource, text, markupText, null, null, true,
                     false, encrypted, false, getStanzaId(message), attachments,
                     originalStanza, parentMessageId, originalFrom, fromMuc, true);
 
             // create message without attachments
-        else createAndSaveNewMessage(ui, uid, resource, text, null, null, true,
+        else createAndSaveNewMessage(ui, uid, resource, text, markupText, null, null, true,
                 false, encrypted, false, getStanzaId(message), originalStanza,
                 parentMessageId, originalFrom, forwardIds, fromMuc, true);
 

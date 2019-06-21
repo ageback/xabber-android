@@ -140,7 +140,7 @@ public class ContactVO extends AbstractFlexibleItem<ContactVO.ViewHolder> {
                 .getAccountMainColor(contact.getAccount());
         accountColorIndicatorBack = ColorManager.getInstance().getAccountPainter()
                 .getAccountIndicatorBackColor(contact.getAccount());
-        avatar = contact.getAvatarForContactList();
+        avatar = contact.getAvatar();
 
 
         String name = contact.getName();
@@ -191,15 +191,15 @@ public class ContactVO extends AbstractFlexibleItem<ContactVO.ViewHolder> {
 
             // message status
             if (isOutgoing) {
-                if (lastMessage.isError()) {
-                    messageStatus = 4;
-                } else if (!MessageItem.isUploadFileMessage(lastMessage) && !lastMessage.isSent()
+                if (!MessageItem.isUploadFileMessage(lastMessage) && !lastMessage.isSent()
                         && System.currentTimeMillis() - lastMessage.getTimestamp() > 1000) {
                     messageStatus = 5;
                 } else if (lastMessage.isDisplayed() || lastMessage.isReceivedFromMessageArchive()) {
                     messageStatus = 1;
                 } else if (lastMessage.isDelivered() || lastMessage.isForwarded()) {
                     messageStatus = 2;
+                } else if (lastMessage.isError()) {
+                    messageStatus = 4;
                 } else if (lastMessage.isAcknowledged()) {
                     messageStatus = 3;
                 }

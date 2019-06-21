@@ -24,8 +24,8 @@ android {
     defaultConfig {
         minSdkVersion 15
         targetSdkVersion 28
-        versionCode 620
-        versionName '2.6.4(620)'
+        versionCode 624
+        versionName '2.6.4(624)'
     }
 
     lintOptions {
@@ -107,6 +107,12 @@ android {
             include 'armeabi', 'armeabi-v7a', 'arm64-v8a', 'mips', 'x86', 'x86_64'
 
             universalApk true
+        }
+    }
+
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
         }
     }
 }
@@ -194,9 +200,14 @@ dependencies {
     debugImplementation 'com.github.markzhai:blockcanary-android:1.5.0'
     releaseImplementation 'com.github.markzhai:blockcanary-no-op:1.5.0'
 
+    // test
+    testImplementation 'junit:junit:4.12'
+    testImplementation "org.robolectric:robolectric:4.0"
+    testImplementation "org.robolectric:shadows-multidex:4.0.1"
 }
 apply plugin: 'com.google.gms.google-services'
 
 configurations {
     all*.exclude group: 'xpp3', module: 'xpp3'
+    all*.exclude group: 'com.google.guava', module:'guava-jdk5'
 }
